@@ -39,7 +39,7 @@ async function resetUserData(email: string) {
     // 5. Reiniciar secuencias código de transacción
     await prisma.transactionCodeSequence.updateMany({ 
       where: { projectId: pId }, 
-      data: { lastCode: 0 } 
+      data: { counter: 0 } 
     });
     
     console.log(`✔ Proyecto ${pId} limpiado completamente`);
