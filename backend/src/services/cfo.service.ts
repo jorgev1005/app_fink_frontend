@@ -84,7 +84,7 @@ export const generateCFOSummary = async (projectId?: string) => {
     const response = await getOpenAI().chat.completions.create({
       model: 'minimax/minimax-m2.5:free',
       messages: [{ role: 'user', content: prompt }],
-    }, { timeout: 4000 });
+    }, { timeout: 3000 });
     return response.choices[0].message.content || 'Sin recomendaciones por ahora.';
   } catch(e:any) {
     console.error('Error in getCFOAdvice:', e.message);
@@ -92,7 +92,7 @@ export const generateCFOSummary = async (projectId?: string) => {
       const fallbackResponse = await getOpenAI().chat.completions.create({
         model: 'nvidia/nemotron-nano-12b-v2-vl:free',
         messages: [{ role: 'user', content: prompt }],
-      }, { timeout: 4000 });
+      }, { timeout: 3000 });
       return fallbackResponse.choices[0].message.content || 'Sin recomendaciones por ahora.';
     } catch (err2: any) {
       console.error('Error in getCFOAdvice fallback:', err2.message);
