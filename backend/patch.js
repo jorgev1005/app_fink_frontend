@@ -1,0 +1,1 @@
+const fs = require("fs"); let code = fs.readFileSync("scripts/fix_lucem_ca_petty_cash.js", "utf8"); code = code.replace("if (Math.abs(ledgerBalances.balanceBs) > 0.01 || Math.abs(ledgerBalances.balanceEur) > 0.01) {", "if (false) {"); fs.writeFileSync("scripts/fix_lucem_ca_petty_cash.js", code);

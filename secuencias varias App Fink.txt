@@ -1,0 +1,45 @@
+App Fink
+
+* <LAN_IP> = aquí se sustituye la IP de la red que se necesita
+
+Iniciar Backend:
+
+Apartamento: (revisar siempre dirección IP)
+
+cd /d d:\Documentos\espacio_vc\app_fink\backend
+set PORT=4002
+set CORS_ORIGIN=http://localhost:3000,http://127.0.0.1:3000,http://192.168.1.104:3000
+echo Starting backend on port %PORT% with CORS_ORIGIN=%CORS_ORIGIN%
+npm run dev
+--------------------------------------------------------
+Oficina: (revisar siempre dirección IP)
+
+cd /d d:\Documentos\espacio_vc\app_fink\backend
+set PORT=4002
+set CORS_ORIGIN=http://localhost:3000,http://127.0.0.1:3000,http://192.168.1.130:3000
+echo Starting backend on port %PORT% with CORS_ORIGIN=%CORS_ORIGIN%
+npm run dev
+________________________________________________________________________________________
+
+Iniciar Frontend:
+Apartamento: (revisar siempre dirección IP)
+
+cd /d d:\Documentos\espacio_vc\app_fink\frontend
+set NEXT_PUBLIC_API_URL=http://192.168.1.104:4002/api
+echo Starting frontend with NEXT_PUBLIC_API_URL=%NEXT_PUBLIC_API_URL%
+npx next dev -H 0.0.0.0 -p 3000
+
+--------------------------------------------------------
+Oficina: (revisar siempre dirección IP)
+
+cd /d d:\Documentos\espacio_vc\app_fink\frontend
+set NEXT_PUBLIC_API_URL=http://192.168.1.130:4002/api
+echo Starting frontend with NEXT_PUBLIC_API_URL=%NEXT_PUBLIC_API_URL%
+npx next dev -H 0.0.0.0 -p 3000
+_________________________________________________________________________________________
+
+Abrir en laptop y teléfono
+Laptop: http://localhost:3000 o http://<LAN_IP>:3000
+Teléfono (mismo Wi‑Fi): abrir http://<LAN_IP>:3000
+Inicia sesión con admin@fink.com / Admin123!
+

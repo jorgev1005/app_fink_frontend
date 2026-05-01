@@ -1,0 +1,75 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Testing
+coverage/
+*.test.js.snap
+
+# Production
+build/
+dist/
+.next/
+out/
+
+# Environment variables
+.env
+.env*.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Debug
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Prisma
+prisma/migrations/
+*.db
+*.db-journal
+
+# Logs
+logs/
+*.log
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Uploads
+uploads/
+public/uploads/
+
+# Backups
+*.backup
+*.bak
+
+# Cache
+.cache/
+.parcel-cache/
+.turbo/
+
+# Sensitive Files
+CREDENCIALES_ADMIN.md
+Contabo.txt
+*.pem
+*.key
+
+.vercel
+entradas a las app.txt
+entradas a las app.txt

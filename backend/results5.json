@@ -1,0 +1,126 @@
+CONTACTS:
+[
+  'Vendor 1769285204993',
+  'Vendor 1769285274114',
+  'Vendor 1769285328198',
+  'Marcos Alvarez',
+  'Movistar',
+  'Tecnisport C.A.',
+  'bodega el bosque',
+  'Bodega el bosque',
+  'Tecnisport C.A:',
+  'Inversiones Tornillos Serrano C.A.',
+  'Ferretotal',
+  'Inversiones Nugen C.A.'
+]
+INVOICE DESCRIPTIONS (from lines JSON):
+[
+  { code: 'INV-1769285205007', type: 'BILL', desc: '', status: 'PAID' },
+  {
+    code: 'INV-1769285274124',
+    type: 'BILL',
+    desc: '',
+    status: 'PARTIALLY_PAID'
+  },
+  {
+    code: 'INV-1769285328244',
+    type: 'BILL',
+    desc: '',
+    status: 'PARTIALLY_PAID'
+  },
+  {
+    code: 'TEST-INV-1769377971313',
+    type: 'BILL',
+    desc: '',
+    status: 'PARTIALLY_PAID'
+  },
+  {
+    code: 'INV-9b3f499f-ccb6-47b3-a2cd-cdd39c43b2ca-1769532589233',
+    type: 'BILL',
+    desc: 'no lines',
+    status: 'OPEN'
+  },
+  {
+    code: 'INV-5271f500-b835-4b11-a8aa-f9957d8d5ea4-1769537775295',
+    type: 'BILL',
+    desc: 'no lines',
+    status: 'OPEN'
+  },
+  {
+    code: 'INV-5271f500-b835-4b11-a8aa-f9957d8d5ea4-1769537858617',
+    type: 'BILL',
+    desc: 'no lines',
+    status: 'PAID'
+  },
+  {
+    code: 'INV-5271f500-b835-4b11-a8aa-f9957d8d5ea4-1769546474629',
+    type: 'INVOICE',
+    desc: 'no lines',
+    status: 'OPEN'
+  },
+  {
+    code: 'INV-5271f500-b835-4b11-a8aa-f9957d8d5ea4-1769546670661',
+    type: 'INVOICE',
+    desc: 'no lines',
+    status: 'PAID'
+  },
+  {
+    code: 'INV-5271f500-b835-4b11-a8aa-f9957d8d5ea4-1769621448045',
+    type: 'BILL',
+    desc: 'no lines',
+    status: 'OPEN'
+  },
+  {
+    code: 'INV-5271f500-b835-4b11-a8aa-f9957d8d5ea4-1769621699592',
+    type: 'BILL',
+    desc: '',
+    status: 'PAID'
+  },
+  {
+    code: 'INV-5271f500-b835-4b11-a8aa-f9957d8d5ea4-1769622567551',
+    type: 'INVOICE',
+    desc: '',
+    status: 'PAID'
+  },
+  {
+    code: 'INV-5271f500-b835-4b11-a8aa-f9957d8d5ea4-1769623150722',
+    type: 'BILL',
+    desc: '',
+    status: 'PAID'
+  },
+  {
+    code: 'INV-5271f500-b835-4b11-a8aa-f9957d8d5ea4-1769623244095',
+    type: 'BILL',
+    desc: '',
+    status: 'PAID'
+  },
+  {
+    code: 'INV-5271f500-b835-4b11-a8aa-f9957d8d5ea4-1769623348038',
+    type: 'INVOICE',
+    desc: '',
+    status: 'PAID'
+  },
+  {
+    code: 'INV-5271f500-b835-4b11-a8aa-f9957d8d5ea4-1769623786186',
+    type: 'BILL',
+    desc: '',
+    status: 'OPEN'
+  },
+  {
+    code: 'INV-5271f500-b835-4b11-a8aa-f9957d8d5ea4-1769627716461',
+    type: 'BILL',
+    desc: 'no lines',
+    status: 'OPEN'
+  },
+  { code: 'INV-25601063', type: 'BILL', desc: '', status: 'POSTED' },
+  { code: 'INV-04401131', type: 'BILL', desc: '', status: 'POSTED' }
+]
+RULES:
+[
+  {
+    id: 'f3443fe1-d93a-4d66-a311-9dbcc8c0eb5a',
+    desc: null,
+    status: undefined,
+    type: 'BILL'
+  }
+]

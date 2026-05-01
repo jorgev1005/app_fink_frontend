@@ -1,0 +1,61 @@
+--- FRUTY ---
+[]
+--- JHONNY ---
+[]
+--- ALQUILER ---
+REGLAS: []
+INSTANCIAS ALQUILER: []
+--- STATS ---
+[
+  {
+    "_count": {
+      "id": 5
+    },
+    "type": "BILL",
+    "status": "OPEN"
+  },
+  {
+    "_count": {
+      "id": 5
+    },
+    "type": "BILL",
+    "status": "PAID"
+  },
+  {
+    "_count": {
+      "id": 3
+    },
+    "type": "BILL",
+    "status": "PARTIALLY_PAID"
+  },
+  {
+    "_count": {
+      "id": 2
+    },
+    "type": "BILL",
+    "status": "POSTED"
+  },
+  {
+    "_count": {
+      "id": 1
+    },
+    "type": "INVOICE",
+    "status": "OPEN"
+  },
+  {
+    "_count": {
+      "id": 3
+    },
+    "type": "INVOICE",
+    "status": "PAID"
+  }
+]
+--- RECURRING INVOICES ---
+[
+  {
+    "_count": {
+      "id": 2
+    },
+    "recurringRuleId": "f3443fe1-d93a-4d66-a311-9dbcc8c0eb5a"
+  }
+]

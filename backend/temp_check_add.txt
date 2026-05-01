@@ -1,0 +1,40 @@
+
+export const parseFinancialTextToJSON = async (text: string) => {
+  const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+  if (!OPENROUTER_API_KEY) {
+    throw new Error('Falta OPENROUTER_API_KEY');
+  }
+
+  const prompt = `Eres un asistente experto en contabilidad.
+Convierte el siguiente texto en un array JSON estricto con los campos: "fecha", "monto", "categoria", "tipo", "descripcion".
+Texto: ${text}`;
+
+  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: 'openai/gpt-4o-mini',
+      messages: [
+        { role: 'system', content: 'Debes responder SOLO con un arreglo JSON válido. No uses markdown, ni backticks, ni comentarios.' },
+        { role: 'user', content: prompt }
+      ]
+    })
+  });
+
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error('Error en OpenRouter: ' + err);
+  }
+
+  const data = await response.json();
+  const rawText = data.choices[0].message.content.trim();
+  
+  try {
+    return JSON.parse(rawText);
+  } catch (e) {
+    throw new Error('El NLP no devolvió JSON válido: ' + rawText);
+  }
+};

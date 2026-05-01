@@ -1,0 +1,1 @@
+const XLSX = require('xlsx'); const fs = require('fs'); const buf = fs.readFileSync('V011180626.csv'); const wb = XLSX.read(buf, {type: 'buffer', raw: true}); console.log(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header: 1, raw: true})[0]);

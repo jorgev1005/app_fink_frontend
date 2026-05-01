@@ -1,0 +1,7 @@
+Factura #F-12345
+Fecha: 2025-11-04
+Total: 1.234,56
+Proveedor: ACME S.A.
+
+Detalle:
+- Servicio de consultoría

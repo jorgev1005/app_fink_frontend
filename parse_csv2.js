@@ -1,0 +1,1 @@
+const XLSX = require('xlsx'); const bstr = 'a;b;c\n1;2;3'; const wb = XLSX.read(bstr, {type: 'binary', raw: true}); console.log(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], {header: 1, raw: true}));

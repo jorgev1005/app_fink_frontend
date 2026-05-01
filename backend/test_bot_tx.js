@@ -1,0 +1,1 @@
+const { PrismaClient } = require('@prisma/client'); const prisma = new PrismaClient(); async function main() { const txs = await prisma.transaction.findMany({ where: { code: { startsWith: 'BOT-' } }, take: 5, orderBy: { createdAt: 'desc' } }); console.log(txs); } main();

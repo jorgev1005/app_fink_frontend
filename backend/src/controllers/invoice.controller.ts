@@ -1,0 +1,367 @@
+import { Request, Response } from 'express';
+import prisma from '../config/database';
+import { updateAccountBalance } from '../services/account.service';
+import { getLatestExchangeRate } from '../services/exchangeRate.service';
+import { checkProjectWriteAccess, getProjectAccessFilter } from '../utils/projectAccess';
+
+export const createInvoice = async (req: Request, res: Response) => {
+  try {
+    const { 
+      projectId, type, issueDate, dueDate, currency, total, code,
+      vendorId, customerId, description, taxAmount,
+      isPaid, paymentAccountId, paymentMethod, paymentReference, lines 
+    } = req.body;
+    
+    const user = (req as any).user;
+    if (!projectId) return res.status(400).json({ success: false, error: { message: 'projectId required' } });
+    if (!total || Number(total) <= 0) return res.status(400).json({ success: false, error: { message: 'total must be > 0' } });
+
+    const hasAccess = await checkProjectWriteAccess(user, projectId);
+    if (!hasAccess) {
+      return res.status(403).json({ success: false, error: { message: 'No tienes permisos para crear facturas en este proyecto' } });
+    }
+
+    // Validate Contact
+    if (type === 'BILL' && !vendorId) {
+        return res.status(400).json({ success: false, error: { message: 'El proveedor es obligatorio para facturas de compra' } });
+    }
+    if (type === 'INVOICE' && !customerId) {
+        return res.status(400).json({ success: false, error: { message: 'El cliente es obligatorio para facturas de venta' } });
+    }
+
+    const invoiceCode = code || `INV-${projectId}-${Date.now()}`;
+
+    // Anchor dueDate to noon if it's a date-only string
+    let dueDateToStore = dueDate;
+    if (dueDate && typeof dueDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
+      dueDateToStore = dueDate + 'T12:00:00';
+    }
+
+    // Anchor issueDate to noon if it's a date-only string to prevent TZ shifts
+    let issueDateToStore = issueDate ? new Date(issueDate) : new Date();
+    if (issueDate && typeof issueDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(issueDate)) {
+        issueDateToStore = new Date(issueDate + 'T12:00:00');
+    }
+
+    // Prepare Lines Data (JSON)
+    // We strictly use an object wrapper now to ensure metadata (tax, description) is kept along with items
+    let finalLinesData: any = {
+      items: [],
+      taxAmount: Number(taxAmount) || 0,
+      description: description || ''
+    };
+
+    if (Array.isArray(lines)) {
+      finalLinesData.items = lines;
+    } else if (lines) {
+      // If legacy lines was passed as object (unlikely from new frontend)
+      // or if we fall back to just description/tax
+      // We already set defaults above.
+      // If lines was null, we just have empty items.
+    }
+
+    // fallback for legacy structure support in case we are editing old invoices? 
+    // New create always uses this structure.
+
+    // Transactional creation if payment is involved
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Create Invoice
+      const createdInvoice = await tx.invoice.create({
+        data: {
+          project: { connect: { id: projectId } },
+          code: invoiceCode,
+          type: type || 'BILL',
+          vendorId: vendorId || null,
+          customerId: customerId || null,
+          issueDate: issueDateToStore,
+          dueDate: dueDateToStore ? new Date(dueDateToStore) : undefined,
+          currency,
+          total: Number(total),
+          outstanding: isPaid ? 0 : Number(total), // If fully paid, outstanding is 0
+          status: isPaid ? 'PAID' : 'OPEN',
+          lines: JSON.stringify(finalLinesData), // Store consistent object structure
+          createdBy: user.id,
+        }
+      });
+      
+      // 1.5 Process Inventory Updates checks
+      if (finalLinesData.items && finalLinesData.items.length > 0) {
+          for (const line of finalLinesData.items) {
+              if (line.productId && line.productId !== 'CUSTOM' && line.quantity) {
+                  const qty = Number(line.quantity);
+                  // BILL (Compra) -> Aumenta Stock (+)
+                  // INVOICE (Venta) -> Disminuye Stock (-)
+                  const operationMultiplier = (type === 'BILL') ? 1 : -1;
+                  
+                  await tx.product.update({
+                      where: { id: line.productId },
+                      data: {
+                          stock: { increment: qty * operationMultiplier },
+                      }
+                  });
+              }
+          }
+      }
+
+      // 2. Create Payment if requested
+
+      // 2. Create Payment if requested
+      if (isPaid && paymentAccountId) {
+        const paymentCode = `PAY-${Date.now()}`;
+        const createdPayment = await tx.payment.create({
+          data: {
+            projectId,
+            code: paymentCode,
+            date: new Date(), // Payment date is now
+            currency, // Assuming payment in same currency for simplicity
+            amount: Number(total),
+            method: paymentMethod || 'OTHER',
+            reference: paymentReference || null,
+            status: 'COMPLETED',
+            userId: user.id,
+            accountId: paymentAccountId,
+            exchangeRate: 1 // base
+          }
+        });
+
+        // 3. Create Allocation
+        await tx.paymentAllocation.create({
+          data: {
+            paymentId: createdPayment.id,
+            invoiceId: createdInvoice.id,
+            allocatedAmount: Number(total)
+          }
+        });
+
+        // 4. Update Account Balance (If account exists) via logic
+        // We need to fetch account to know current balance, update it.
+        // Simplified: We call the service helper later or do raw update here.
+        // For safety/speed in this tool usage, I'll do raw update if account is managed.
+        // But better to rely on `updateAccountBalance` service if imported. 
+        // Since `updateAccountBalance` is imported at top file, I can use it AFTER transaction or inside?
+        // `updateAccountBalance` uses prisma internally. It might not be transaction-aware if it uses global prisma.
+        // So I will just let the user know balance might update async or handle it simply.
+        // Ideally: await updateAccountBalance(paymentAccountId);
+      }
+      return createdInvoice;
+    });
+    
+    // Trigger balance update outside transaction (to use global prisma instance of the service)
+    if (isPaid && paymentAccountId && updateAccountBalance) {
+        const operation = (type === 'INVOICE') ? 'DEBIT' : 'CREDIT'; // INVOICE = Venta (Entrada/Debit), BILL = Compra (Salida/Credit)
+        try { 
+            await updateAccountBalance(
+                paymentAccountId, 
+                currency, 
+                Number(total), 
+                operation
+            ); 
+        } catch(e) { console.error('Error updating balance:', e); }
+    }
+
+    // === LOG DE ACTIVIDAD ===
+    try {
+      const { logActivity } = await import('../services/activityLog.service');
+      await logActivity(
+        user.id,
+        'CREATE',
+        'Invoice',
+        result.id,
+        `Creación de factura ${result.code} ${isPaid ? '(Pagada)' : ''}`,
+        {
+          total: result.total,
+          currency: result.currency,
+          type: result.type,
+          projectId: result.projectId,
+          vendorId, 
+          customerId
+        },
+        req.ip,
+        req.headers['user-agent'] as string
+      );
+    } catch (err) {
+      console.error('Error registrando log de actividad (createInvoice):', err);
+    }
+
+    res.status(201).json({ success: true, data: result });
+  } catch (error: any) {
+    console.error('[createInvoice] error', error);
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
+export const updateInvoice = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const user = (req as any).user;
+    const { 
+      projectId, type, issueDate, dueDate, currency, total, code,
+      vendorId, customerId, description, taxAmount 
+    } = req.body;
+    
+    // Check existence and status
+    const invoice = await prisma.invoice.findUnique({ where: { id } });
+    if (!invoice) return res.status(404).json({ success: false, error: { message: 'Invoice not found' } });
+
+    const hasAccess = await checkProjectWriteAccess(user, invoice.projectId);
+    if (!hasAccess) {
+      return res.status(403).json({ success: false, error: { message: 'No tienes permisos para modificar facturas en este proyecto' } });
+    }
+    
+    // Only allow editing if not paid
+    if (invoice.status === 'PAID' || invoice.status === 'PARTIALLY_PAID') {
+        return res.status(400).json({ success: false, error: { message: 'No se puede editar una factura pagada o parcialmente pagada.' } });
+    }
+
+    const linesData = {
+      description: description || '',
+      taxAmount: Number(taxAmount) || 0
+    };
+
+    // Update
+    const updated = await prisma.invoice.update({
+        where: { id },
+        data: {
+            projectId,
+            code: code || invoice.code,
+            issueDate: issueDate ? new Date(issueDate) : invoice.issueDate,
+            dueDate: dueDate ? new Date(dueDate) : invoice.dueDate,
+            currency,
+            total: Number(total),
+            outstanding: Number(total), // Reset outstanding since it's not paid
+            lines: JSON.stringify(linesData),
+            vendorId: vendorId || null,
+            customerId: customerId || null,
+        }
+    });
+
+    res.json({ success: true, data: updated });
+  } catch (error: any) {
+    console.error('[updateInvoice] error', error);
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
+export const deleteInvoice = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const user = (req as any).user;
+    const invoice = await prisma.invoice.findUnique({ where: { id } });
+    if (!invoice) return res.status(404).json({ success: false, error: { message: 'Invoice not found' } });
+
+    const hasAccess = await checkProjectWriteAccess(user, invoice.projectId);
+    if (!hasAccess) {
+      return res.status(403).json({ success: false, error: { message: 'No tienes permisos para eliminar facturas en este proyecto' } });
+    }
+    
+    // Only allow deleting DRAFT or PENDING invoices (assuming PENDING is the status for drafts/unposted)
+    // Adjust status check based on your business logic. 
+    // Usually 'PENDING' means created but not paid/posted.
+    if (invoice.status === 'PAID' || invoice.status === 'POSTED') {
+      return res.status(400).json({ success: false, error: { message: 'Cannot delete paid or posted invoice' } });
+    }
+
+    await prisma.invoice.delete({ where: { id } });
+
+    // === LOG DE ACTIVIDAD ===
+    try {
+      const { logActivity } = await import('../services/activityLog.service');
+      await logActivity(
+        (req as any).user?.id || 'system',
+        'DELETE',
+        'Invoice',
+        invoice.id,
+        `Eliminación de factura ${invoice.code}`,
+        {
+          total: invoice.total,
+          currency: invoice.currency,
+          type: invoice.type,
+          projectId: invoice.projectId
+        },
+        req.ip,
+        req.headers['user-agent'] as string
+      );
+    } catch (err) {
+      console.error('Error registrando log de actividad (deleteInvoice):', err);
+    }
+
+    res.json({ success: true, message: 'Invoice deleted' });
+  } catch (error: any) {
+    console.error('[deleteInvoice] error', error);
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
+export const getInvoices = async (req: Request, res: Response) => {
+  try {
+    const { projectId, status, page = 1, limit = 50 } = req.query;
+    const skip = (Number(page) - 1) * Number(limit);
+    const user = (req as any).user;
+    const where: any = {
+      ...getProjectAccessFilter(user)
+    };
+    if (projectId) where.projectId = projectId as string;
+    if (status) where.status = status as string;
+
+    const [invoices, total] = await Promise.all([
+      prisma.invoice.findMany({ where, orderBy: { createdAt: 'desc' }, skip, take: Number(limit) }),
+      prisma.invoice.count({ where })
+    ]);
+
+    // Manual population of contacts (since relation is missing in Prisma schema)
+    const contactIds = new Set<string>();
+    invoices.forEach(inv => {
+        if (inv.vendorId) contactIds.add(inv.vendorId);
+        if (inv.customerId) contactIds.add(inv.customerId);
+    });
+
+    let contactMap = new Map();
+    if (contactIds.size > 0) {
+        const contacts = await prisma.contactPerson.findMany({
+            where: { id: { in: Array.from(contactIds) } },
+            select: { id: true, name: true, taxId: true }
+        });
+        contactMap = new Map(contacts.map(c => [c.id, c]));
+    }
+
+    const enrichedInvoices = invoices.map((inv: any) => ({
+        ...inv,
+        vendor: inv.vendorId ? contactMap.get(inv.vendorId) : null,
+        customer: inv.customerId ? contactMap.get(inv.customerId) : null
+    }));
+
+    res.json({ success: true, data: enrichedInvoices, pagination: { page: Number(page), limit: Number(limit), total } });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
+import { processInvoicePosting } from '../services/invoice.service';
+
+export const postInvoice = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const user = (req as any).user;
+
+    const createdTxn = await processInvoicePosting(id, user.id);
+
+    res.json({ success: true, data: createdTxn });
+  } catch (error: any) {
+    console.error('[postInvoice] error', error);
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
+export const getInvoiceById = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const invoice = await prisma.invoice.findUnique({ where: { id } });
+    
+    if (!invoice) return res.status(404).json({ success: false, error: { message: 'Invoice not found' } });
+    
+    res.json({ success: true, data: invoice });
+  } catch (error: any) {
+    console.error('[getInvoiceById] error', error);
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};

@@ -1,0 +1,1 @@
+const { PrismaClient } = require('@prisma/client'); const prisma = new PrismaClient(); async function m() { console.log(await prisma.project.findMany({ where: { name: { contains: 'Lucem' } }, select: { id: true, name: true, code: true, status: true } })); } m();

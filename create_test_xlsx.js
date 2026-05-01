@@ -1,0 +1,1 @@
+const XLSX = require('xlsx'); const wb = XLSX.utils.book_new(); const ws = XLSX.utils.aoa_to_sheet([['Monto'], [1617], [3550], [4356.9], [6445.49], [2500]]); XLSX.utils.book_append_sheet(wb, ws, 'Sheet1'); XLSX.writeFile(wb, 'test1.xlsx');

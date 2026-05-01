@@ -1,0 +1,1 @@
+let str = '1.617,00'; let forcedFormat = 'EU'; const lastComma = str.lastIndexOf(','); const lastDot = str.lastIndexOf('.'); if (lastComma > -1 && lastDot > -1) { if (lastComma > lastDot) forcedFormat = 'EU'; else forcedFormat = 'US'; } if (forcedFormat === 'EU') { str = str.replace(/\./g, 'TEMP').replace(/,/g, '.').replace(/TEMP/g, ''); } console.log(parseFloat(str));
