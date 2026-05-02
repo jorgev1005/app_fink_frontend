@@ -172,10 +172,27 @@ export const initTelegramBot = () => {
 
       if (msg.voice) {
         const waitMsg = await bot.sendMessage(chatId, '🎙️ Escuchando...');
-        const fileLink = await bot.getFileLink(msg.voice.file_id);
-        const audioResponse = await axios.get(fileLink, { responseType: 'arraybuffer' });
-        const audioBuffer = Buffer.from(audioResponse.data);
+        
+        let audioBuffer = null;
+        let fileLink = '';
+        let dlAttempts = 0;
+        while (dlAttempts < 3) {
+          try {
+            fileLink = await bot.getFileLink(msg.voice.file_id);
+            const audioResponse = await axios.get(fileLink, { responseType: 'arraybuffer', timeout: 15000 });
+            audioBuffer = Buffer.from(audioResponse.data);
+            break;
+          } catch(e) {
+            dlAttempts++;
+            if (dlAttempts >= 3) {
+                // If it fails after 3, let the global try/catch get it but translate ECONNRESET
+                throw new Error("No se pudo descargar el audio de Telegram por inestabilidad de red (ECONNRESET/EFATAL). Por favor intenta de nuevo.");
+            }
+            await new Promise(r => setTimeout(r, 1000));
+          }
+        }
 
+        if (!audioBuffer) throw new Error('Audio no encontrado');
         textToProcess = await transcribeAudioOGG(audioBuffer);
         
         await bot.editMessageText(`Lo que escuché:\n_"${textToProcess}"_\n\n🧠 Pensando...`, {

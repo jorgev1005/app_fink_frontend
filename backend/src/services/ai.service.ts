@@ -322,23 +322,38 @@ Las claves requeridas son:
 
 Texto: ${text}`;
 
-  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      model: 'openai/gpt-4o-mini',
-      messages: [
-        { role: 'system', content: 'Debes responder SOLO con un OBJETO JSON válido. No uses markdown, ni backticks, ni comentarios (ej. {"monto": 100, ... }).' },
-        { role: 'user', content: prompt }
-      ]
-    })
-  });
+  let response;
+  let attempts = 0;
+  while (attempts < 3) {
+    try {
+      response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          model: 'openai/gpt-4o-mini',
+          messages: [
+            { role: 'system', content: 'Debes responder SOLO con un OBJETO JSON válido sin formato ni backticks.' },
+            { role: 'user', content: prompt }
+          ]
+        }),
+        signal: AbortSignal.timeout(15000)
+      });
+      break;
+    } catch (e) {
+      attempts++;
+      console.log('AI Timeout, retrying', attempts);
+      if (attempts >= 3) {
+          throw new Error("terminated"); // This mimics what telegram throws, or we can throw custom
+      }
+      await new Promise(r => setTimeout(r, 1500));
+    }
+  }
 
-  if (!response.ok) {
-    const err = await response.text();
+  if (!response || !response.ok) {
+    const err = response ? await response.text() : 'Network Timeout';
     throw new Error('Error en OpenRouter: ' + err);
   }
 
