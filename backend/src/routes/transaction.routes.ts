@@ -13,6 +13,7 @@ import {
   getTransactionCategories,
   uploadTransactionAttachments,
   deleteTransactionAttachment,
+  forceMarkPaid,
 } from '../controllers/transaction.controller';
 
 const router = Router();
@@ -68,6 +69,7 @@ router.get('/categories', getTransactionCategories);
 router.get('/:id', getTransactionById);
 router.post('/', createTransaction);
 router.put('/:id', updateTransaction);
+router.patch('/:id/force-paid', forceMarkPaid);
 router.delete('/:id', deleteTransaction);
 
 // Acciones especiales

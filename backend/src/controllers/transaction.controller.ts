@@ -1140,6 +1140,40 @@ export const updateTransaction = async (req: Request, res: Response) => {
 };
 
 /**
+ * Forzar transacción a Pagada sin generar recibo
+ */
+export const forceMarkPaid = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const user = (req as any).user;
+
+    const transaction = await prisma.transaction.findUnique({ where: { id } });
+
+    if (!transaction) {
+      return res.status(404).json({ success: false, error: { message: 'Transacción no encontrada' } });
+    }
+
+    const hasAccess = await checkProjectWriteAccess(user, transaction.projectId);
+    if (!hasAccess) {
+      return res.status(403).json({ success: false, error: { message: 'No tienes permisos' } });
+    }
+
+    const updated = await prisma.transaction.update({
+      where: { id },
+      data: {
+        amountPaid: Number(transaction.amount),
+        paymentStatus: 'PAID',
+        status: 'COMPLETED'
+      }
+    });
+
+    res.json({ success: true, data: updated });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
+/**
  * Cancelar una transacción
  */
 export const cancelTransaction = async (req: Request, res: Response) => {
