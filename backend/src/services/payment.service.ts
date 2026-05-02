@@ -171,57 +171,62 @@ export const PaymentService = {
          }
       }
 
-      // D. Update Target Status (Invoice or Transaction)
-      if (targetType === 'INVOICE') {
-          // Calculate deduction in Invoice Currency
-          const inv = targetObj;
-          let deduction = amount;
-          if (inv.currency !== currency && effectiveRate) {
-              if (inv.currency === 'USD' && currency === 'BS') deduction = amount / effectiveRate;
-              else if (inv.currency === 'BS' && currency === 'USD') deduction = amount * effectiveRate;
-          }
-          
-          const newOutstanding = Math.max(0, Number(inv.outstanding || inv.total) - deduction);
-          const newStatus = newOutstanding < 0.01 ? 'PAID' : 'PARTIALLY_PAID';
-          
-          await tx.invoice.update({
-              where: { id: inv.id },
-              data: {
-                  status: newStatus,
-                  outstanding: newOutstanding
-              }
-          });
-      } else {
-          // Update Legacy Transaction Paid Amount
-          const txn = targetObj;
-          let addedPaid = amount;
-          if (txn.currency !== currency && effectiveRate) {
-              if (txn.currency === 'USD' && currency === 'BS') addedPaid = amount / effectiveRate;
-              else if (txn.currency === 'BS' && currency === 'USD') addedPaid = amount * effectiveRate;
-          }
-          const txnAmount = Number((txn as any).amount || 0);
-          const currentPaid = Number((txn as any).amountPaid || 0) + addedPaid;
-          const normalizedPaid = Math.min(txnAmount, currentPaid);
-          const epsilon = 0.01;
-
-          let nextPaymentStatus: 'PENDING' | 'PARTIAL' | 'PAID' = 'PENDING';
-          let nextStatus: 'PENDING' | 'COMPLETED' = 'PENDING';
-
-          if (normalizedPaid >= txnAmount - epsilon) {
-            nextPaymentStatus = 'PAID';
-            nextStatus = 'COMPLETED';
-          } else if (normalizedPaid > epsilon) {
-            nextPaymentStatus = 'PARTIAL';
-          }
-
-          await tx.transaction.update({
-              where: { id: txn.id },
-            data: {
-              amountPaid: normalizedPaid,
-              paymentStatus: nextPaymentStatus,
-              status: nextStatus
+      // D. Update Target Status (Invoice or Transaction) FOR EVERY ALLOCATION
+      for (const a of allocations) {
+        if (a.invoiceId) {
+            const inv = await tx.invoice.findUnique({ where: { id: a.invoiceId } });
+            if (!inv) continue;
+            
+            let deduction = a.amount;
+            if (inv.currency !== currency && effectiveRate) {
+                if (inv.currency === 'USD' && currency === 'BS') deduction = a.amount / effectiveRate;
+                else if (inv.currency === 'BS' && currency === 'USD') deduction = a.amount * effectiveRate;
             }
-          });
+            
+            const newOutstanding = Math.max(0, Number(inv.outstanding || inv.total) - deduction);
+            const newStatus = newOutstanding < 0.01 ? 'PAID' : 'PARTIALLY_PAID';
+            
+            await tx.invoice.update({
+                where: { id: inv.id },
+                data: {
+                    status: newStatus,
+                    outstanding: newOutstanding
+                }
+            });
+        } else if (a.transactionId) {
+            const txn = await tx.transaction.findUnique({ where: { id: a.transactionId } });
+            if (!txn) continue;
+
+            let addedPaid = a.amount;
+            if (txn.currency !== currency && effectiveRate) {
+                if (txn.currency === 'USD' && currency === 'BS') addedPaid = a.amount / effectiveRate;
+                else if (txn.currency === 'BS' && currency === 'USD') addedPaid = a.amount * effectiveRate;
+            }
+            
+            const txnAmount = Number((txn as any).amount || 0);
+            const currentPaid = Number((txn as any).amountPaid || 0) + addedPaid;
+            const normalizedPaid = Math.min(txnAmount, currentPaid);
+            const epsilon = 0.01;
+
+            let nextPaymentStatus: 'PENDING' | 'PARTIAL' | 'PAID' = 'PENDING';
+            let nextStatus: 'PENDING' | 'COMPLETED' = 'PENDING';
+
+            if (normalizedPaid >= txnAmount - epsilon) {
+              nextPaymentStatus = 'PAID';
+              nextStatus = 'COMPLETED';
+            } else if (normalizedPaid > epsilon) {
+              nextPaymentStatus = 'PARTIAL';
+            }
+
+            await tx.transaction.update({
+                where: { id: txn.id },
+              data: {
+                amountPaid: normalizedPaid,
+                paymentStatus: nextPaymentStatus,
+                status: nextStatus
+              }
+            });
+        }
       }
 
       return payment;
