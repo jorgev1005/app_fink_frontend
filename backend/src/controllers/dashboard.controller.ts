@@ -195,6 +195,7 @@ export const getDashboardData = async (req: Request, res: Response) => {
         id: p.id,
         name: p.name,
         code: p.code,
+        description: p.description,
         color: p.color,
         transactionCount: p.transactions.length,
         incomeUsd,
