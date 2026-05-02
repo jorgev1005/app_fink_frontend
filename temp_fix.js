@@ -1,0 +1,1 @@
+const { PrismaClient } = require('/home/fink/backend/node_modules/@prisma/client'); const prisma = new PrismaClient(); prisma.account.update({ where: { id: 'ca2aad19-189b-48bc-b681-13c5fe0e3114' }, data: { currency: 'USD' } }).then(() => { console.log('Fixed'); process.exit(0); }).catch(e => console.error(e));

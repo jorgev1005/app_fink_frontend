@@ -1,0 +1,1 @@
+const { PrismaClient } = require('/home/fink/backend/node_modules/@prisma/client'); const prisma = new PrismaClient(); prisma.project.findMany().then(a => { console.log(a); process.exit(0); }).catch(e => console.error(e));

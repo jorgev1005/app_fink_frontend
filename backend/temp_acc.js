@@ -1,0 +1,1 @@
+const { PrismaClient } = require('@prisma/client'); const prisma = new PrismaClient(); prisma.account.findFirst({where: {name: 'Exchange Binance'}}).then(a => console.log(a)).finally(() => prisma.\());

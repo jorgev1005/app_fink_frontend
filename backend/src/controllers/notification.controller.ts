@@ -66,3 +66,25 @@ export const markAsRead = async (req: Request, res: Response) => {
     });
   }
 };
+
+export const markAllAsRead = async (req: Request, res: Response) => {
+  try {
+    await prisma.notification.updateMany({
+      where: {
+        userId: req.user!.id,
+        isRead: false,
+      },
+      data: { isRead: true }
+    });
+
+    res.json({
+      success: true,
+      message: 'Notificaciones marcadas como leidas'
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      success: false,
+      error: { message: error.message }
+    });
+  }
+};

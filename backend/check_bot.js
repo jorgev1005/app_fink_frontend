@@ -1,0 +1,1 @@
+const { PrismaClient } = require('@prisma/client'); const prisma = new PrismaClient(); async function main() { const tx = await prisma.transaction.findUnique({ where: { code: 'BOT-1777672520118' }, include: { paymentRecord: true } }); console.log(JSON.stringify(tx, null, 2)); prisma.$disconnect(); } main().catch(console.error);

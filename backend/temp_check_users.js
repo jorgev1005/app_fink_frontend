@@ -1,0 +1,1 @@
+const { PrismaClient } = require('@prisma/client'); const prisma = new PrismaClient(); prisma.user.findMany().then(u => { console.log('Usuarios en BD de Produccion:'); u.forEach(x => console.log(' - ' + x.email + ' (Rol: ' + x.role + ')')); process.exit(0); }).catch(console.error);

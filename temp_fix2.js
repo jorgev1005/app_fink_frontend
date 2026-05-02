@@ -1,0 +1,1 @@
+const { PrismaClient } = require('/home/fink/backend/node_modules/@prisma/client'); const prisma = new PrismaClient(); prisma.account.updateMany({ where: { name: { contains: 'Ajustes $' }, currency: 'BS' }, data: { currency: 'USD' } }).then(() => { console.log('Fixed multiple'); process.exit(0); }).catch(e => console.error(e));

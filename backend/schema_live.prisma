@@ -1,0 +1,845 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// USUARIOS Y AUTENTICACIÓN
+// ============================================
+
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  firstName String
+  lastName  String
+  role      String   @default("USER") // ADMIN, MANAGER, ACCOUNTANT, USER, VIEWER
+  isActive  Boolean  @default(true)
+  avatar    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relaciones
+  projects            ProjectUser[]
+  transactions        Transaction[]
+  documents           Document[]
+  activityLogs        ActivityLog[]
+  // Consolidation groups created by the user
+  consolidationGroups ConsolidationGroup[]
+  payments            Payment[]
+  occurrenceBatches   OccurrenceBatch[]
+
+  @@map("users")
+}
+
+// ============================================
+// PROYECTOS / UNIDADES DE NEGOCIO
+// ============================================
+
+model Project {
+  id          String        @id @default(uuid())
+  name        String
+  description String?
+  code        String        @unique // Código único del proyecto
+  status      String        @default("ACTIVE") // ACTIVE, PAUSED, COMPLETED, ARCHIVED, PAUSED
+  color       String        @default("#3B82F6") // Para UI
+  icon        String?
+  logoUrl     String?       // URL o path del logo del proyecto
+
+  // Capital inicial
+  initialCapitalBs  Float @default(0)
+  initialCapitalUsd Float @default(0)
+  initialCapitalEur Float @default(0)
+
+  startDate DateTime?
+  endDate   DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relaciones
+  users                   ProjectUser[]
+  accounts                Account[]
+  transactions            Transaction[]
+  templates               TransactionTemplate[]
+  documents               Document[]
+  invoices                Invoice[]
+  products                Product[]
+  payments                Payment[]
+  recurringRules          RecurringRule[]
+  budgets                 Budget[]
+  contacts                ContactPerson[]
+  // Categorías normalizadas de transacciones
+  transactionCategories   TransactionCategory[]
+  // Secuencias de códigos de cuenta
+  accountCodeSequences    AccountCodeSequence[]
+  // Secuencia de códigos de transacción (uno por proyecto)
+  transactionCodeSequence TransactionCodeSequence?
+
+  @@map("projects")
+}
+
+model ProjectUser {
+  id        String @id @default(uuid())
+  projectId String
+  userId    String
+  role      String @default("member") // owner, manager, member, viewer
+
+  createdAt DateTime @default(now())
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@map("project_users")
+}
+
+// ============================================
+// PLAN DE CUENTAS
+// ============================================
+
+model Account {
+  id          String         @id @default(uuid())
+  code        String // Código contable (ej: 1.1.01.001)
+  name        String
+  description String?
+  type        String // ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE
+  subType     String // CASH, BANK, etc.
+  currency    String @default("BS") // BS, USD, EUR
+
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  parentId String?
+  parent   Account?  @relation("AccountHierarchy", fields: [parentId], references: [id])
+  children Account[] @relation("AccountHierarchy")
+
+  // Balances por moneda
+  balanceBs  Float @default(0)
+  balanceUsd Float @default(0)
+  balanceEur Float @default(0)
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relaciones
+  transactionDebits          TransactionEntry[]          @relation("DebitAccount")
+  transactionCredits         TransactionEntry[]          @relation("CreditAccount")
+  // Relation to consolidation groups membership
+  consolidationGroupAccounts ConsolidationGroupAccount[]
+
+  // Smart ERP Relations
+  paymentSources             Payment[]                   @relation("PaymentSourceAccount")
+  contactReceivables         ContactPerson[]             @relation("ContactReceivable")
+  contactPayables            ContactPerson[]             @relation("ContactPayable")
+  productIncomes             Product[]                   @relation("ProductIncome")
+  productExpenses            Product[]                   @relation("ProductExpense")
+
+  @@unique([projectId, code])
+  @@map("accounts")
+}
+
+// Grupos de consolidación reutilizables. Permiten agrupar cuentas (de distintos proyectos)
+// para generar reportes consolidados y exportaciones.
+model ConsolidationGroup {
+  id          String  @id @default(uuid())
+  name        String
+  description String?
+  ownerId     String // usuario que creó el grupo
+  owner       User    @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  accounts ConsolidationGroupAccount[]
+
+  @@map("consolidation_groups")
+}
+
+model ConsolidationGroupAccount {
+  id        String @id @default(uuid())
+  groupId   String
+  accountId String
+
+  group   ConsolidationGroup @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  account Account            @relation(fields: [accountId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@unique([groupId, accountId])
+  @@map("consolidation_group_accounts")
+}
+
+// Secuencia atómica para generación de códigos de cuentas
+model AccountCodeSequence {
+  id        String   @id @default(uuid())
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  type    String
+  subType String?
+
+  // contador incremental
+  counter Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectId, type, subType])
+  @@map("account_code_sequences")
+}
+
+// Secuencia atómica para generación de códigos de transacción por proyecto
+model TransactionCodeSequence {
+  id        String  @id @default(uuid())
+  projectId String  @unique
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  // contador incremental
+  counter Int @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("transaction_code_sequences")
+}
+
+// ============================================
+// TIPOS DE CAMBIO
+// ============================================
+
+model ExchangeRate {
+  id     String             @id @default(uuid())
+  date   DateTime           @default(now())
+  source String @default("BCV") // BCV, CUSTOM, API
+
+  // Tasas
+  usdToBs  Float
+  eurToBs  Float
+  eurToUsd Float
+
+  // Metadatos
+  isOfficial Boolean @default(false)
+  isFallback Boolean @default(false)
+  notes      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relaciones
+  transactions Transaction[]
+
+  @@index([date])
+  @@map("exchange_rates")
+}
+
+// ============================================
+// TRANSACCIONES CONTABLES
+// ============================================
+
+model Transaction {
+  id     String            @id @default(uuid())
+  code   String            @unique // Código único de transacción
+  date   DateTime          @default(now())
+  type   String // INCOME, EXPENSE, TRANSFER, ADJUSTMENT
+  // seguir usando TransactionStatus por compatibilidad en tablas existentes
+  status String @default("COMPLETED") // DRAFT, PENDING, COMPLETED, CANCELLED, RECONCILED
+
+  description String
+  reference   String? // Número de factura, comprobante, etc.
+  notes       String?
+
+  // Proyecto
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  // Moneda y montos
+  currency String // BS, USD, EUR
+  amount   Float
+
+  // Conversión a otras monedas (calculado automáticamente)
+  amountBs  Float
+  amountUsd Float
+  amountEur Float
+
+  // Tasa de cambio usada
+  exchangeRateId String?
+  exchangeRate   ExchangeRate? @relation(fields: [exchangeRateId], references: [id])
+  // Fecha de vencimiento (para transacciones pendientes / programadas)
+  dueDate        DateTime?
+
+  // Usuario que registró
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  // Contacto (cliente/proveedor) - NUEVO
+  contactPersonId String?
+  contactPerson   ContactPerson? @relation(fields: [contactPersonId], references: [id])
+
+  // Categorización (opcional, para reportes)
+  category    String?
+  subcategory String?
+  // Normalized category reference (optional)
+  categoryId  String?
+  categoryRef TransactionCategory? @relation(fields: [categoryId], references: [id])
+  tags        String // Array de tags para búsqueda (JSON)
+
+  // Archivos adjuntos
+  attachments String // URLs de archivos (JSON)
+
+  // Pago: cantidad ya asignada (sum of allocations) y estatus resumido
+  amountPaid    Float                  @default(0)
+  paymentStatus String @default("PENDING") // PENDING, PARTIAL, PAID
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relaciones
+  entries     TransactionEntry[]
+  documents   Document[]
+  // Allocations (pagos aplicados a esta transacción)
+  allocations PaymentAllocation[]
+
+  // Detalle de líneas (productos/servicios) para visualización
+  lines String? // (JSON)
+
+  // Smart ERP: Reversal Link
+  reversedByTransactionId String? @unique
+  reversedByTransaction   Transaction? @relation("TransactionReversal", fields: [reversedByTransactionId], references: [id])
+  reversesTransaction     Transaction? @relation("TransactionReversal")
+  
+  // Link to a Payment record if this transaction represents a payment
+  paymentRecord    Payment? @relation("PaymentTransaction")
+
+  @@index([projectId, date])
+  @@index([type, status])
+  @@map("transactions")
+}
+
+// Normalized categories for transactions
+model TransactionCategory {
+  id        String   @id @default(uuid())
+  name      String   @unique
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  transactions Transaction[]
+  templates    TransactionTemplate[]
+
+  @@map("transaction_categories")
+}
+
+// Entradas contables (débitos y créditos)
+model TransactionEntry {
+  id            String      @id @default(uuid())
+  transactionId String
+  transaction   Transaction @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  // Cuenta de débito
+  debitAccountId String?
+  debitAccount   Account? @relation("DebitAccount", fields: [debitAccountId], references: [id])
+  debitAmount    Float  @default(0)
+
+  // Cuenta de crédito
+  creditAccountId String?
+  creditAccount   Account? @relation("CreditAccount", fields: [creditAccountId], references: [id])
+  creditAmount    Float  @default(0)
+
+  description String?
+
+  createdAt DateTime @default(now())
+
+  @@map("transaction_entries")
+}
+
+// ============================================
+// DOCUMENTOS Y ARCHIVO
+// ============================================
+
+model Document {
+  id     String         @id @default(uuid())
+  code   String         @unique
+  type   String // INVOICE, RECEIPT, etc.
+  status String @default("PENDING") // PENDING, APPROVED, PAID, OVERDUE, CANCELLED
+
+  title       String
+  description String?
+
+  // Montos
+  currency   String // BS, USD, EUR
+  amount     Float
+  amountPaid Float  @default(0)
+
+  // Fechas importantes
+  issueDate DateTime
+  dueDate   DateTime?
+  paidDate  DateTime?
+
+  // Tercero (cliente/proveedor)
+  thirdParty   String?
+  thirdPartyId String? // Para futuras relaciones con contactos
+
+  // Proyecto
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  // Transacción asociada
+  transactionId String?
+  transaction   Transaction? @relation(fields: [transactionId], references: [id])
+
+  // Archivos
+  files String // URLs de archivos PDF, imágenes, etc. (JSON)
+
+  // IA - Datos extraídos automáticamente
+  aiExtractedData String? // Datos extraídos por OCR/IA (JSON)
+  aiConfidence    Float? // Nivel de confianza de la IA
+
+  // Usuario
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  tags  String // (JSON)
+  notes String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId, status])
+  @@index([dueDate])
+  @@map("documents")
+}
+
+// ============================================
+// PRESUPUESTOS
+// ============================================
+
+model Budget {
+  id          String  @id @default(uuid())
+  name        String
+  description String?
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  // Período
+  startDate DateTime
+  endDate   DateTime
+
+  // Montos presupuestados por moneda
+  budgetBs  Float @default(0)
+  budgetUsd Float @default(0)
+  budgetEur Float @default(0)
+
+  // Categoría o tipo de gasto
+  category String?
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("budgets")
+}
+
+// ============================================
+// NOTIFICACIONES Y ALERTAS
+// ============================================
+
+model Notification {
+  id      String              @id @default(uuid())
+  type    String // DOCUMENT_DUE, etc.
+  channel String // IN_APP, EMAIL, WHATSAPP
+
+  title   String
+  message String
+  data    String? // Datos adicionales (JSON)
+
+  userId String? // null = notificación global
+
+  isRead Boolean   @default(false)
+  isSent Boolean   @default(false)
+  sentAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, isRead])
+  @@map("notifications")
+}
+
+// ============================================
+// LOG DE ACTIVIDADES (Auditoría)
+// ============================================
+
+model ActivityLog {
+  id     String @id @default(uuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id])
+
+  action   String // CREATE, UPDATE, etc.
+  entity   String // "Transaction", "Document", "Project", etc.
+  entityId String
+
+  description String
+  metadata    String? // Datos adicionales sobre la acción (JSON)
+
+  ipAddress String?
+  userAgent String?
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@index([entity, entityId])
+  @@map("activity_logs")
+}
+
+// ============================================
+// CONFIGURACIÓN GLOBAL
+// ============================================
+
+model SystemConfig {
+  id    String @id @default(uuid())
+  key   String @unique
+  value String // (JSON)
+
+  description String?
+
+  updatedAt DateTime @updatedAt
+
+  @@map("system_config")
+}
+
+// Prefer project-scoped settings for user/project preferences
+model ProjectSetting {
+  id        String  @id @default(uuid())
+  projectId String?
+  userId    String
+  key       String
+  value     String // (JSON)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([projectId, userId, key])
+  @@map("project_settings")
+}
+
+// ============================================
+// IA - INSIGHTS Y PREDICCIONES
+// ============================================
+
+model AIInsight {
+  id          String @id @default(uuid())
+  type        String // "expense_prediction", "document_due", "spending_pattern"
+  title       String
+  description String
+
+  // Datos del insight
+  data       String // (JSON)
+  confidence Float // 0-1
+
+  projectId String?
+
+  isRead     Boolean @default(false)
+  isActioned Boolean @default(false)
+
+  validUntil DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([projectId, createdAt])
+  @@map("ai_insights")
+}
+
+// Analytics events captured from frontend (lightweight)
+model AnalyticsEvent {
+  id        String   @id @default(uuid())
+  event     String
+  props     String? // (JSON)
+  ip        String?
+  createdAt DateTime @default(now())
+
+  @@index([event, createdAt])
+  @@map("analytics_events")
+}
+
+// ============================================
+// CONTACTOS (CLIENTES Y PROVEEDORES)
+// ============================================
+
+model ContactPerson {
+  id   String      @id @default(uuid())
+  name String // Nombre o razón social
+  type String @default("OTHER") // CUSTOMER, SUPPLIER, BOTH, OTHER
+
+  // Información de contacto
+  email   String?
+  phone   String?
+  address String?
+
+  // Información fiscal
+  taxId String? // RIF, NIT, etc.
+
+  // Proyecto
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  // Notas adicionales
+  notes    String?
+  isActive Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relaciones
+  transactions Transaction[]
+  templates    TransactionTemplate[]
+
+  // Smart ERP: Mapeo Contable Automático
+  defaultReceivableAccountId String?
+  defaultReceivableAccount   Account? @relation("ContactReceivable", fields: [defaultReceivableAccountId], references: [id])
+  defaultPayableAccountId    String?
+  defaultPayableAccount      Account? @relation("ContactPayable", fields: [defaultPayableAccountId], references: [id])
+
+  @@index([projectId, name])
+  @@index([type])
+  @@map("contact_persons")
+}
+
+// ============================================
+// RECURRING RULES Y OCCURRENCES
+// ============================================
+
+// Productos rápidos (catalogo mínimo para QuickTransaction)
+model Product {
+  id        String   @id @default(uuid())
+  projectId String?
+  project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  sku         String? @unique
+  name        String
+  description String?
+
+  currency  String @default("USD")
+  unitPrice Float  @default(0)
+
+  // Nuevos campos: unidad, si es gravable, tasa de impuesto y stock
+  unit    String? // ej: 'u', 'kg', 'pcs'
+  taxable Boolean @default(true)
+  taxRate Float @default(0) // porcentaje (ej: 16.00)
+  stock   Float @default(0)
+
+  // Smart ERP: Mapeo Contable
+  incomeAccountId  String?
+  incomeAccount    Account? @relation("ProductIncome", fields: [incomeAccountId], references: [id])
+  expenseAccountId String?
+  expenseAccount   Account? @relation("ProductExpense", fields: [expenseAccountId], references: [id])
+
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId, name])
+  @@map("products")
+}
+
+model RecurringRule {
+  id              String    @id @default(uuid())
+  projectId       String
+  project         Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  name            String
+  description     String?
+  amount          Float
+  currency        String
+  // entriesTemplate: JSON describing debit/credit accounts and amounts (templates)
+  entriesTemplate String // (JSON)
+  // scheduling
+  frequency       String @default("MONTHLY") // DAILY, WEEKLY, MONTHLY, YEARLY
+  interval        Int       @default(1)
+  startDate       DateTime
+  endDate         DateTime?
+  timezone        String    @default("America/Caracas")
+  dueDays         Int?
+  nextRunAt       DateTime
+  isActive        Boolean   @default(true)
+
+  // New fields for categorization and contact
+  contactId       String?
+  categoryId      String?
+  type            String?   @default("BILL") // BILL, INVOICE
+  autoPost        Boolean   @default(false) // If true, automatically creates the transaction
+
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  occurrences ScheduledOccurrence[]
+
+  @@index([projectId, nextRunAt])
+  @@map("recurring_rules")
+}
+
+model ScheduledOccurrence {
+  id              String           @id @default(uuid())
+  recurringRuleId String
+  recurringRule   RecurringRule    @relation(fields: [recurringRuleId], references: [id], onDelete: Cascade)
+  scheduledFor    DateTime
+  status          String @default("PENDING") // PENDING, POSTED, CANCELLED
+  invoiceId       String?
+  invoice         Invoice?         @relation(fields: [invoiceId], references: [id])
+  createdAt       DateTime         @default(now())
+
+  @@index([recurringRuleId, scheduledFor])
+  @@map("scheduled_occurrences")
+}
+
+// Registro de ejecuciones batch para marcas de ocurrencias
+model OccurrenceBatch {
+  id            String   @id @default(uuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  projectId     String?
+  requestParams String? // (JSON)
+  results       String? // (JSON)
+  createdAt     DateTime @default(now())
+
+  @@index([userId, createdAt])
+  @@map("occurrence_batches")
+}
+
+// ============================================
+// INVOICES, PAYMENTS y ALLOCATIONS
+// ============================================
+
+model Invoice {
+  id              String        @id @default(uuid())
+  projectId       String
+  project         Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  code            String        @unique
+  type            String // BILL, INVOICE
+  vendorId        String?
+  customerId      String?
+  issueDate       DateTime
+  dueDate         DateTime?
+  currency        String // BS, USD, EUR
+  total           Float
+  outstanding     Float
+  status          String @default("OPEN") // DRAFT, OPEN, PARTIALLY_PAID, PAID, CANCELLED
+  lines           String? // (JSON)
+  // transactionId String?
+  // transaction   Transaction?  @relation(fields: [transactionId], references: [id])
+  recurringRuleId String?
+
+  createdBy String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  payments    PaymentAllocation[]
+  occurrences ScheduledOccurrence[]
+
+  @@index([projectId, dueDate])
+  @@map("invoices")
+}
+
+model Payment {
+  id        String        @id @default(uuid())
+  projectId String
+  project   Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  code      String        @unique
+  date      DateTime      @default(now())
+  
+  // Source Currency (Moneda con la que se paga)
+  currency  String // BS, USD, EUR
+  amount    Float
+  
+  // Smart ERP: Cross-Currency Logic
+  targetCurrency String? // Moneda de la deuda (si difiere)
+  exchangeRate   Float?  @default(1) // Tasa usada para la conversión
+
+  method    String // CASH, BANK_TRANSFER, CARD, CHEQUE, OTHER
+  reference String?
+  status    String @default("COMPLETED") // DRAFT, COMPLETED, CANCELLED
+  userId    String
+  user      User          @relation(fields: [userId], references: [id])
+
+  // Smart ERP: Financial Account Link
+  accountId String? // Cuenta de donde sale/entra el dinero (Banco/Caja)
+  account   Account? @relation("PaymentSourceAccount", fields: [accountId], references: [id])
+
+  // Link to Journal Entry
+  transactionId String? @unique
+  transaction   Transaction? @relation("PaymentTransaction", fields: [transactionId], references: [id])
+
+  allocations PaymentAllocation[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId, date])
+  @@map("payments")
+}
+
+model PaymentAllocation {
+  id        String  @id @default(uuid())
+  paymentId String
+  payment   Payment @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+
+  // allocation can belong to an invoice OR to a transaction
+  invoiceId String?
+  invoice   Invoice? @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+
+  transactionId String?
+  transaction   Transaction? @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  // amount stored in the currency of the target (invoice or transaction)
+  allocatedAmount Float
+  createdAt       DateTime @default(now())
+
+  @@index([invoiceId])
+  @@index([transactionId])
+  @@map("payment_allocations")
+}
+
+model TransactionTemplate {
+  id          String   @id @default(uuid())
+  name        String   // User defined name for the favorite
+  
+  projectId   String
+  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  
+  type            String   // INCOME, EXPENSE, TRANSFER
+  description     String?
+  
+  categoryId      String?
+  categoryRef     TransactionCategory? @relation(fields: [categoryId], references: [id])
+  
+  contactPersonId String?
+  contactPerson   ContactPerson? @relation(fields: [contactPersonId], references: [id])
+  
+  currency        String   @default("USD")
+  amount          Float?   
+  
+  debitAccountId  String?
+  creditAccountId String?
+  
+  paymentMethod   String?
+  lines           String?  // JSON
+  
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("transaction_templates")
+}
+
+
+

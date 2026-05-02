@@ -133,10 +133,14 @@ export const getTransactions = async (req: Request, res: Response) => {
             },
           },
           exchangeRate: true,
-          paymentRecord: {
-            select: {
-              targetCurrency: true,
-              exchangeRate: true,
+          allocations: {
+            include: {
+              payment: {
+                select: {
+                  targetCurrency: true,
+                  exchangeRate: true,
+                }
+              }
             }
           },
           // include normalized category reference

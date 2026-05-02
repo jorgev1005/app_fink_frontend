@@ -285,9 +285,9 @@ export const parseFinancialTextToJSON = async (
     accounts?: { id: string; name: string; projectId: string | null }[];
   }
 ) => {
-  const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+  const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY || process.env.OPENAI_API_KEY;
   if (!OPENROUTER_API_KEY) {
-    throw new Error('Falta OPENROUTER_API_KEY');
+    throw new Error('Falta OPENROUTER_API_KEY u OPENAI_API_KEY');
   }
 
   const currentDateInfo = context?.currentDate ? `Hoy es: ${context.currentDate}. Usa esto de base para inferir la clave "fecha".` : '';

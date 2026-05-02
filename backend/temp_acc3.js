@@ -1,0 +1,1 @@
+const { PrismaClient } = require('@prisma/client'); const prisma = new PrismaClient(); prisma.account.findMany({where: {projectId: '0e1bcc2f-9192-4c9f-85d0-a5bf5702265e'}, select: {name: true, currency: true}}).then(a => console.log(a)).finally(() => prisma.$disconnect());
