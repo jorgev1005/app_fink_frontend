@@ -124,8 +124,8 @@ const inferFxTransferDetails = (
   const mentions = extractMonetaryMentions(text);
   if (mentions.length < 2) return null;
 
-  const sourceCurrency = normalizeCurrencyToken(originAccount?.currency) || mentions.find(mention => mention.currency !== 'BS')?.currency || mentions[0].currency;
-  const targetCurrency = normalizeCurrencyToken(destinationAccount?.currency) || mentions.find(mention => mention.currency !== sourceCurrency)?.currency || mentions[mentions.length - 1].currency;
+  const sourceCurrency = mentions[0].currency || normalizeCurrencyToken(originAccount?.currency);
+  const targetCurrency = mentions.find(m => m.currency !== sourceCurrency)?.currency || mentions[mentions.length - 1].currency || normalizeCurrencyToken(destinationAccount?.currency);
 
   if (!sourceCurrency || !targetCurrency || sourceCurrency === targetCurrency) return null;
 
