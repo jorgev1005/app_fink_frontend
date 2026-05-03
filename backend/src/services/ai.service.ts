@@ -290,7 +290,7 @@ export const parseFinancialTextToJSON = async (
     throw new Error('Falta OPENROUTER_API_KEY u OPENAI_API_KEY');
   }
 
-  const currentDateInfo = context?.currentDate ? `Hoy es: ${context.currentDate}. Usa esto de base para inferir la clave "fecha".` : '';
+  const currentDateInfo = context?.currentDate ? `Hoy es y ahora son las: ${context.currentDate} (YYYY-MM-DDTHH:mm:ss). Usa esto de base para inferir la clave "fecha".` : '';
   const projectsInfo = context?.projects?.length ? `Proyectos disponibles:\n${context.projects.map(p => `- ID: ${p.id} | Nombre: ${p.name}`).join('\n')}\nSi el usuario menciona un proyecto, usa su ID. Si no, usa null/vacío.` : '';
   const contactsInfo = context?.contacts?.length ? `Contactos disponibles (clientes/proveedores):\n${context.contacts.map(c => `- ID: ${c.id} | Nombre: ${c.name}`).join('\n')}\nSi el usuario menciona o infieres alguno de estos clientes/proveedores en el texto, usa su ID. Si no lo encuentras o no lo menciona claramente, devuelve null.` : '';
   const accountsInfo = context?.accounts?.length ? `Cuentas disponibles:\n${context.accounts.map(a => `- ID: ${a.id} | Nombre: ${a.name} | Proyecto_ID: ${a.projectId}`).join('\n')}\nSi el usuario menciona una cuenta origen o destino, intenta asociarla con uno de estos IDs.` : '';
@@ -308,7 +308,7 @@ Las claves requeridas son:
 - "monto" (número exacto del valor mencionado, sin comas para separador de miles. usa punto para decimal).
 - "moneda_dictada" (string: "BS", "USD" o "EUR". La denominación original referida).
 - "moneda_final" (string: "BS", "USD" o "EUR". La moneda real de pago/cobro exigida por el usuario).
-  - "fecha" (formato YYYY-MM-DD. Calcula "ayer", "hoy", etc. Si no se menciona explícitamente cuándo ocurrió en el texto, asume estrictamente la fecha actual).
+  - "fecha" (formato YYYY-MM-DDTHH:mm:ss. Si el usuario menciona una fecha u hora, conviértela usando el contexto actual, de lo contrario devuelve exactamente la fecha y hora indicadas en el Contexto actual).
 - "proyecto_id" (string con el ID del proyecto si lo menciona, de lo contrario null).
 - "contacto_id" (string con el ID del contacto cliente/proveedor si se menciona en el texto buscando entre los disponibles en el contexto, de lo contrario null).
 - "concepto" (string, descripción breve).

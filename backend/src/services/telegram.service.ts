@@ -229,8 +229,12 @@ export const initTelegramBot = () => {
         return bot.sendMessage(chatId, '❌ No se encontró usuario o proyecto activo.', { parse_mode: 'Markdown' });
       }
 
-      // Ajuste de zona horaria a Venezuela (UTC-4) para evitar brincos de día en la noche
-      const currentDateVe = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString().split('T')[0];
+      // Ajustar la fecha base a la recibida por Telegram (msg.date viene en segundos UTC)
+      // Lo transformamos a UTC-4 para pasárselo al asistente como fecha/hora actual local.
+      const msgDateMs = msg.date ? msg.date * 1000 : Date.now();
+      const currentDateVeMs = new Date(msgDateMs - 4 * 60 * 60 * 1000);
+      const currentDateVe = currentDateVeMs.toISOString().split('.')[0]; // YYYY-MM-DDTHH:mm:ss
+
       const extractedData = await parseFinancialTextToJSON(textToProcess, {
         currentDate: currentDateVe,
         projects: activeProjects,
@@ -276,7 +280,7 @@ export const initTelegramBot = () => {
         finalCurrency = normalizeCurrencyToken(destAcc.currency) || finalCurrency;
       }
 
-      const parsedDate = extractedData.fecha ? new Date(extractedData.fecha) : new Date(Date.now() - 4 * 60 * 60 * 1000);
+      const parsedDate = extractedData.fecha ? new Date(extractedData.fecha) : new Date(msgDateMs - 4 * 60 * 60 * 1000);
 
       const queryDate = new Date(parsedDate);
       queryDate.setHours(23, 59, 59, 999);
@@ -447,7 +451,7 @@ export const initTelegramBot = () => {
 
         const formatResponse = "🤖 *Revisión de Transacción Inteligente*\n\n" +
           "💰 *Monto:* " + amountLabel + "\n" +
-          "🗓️ *Fecha:* " + parsedDate.toISOString().split('T')[0] + "\n" +
+          "🗓️ *Fecha:* " + parsedDate.toISOString().replace('T', ' ').substring(0, 16) + "\n" +
           "📋 *Concepto:* " + extractedData.concepto + "\n" +
           "🏷️ *Categoría:* " + extractedData.categoria + "\n" +
           accountsInfoStr + "\n" +
