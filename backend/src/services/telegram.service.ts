@@ -449,9 +449,21 @@ export const initTelegramBot = () => {
           ? `${fxTransfer.sourceAmount} ${fxTransfer.sourceCurrency} → ${fxTransfer.targetAmount} ${fxTransfer.targetCurrency}`
           : `${parsedAmount} ${finalCurrency}`;
 
+        let finalTime = '00:00';
+        if (parsedDate.toISOString().endsWith('04:00:00.000Z') || parsedDate.getHours() === 0 && parsedDate.getMinutes() === 0) {
+          // Si no dictó hora (y la IA devolvió medianoche o inicio del día), ponemos la hora exacta del envío del mensaje
+          const sentDate = new Date(msgDateMs);
+          finalTime = sentDate.toISOString().replace('T', ' ').substring(11, 16);
+        } else {
+          // Si dictó una hora real en el audio, la usamos
+          finalTime = parsedDate.toISOString().replace('T', ' ').substring(11, 16);
+        }
+        
+        const fullDateTimeStr = parsedDate.toISOString().split('T')[0] + ' ' + finalTime;
+
         const formatResponse = "🤖 *Revisión de Transacción Inteligente*\n\n" +
           "💰 *Monto:* " + amountLabel + "\n" +
-          "🗓️ *Fecha:* " + parsedDate.toISOString().replace('T', ' ').substring(0, 16) + "\n" +
+          "🗓️ *Fecha:* " + fullDateTimeStr + "\n" +
           "📋 *Concepto:* " + extractedData.concepto + "\n" +
           "🏷️ *Categoría:* " + extractedData.categoria + "\n" +
           accountsInfoStr + "\n" +
