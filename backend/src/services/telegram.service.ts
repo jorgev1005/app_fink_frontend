@@ -450,12 +450,13 @@ export const initTelegramBot = () => {
           : `${parsedAmount} ${finalCurrency}`;
 
         let finalTime = '00:00';
-        if (parsedDate.toISOString().endsWith('04:00:00.000Z') || parsedDate.getHours() === 0 && parsedDate.getMinutes() === 0) {
-          // Si no dictó hora (y la IA devolvió medianoche o inicio del día), ponemos la hora exacta del envío del mensaje
+        const isTimeOmitted = !extractedData.fecha || !extractedData.fecha.includes('T');
+        if (isTimeOmitted || parsedDate.toISOString().endsWith('04:00:00.000Z') || parsedDate.getHours() === 0 && parsedDate.getMinutes() === 0) {
+          // Si no dictó hora (y la IA devolvió solo fecha o devolvió cero horas), sacamos la hora exacta del envío del mensaje de Telegram
           const sentDate = new Date(msgDateMs);
           finalTime = sentDate.toISOString().replace('T', ' ').substring(11, 16);
         } else {
-          // Si dictó una hora real en el audio, la usamos
+          // Si dictó una hora real en el audio y la IA la capturó con la T, la usamos
           finalTime = parsedDate.toISOString().replace('T', ' ').substring(11, 16);
         }
         
