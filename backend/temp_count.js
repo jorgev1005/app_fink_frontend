@@ -1,0 +1,1 @@
+const { PrismaClient } = require('@prisma/client'); const prisma = new PrismaClient(); async function check() { const txs = await prisma.transaction.findMany({ where: { paymentStatus: { in: ['PENDING', 'PARTIAL'] } }, select: { code: true, description: true, amount: true, paymentStatus: true }}); console.log(txs); } check();

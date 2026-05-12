@@ -1,10 +1,14 @@
+# Script para iniciar el entorno de desarrollo de FINK
+# Ejecutar con: .\start-dev.ps1
+
 param(
-  [int]$BackendPort = 4002,
-  [int]$FrontendPort = 3001,
+  [int]$BackendPort = 4000,
+  [int]$FrontendPort = 3000,
   [switch]$AllowExternal
 )
 
-Write-Host "Starting development environment..." -ForegroundColor Cyan
+Write-Host "🚀 Iniciando FINK - Sistema Administrativo" -ForegroundColor Cyan
+Write-Host ""
 
 # Resolve repository root (script location)
 $repoRoot = Split-Path -Parent $MyInvocation.MyCommand.Definition
@@ -38,47 +42,6 @@ if ($AllowExternal) {
 
 $apiUrl = "http://${apiHost}:${BackendPort}"
 
-Write-Host "API URL will be: $apiUrl" -ForegroundColor Green
-
-# Prepare .dev folder to store pids
-$devDir = Join-Path $repoRoot '.dev'
-if (-not (Test-Path $devDir)) { New-Item -ItemType Directory -Path $devDir | Out-Null }
-
-# Start backend in a new PowerShell window and record PID
-$backendPath = Join-Path $repoRoot 'backend'
-$corsOrigins = "http://localhost:$FrontendPort,http://127.0.0.1:$FrontendPort"
-if ($AllowExternal -and $apiHost -ne 'localhost') { $corsOrigins += ",http://${apiHost}:${FrontendPort}" }
-
-$backendCommand = "`$env:PORT=$BackendPort; `$env:CORS_ORIGIN='$corsOrigins'; cd '$backendPath'; npm run dev"
-Write-Host "Starting backend (port $BackendPort) with CORS: $corsOrigins" -ForegroundColor Cyan
-$bProc = Start-Process -FilePath pwsh -ArgumentList '-NoExit','-Command',$backendCommand -PassThru
-if ($bProc) { $bProc.Id | Out-File (Join-Path $devDir 'backend.pid') }
-
-# Start frontend in a new PowerShell window and record PID
-$frontendPath = Join-Path $repoRoot 'frontend'
-$frontendCommand = "`$env:PORT=$FrontendPort; `$env:NEXT_PUBLIC_API_URL='$apiUrl'; cd '$frontendPath'; npm run dev"
-Write-Host "Starting frontend (port $FrontendPort) -> NEXT_PUBLIC_API_URL=$apiUrl" -ForegroundColor Cyan
-$fProc = Start-Process -FilePath pwsh -ArgumentList '-NoExit','-Command',$frontendCommand -PassThru
-if ($fProc) { $fProc.Id | Out-File (Join-Path $devDir 'frontend.pid') }
-
-Write-Host "Started backend PID: $($bProc.Id)" -ForegroundColor Green
-Write-Host "Started frontend PID: $($fProc.Id)" -ForegroundColor Green
-
-Write-Host "Open in your laptop: http://localhost:$FrontendPort" -ForegroundColor Yellow
-if ($AllowExternal -and $apiHost -ne 'localhost') {
-  Write-Host "Open in other devices on the network (phone): http://${apiHost}:${FrontendPort}" -ForegroundColor Yellow
-  Write-Host "Make sure your firewall allows incoming connections to ports $FrontendPort and $BackendPort." -ForegroundColor Magenta
-}
-
-Write-Host "Logs will remain visible in the opened PowerShell windows." -ForegroundColor Cyan
-
-Write-Host "To stop these processes later run: .\stop-dev.ps1" -ForegroundColor Cyan
-# Script para iniciar el entorno de desarrollo de FINK
-# Ejecutar con: .\start-dev.ps1
-
-Write-Host "🚀 Iniciando FINK - Sistema Administrativo" -ForegroundColor Cyan
-Write-Host ""
-
 # Verificar Docker
 Write-Host "📦 Verificando Docker..." -ForegroundColor Yellow
 $dockerRunning = docker ps 2>$null
@@ -108,31 +71,37 @@ Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process -Force
 Write-Host ""
 Write-Host "🔧 Iniciando servidores de desarrollo..." -ForegroundColor Cyan
 Write-Host ""
-Write-Host "   Backend:  http://localhost:4000" -ForegroundColor Green
-Write-Host "   Frontend: http://localhost:3000" -ForegroundColor Green
+Write-Host "   Backend:  http://localhost:${BackendPort} (CORS: ${corsOrigins})" -ForegroundColor Green
+Write-Host "   Frontend: http://localhost:${FrontendPort} (API: ${apiUrl})" -ForegroundColor Green
 Write-Host ""
-Write-Host "   Credenciales:" -ForegroundColor Yellow
+Write-Host "   Credenciales locales:" -ForegroundColor Yellow
 Write-Host "   Email:    admin@fink.com" -ForegroundColor White
 Write-Host "   Password: Admin123!" -ForegroundColor White
 Write-Host ""
-Write-Host "⚠️  Presiona Ctrl+C para detener todos los servidores" -ForegroundColor Yellow
+Write-Host "To stop these processes later run: .\stop-dev.ps1" -ForegroundColor Cyan
 Write-Host ""
 
-# Usar Start-Process para abrir terminales separadas
-$backendPath = Join-Path $PSScriptRoot "backend"
-$frontendPath = Join-Path $PSScriptRoot "frontend"
+# Prepare .dev folder to store pids
+$devDir = Join-Path $repoRoot '.dev'
+if (-not (Test-Path $devDir)) { New-Item -ItemType Directory -Path $devDir | Out-Null }
 
-# Iniciar Backend en nueva terminal (con variables de entorno)
-$backendCommand = "`$env:PORT=${BackendPort}; `$env:CORS_ORIGIN='${corsOrigins}'; cd '${backendPath}'; npm run dev"
-$bProc = Start-Process pwsh -ArgumentList "-NoExit","-Command",$backendCommand -PassThru
+$corsOrigins = "http://localhost:$FrontendPort,http://127.0.0.1:$FrontendPort"
+if ($AllowExternal -and $apiHost -ne 'localhost') { $corsOrigins += ",http://${apiHost}:${FrontendPort}" }
+
+$backendPath = Join-Path $repoRoot 'backend'
+$frontendPath = Join-Path $repoRoot 'frontend'
+
+# Start backend in a new PowerShell window and record PID
+$backendCommand = "`$env:PORT=$BackendPort; `$env:CORS_ORIGIN='$corsOrigins'; cd '$backendPath'; npm run dev"
+$bProc = Start-Process -FilePath pwsh -ArgumentList '-NoExit','-Command',$backendCommand -PassThru
 if ($bProc) { $bProc.Id | Out-File (Join-Path $devDir 'backend.pid') }
 
-# Esperar 5 segundos para que el backend inicie
-Start-Sleep -Seconds 5
+# Esperar 3 segundos para que el backend inicie
+Start-Sleep -Seconds 3
 
-# Iniciar Frontend en nueva terminal (con NEXT_PUBLIC_API_URL)
-$frontendCommand = "`$env:PORT=${FrontendPort}; `$env:NEXT_PUBLIC_API_URL='${apiUrl}'; Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope Process -Force; cd '${frontendPath}'; npm run dev"
-$fProc = Start-Process pwsh -ArgumentList "-NoExit","-Command",$frontendCommand -PassThru
+# Start frontend in a new PowerShell window and record PID
+$frontendCommand = "`$env:PORT=$FrontendPort; `$env:NEXT_PUBLIC_API_URL='$apiUrl'; cd '$frontendPath'; npm run dev"
+$fProc = Start-Process -FilePath pwsh -ArgumentList '-NoExit','-Command',$frontendCommand -PassThru
 if ($fProc) { $fProc.Id | Out-File (Join-Path $devDir 'frontend.pid') }
 
 Write-Host "✅ Servidores iniciados en terminales separadas" -ForegroundColor Green

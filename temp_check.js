@@ -1,0 +1,1 @@
+const { PrismaClient } = require('@prisma/client'); const prisma = new PrismaClient(); prisma.transaction.findMany({ orderBy: { createdAt: 'desc' }, take: 5, select: { code: true, amount: true, amountPaid: true, paymentStatus: true, status: true, allocations: true } }).then(res => console.log(JSON.stringify(res, null, 2))).catch(console.error)

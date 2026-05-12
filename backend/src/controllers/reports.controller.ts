@@ -131,10 +131,8 @@ export const getAnalyticsCategories = async (req: Request, res: Response) => {
     const where: any = {
       status: 'COMPLETED',
       ...getProjectAccessFilter(req.user!),
-      // Filter by type (EXPENSE or INCOME) to make the chart meaningful
-      OR: type === 'EXPENSE' 
-        ? [{ type: 'EXPENSE' }, { type: 'PAYMENT' }] 
-        : [{ type: 'INCOME' }, { type: 'COLLECTION' }]
+      // Filter by type (EXPENSE or INCOME) to prevent double counting with PAYMENT/COLLECTION
+      type: type === 'EXPENSE' ? 'EXPENSE' : 'INCOME'
     };
 
     if (projectId) where.projectId = String(projectId);
@@ -147,6 +145,9 @@ export const getAnalyticsCategories = async (req: Request, res: Response) => {
     const transactions = await prisma.transaction.findMany({
       where,
       select: {
+        id: true,
+        date: true,
+        description: true,
         category: true,
         categoryRef: { select: { name: true } },
         amountBs: true,
@@ -154,16 +155,18 @@ export const getAnalyticsCategories = async (req: Request, res: Response) => {
       }
     });
 
-    const grouped: Record<string, number> = {};
+    const grouped: Record<string, { value: number, transactions: any[] }> = {};
 
     transactions.forEach(t => {
       const catName = t.categoryRef?.name || t.category || 'Sin Categoría';
       const amount = currency === 'USD' ? (t.amountUsd || 0) : (t.amountBs || 0);
-      grouped[catName] = (grouped[catName] || 0) + Number(amount);
+      if (!grouped[catName]) grouped[catName] = { value: 0, transactions: [] };
+      grouped[catName].value += Number(amount);
+      grouped[catName].transactions.push(t);
     });
 
     const result = Object.entries(grouped)
-      .map(([name, value]) => ({ name, value }))
+      .map(([name, data]) => ({ name, value: data.value, transactions: data.transactions }))
       .sort((a, b) => b.value - a.value);
 
     res.json({ success: true, data: result });

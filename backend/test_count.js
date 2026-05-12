@@ -1,0 +1,1 @@
+const { PrismaClient } = require('@prisma/client'); const p = new PrismaClient(); p.transaction.findMany({ select: { type: true, amountBs: true, category: true, status: true} }).then(tx => console.log(tx.slice(0, 10))).finally(()=>p.\$disconnect())

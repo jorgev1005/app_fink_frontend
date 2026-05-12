@@ -1,0 +1,1 @@
+const { PrismaClient } = require('@prisma/client'); const prisma = new PrismaClient(); async function fix() { await prisma.transaction.updateMany({ where: { code: { startsWith: 'TRX-PAY-' }, paymentStatus: 'PENDING' }, data: { paymentStatus: 'PAID' } }); console.log('Fixed DB'); } fix();

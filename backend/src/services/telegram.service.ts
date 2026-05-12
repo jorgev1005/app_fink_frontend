@@ -450,17 +450,30 @@ export const initTelegramBot = () => {
           : `${parsedAmount} ${finalCurrency}`;
 
         let finalTime = '00:00';
-        const isTimeOmitted = !extractedData.fecha || !extractedData.fecha.includes('T');
-        if (isTimeOmitted || parsedDate.toISOString().endsWith('04:00:00.000Z') || parsedDate.getHours() === 0 && parsedDate.getMinutes() === 0) {
-          // Si no dictó hora (y la IA devolvió solo fecha o devolvió cero horas), sacamos la hora exacta del envío del mensaje de Telegram
-          const sentDate = new Date(msgDateMs);
-          finalTime = sentDate.toISOString().replace('T', ' ').substring(11, 16);
+        let finalDateStr = '';
+        const hasZeroTime = extractedData.fecha && extractedData.fecha.includes('T00:00:00');
+        const isTimeOmitted = !extractedData.fecha || !extractedData.fecha.includes('T') || hasZeroTime;
+        
+        if (extractedData.fecha) {
+           finalDateStr = extractedData.fecha.split('T')[0];
         } else {
-          // Si dictó una hora real en el audio y la IA la capturó con la T, la usamos
-          finalTime = parsedDate.toISOString().replace('T', ' ').substring(11, 16);
+           const veD = new Date(msgDateMs - 4 * 60 * 60 * 1000);
+           finalDateStr = veD.toISOString().split('T')[0];
+        }
+
+        if (isTimeOmitted) {
+          // Sacamos la hora exacta del envío del mensaje de Telegram convertida a zona VE (UTC-4)
+          const veDate = new Date(msgDateMs - 4 * 60 * 60 * 1000);
+          finalTime = veDate.toISOString().substring(11, 16);
+        } else {
+          // Si la IA dictó una hora real 'YYYY-MM-DDTHH:mm:ss', la extraemos directamente como texto
+          finalTime = extractedData.fecha.substring(11, 16);
         }
         
-        const fullDateTimeStr = parsedDate.toISOString().split('T')[0] + ' ' + finalTime;
+        const fullDateTimeStr = finalDateStr + ' ' + finalTime;
+        // Al colocar el offset -04:00 garantizamos que Prisma lo guarde en UTC de forma que 
+        // cuando el frontend lo lea, devuelva esa misma hora local.
+        transactionData.date = new Date(`${finalDateStr}T${finalTime}:00.000-04:00`);
 
         const formatResponse = "🤖 *Revisión de Transacción Inteligente*\n\n" +
           "💰 *Monto:* " + amountLabel + "\n" +

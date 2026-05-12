@@ -1378,3 +1378,140 @@ export const getTransactionCategories = async (req: Request, res: Response) => {
  * Función auxiliar para actualizar balance de cuenta
  */
 // moved updateAccountBalance to services/account.service
+
+/**
+ * Reversar una transacción: Genera un asiento reverso y un borrador para revisión.
+ */
+export const reverseTransaction = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const user = (req as any).user;
+
+    const originalTx = await prisma.transaction.findUnique({
+      where: { id },
+      include: { entries: true, project: true },
+    });
+
+    if (!originalTx) {
+      return res.status(404).json({ success: false, error: { message: 'Transacción no encontrada' } });
+    }
+
+    const hasAccess = await checkProjectWriteAccess(user, originalTx.projectId);
+    if (!hasAccess) {
+      return res.status(403).json({ success: false, error: { message: 'No tienes acceso' } });
+    }
+
+    if (originalTx.status === 'CANCELLED' || originalTx.status === 'REVERSED') {
+      return res.status(400).json({ success: false, error: { message: 'La transacción ya está cancelada o reversada' } });
+    }
+
+    // Usar la librería de servicio para revertir (ya los cancelamos manual en saldo)
+    const { updateAccountBalance } = await import('../services/account.service');
+
+    // 1. Revertir balances matemáticamente
+    for (const entry of originalTx.entries) {
+      if (entry.debitAccountId && Number(entry.debitAmount) > 0) {
+        await updateAccountBalance(entry.debitAccountId, originalTx.currency as any, Number(entry.debitAmount), 'CREDIT');
+      }
+      if (entry.creditAccountId && Number(entry.creditAmount) > 0) {
+        await updateAccountBalance(entry.creditAccountId, originalTx.currency as any, Number(entry.creditAmount), 'DEBIT');
+      }
+    }
+
+    // 2. Marcar la transacción original como REVERSED/CANCELLED con link a Draft
+    let newNotes = originalTx.notes || '';
+    if (newNotes.length > 0) newNotes += '\n';
+    newNotes += '[Cancelada por Reversión]';
+
+    const updatedOriginal = await prisma.transaction.update({
+      where: { id },
+      data: {
+        status: 'CANCELLED',
+        notes: newNotes,
+        paymentStatus: 'PENDING'
+      }
+    });
+
+    // Cancelar pagos y links si los tiene
+    const allocations = await prisma.paymentAllocation.findMany({
+      where: { transactionId: id },
+      include: { payment: true }
+    });
+
+    for (const alloc of allocations) {
+      if (alloc.payment && alloc.payment.status !== 'CANCELLED') {
+        await prisma.payment.update({
+          where: { id: alloc.payment.id },
+          data: { status: 'CANCELLED' }
+        });
+      }
+      await prisma.paymentAllocation.delete({ where: { id: alloc.id } });
+    }
+
+    // 3. Crear el borrador clonado para corregir
+    const uniqueSuffix = Date.now().toString().slice(-6) + Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+    const newCode = `TRX-${originalTx.project.code}-${uniqueSuffix}`;
+
+    const draftTx = await prisma.transaction.create({
+      data: {
+        code: newCode,
+        date: new Date(),
+        type: originalTx.type,
+        status: 'DRAFT', // ¡Clave!
+        description: originalTx.description + ' (Corrección de Reversión)',
+        reference: originalTx.reference,
+        notes: '', // Limpiamos las notas para la corrección
+        projectId: originalTx.projectId,
+        currency: originalTx.currency,
+        amount: Number(originalTx.amount),
+        amountBs: Number(originalTx.amountBs),
+        amountUsd: Number(originalTx.amountUsd),
+        amountEur: Number(originalTx.amountEur),
+        exchangeRateId: originalTx.exchangeRateId,
+        userId: user.id || originalTx.userId,
+        contactPersonId: originalTx.contactPersonId,
+        category: originalTx.category,
+        subcategory: originalTx.subcategory,
+        categoryId: originalTx.categoryId,
+        tags: originalTx.tags,
+        attachments: originalTx.attachments,
+        lines: originalTx.lines,
+        // Enlace al original
+        reversesTransaction: {
+          connect: { id: originalTx.id }
+        },
+        entries: {
+          create: originalTx.entries.map((e) => ({
+            debitAccountId: e.debitAccountId,
+            debitAmount: Number(e.debitAmount),
+            creditAccountId: e.creditAccountId,
+            creditAmount: Number(e.creditAmount),
+            description: e.description,
+          })),
+        },
+      }
+    });
+
+    try {
+      const { logActivity } = await import('../services/activityLog.service');
+      await logActivity(
+        (req as any).user?.id || 'system',
+        'UPDATE',
+        'Transaction',
+        originalTx.id,
+        `Reversión de transacción ${originalTx.code}`,
+        { amount: originalTx.amount, newDraftId: draftTx.id },
+        req.ip,
+        req.headers['user-agent'] as string
+      );
+    } catch (e) {}
+
+    res.json({
+      success: true,
+      message: 'Transacción reversada. Se ha creado un nuevo borrador para corregir los datos.',
+      data: draftTx
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};

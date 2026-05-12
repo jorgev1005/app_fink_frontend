@@ -141,6 +141,8 @@ export const PaymentService = {
             amountUsd,
             amountEur: 0,
             status: 'COMPLETED',
+            paymentStatus: 'PAID',
+            amountPaid: amount,
             // Link is established from Payment side via `paymentRecord` usually, 
             // but we can also set it here if relation allows.
             paymentRecord: { connect: { id: payment.id } },

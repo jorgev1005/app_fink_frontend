@@ -1,0 +1,1 @@
+const { PrismaClient } = require('@prisma/client'); const prisma = new PrismaClient(); async function main() { const txn = await prisma.transaction.findUnique({ where: { id: 'efb3b534-1831-4a90-abd8-7c20e8b7b67b' }}); console.log('TXN:', txn); } main();

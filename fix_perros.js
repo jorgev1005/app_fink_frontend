@@ -1,0 +1,1 @@
+const { PrismaClient } = require('@prisma/client'); const prisma = new PrismaClient(); async function main() { await prisma.transaction.update({ where: { id: 'efb3b534-1831-4a90-abd8-7c20e8b7b67b' }, data: { amountPaid: 7833, paymentStatus: 'PAID', status: 'COMPLETED' }}); console.log('Fixed Perros'); } main();

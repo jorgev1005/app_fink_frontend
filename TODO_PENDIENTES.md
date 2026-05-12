@@ -18,3 +18,7 @@
 ## 🔴 Prioridad Alta / Urgente
 - [ ] **Permisos:** Revisar y actualizar los permisos de usuarios para cada proyecto.
 - [ ] (Espacio para nuevos pendientes)
+
+## 🟣 Integraciones Futuras (Anotadas el 07/05)
+- [ ] **Integración Bot de WhatsApp (Consultas de Inventario):** Crear un endpoint dedicado (API) con llave de seguridad para que el bot pueda leer las existencias de productos en tiempo real y responderle a los clientes.
+- [ ] **Integración con Odoo:** Desarrollar un módulo de comunicación (`odoo.service.ts`) para sincronización bidireccional (enviar datos de transacciones a Odoo y/o descargar catálogo de productos/clientes hacia Fink).

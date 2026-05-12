@@ -308,7 +308,7 @@ Las claves requeridas son:
 - "monto" (número exacto del valor mencionado, sin comas para separador de miles. usa punto para decimal).
 - "moneda_dictada" (string: "BS", "USD" o "EUR". La denominación original referida).
 - "moneda_final" (string: "BS", "USD" o "EUR". La moneda real de pago/cobro exigida por el usuario).
-  - "fecha" (formato YYYY-MM-DDTHH:mm:ss. Si el usuario menciona una fecha u hora, conviértela usando el contexto actual, de lo contrario devuelve exactamente la fecha y hora indicadas en el Contexto actual).
+  - "fecha" (formato YYYY-MM-DDTHH:mm:ss). CRÍTICO: Si el usuario menciona EXPLÍCITAMENTE una fecha o día (ej. "8 de mayo", "ayer", "el viernes pasado"), usa ESA fecha calculándola respecto al Contexto actual temporal. Si el usuario indica una fecha total (día, mes, año), respétala exactamente. SOLO SI NO MENCIONA NADA DE FECHAS, usarás exactamente la fecha del Contexto actual.
 - "proyecto_id" (string con el ID del proyecto si lo menciona, de lo contrario null).
 - "contacto_id" (string con el ID del contacto cliente/proveedor si se menciona en el texto buscando entre los disponibles en el contexto, de lo contrario null).
 - "concepto" (string, descripción breve).
@@ -334,6 +334,7 @@ Texto: ${text}`;
         },
         body: JSON.stringify({
           model: 'openai/gpt-4o-mini',
+          max_tokens: 1000,
           messages: [
             { role: 'system', content: 'Debes responder SOLO con un OBJETO JSON válido sin formato ni backticks.' },
             { role: 'user', content: prompt }

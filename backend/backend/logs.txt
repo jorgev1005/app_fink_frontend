@@ -1,0 +1,1007 @@
+[TAILING] Tailing last 500 lines for [fink-backend] process (change the value with --lines option)
+/home/fink/.pm2/logs/fink-backend-error.log last 500 lines:
+0|fink-bac |       timeoutCb: [Function: emitRequestTimeout],
+0|fink-bac |       upgradeOrConnect: false,
+0|fink-bac |       parser: null,
+0|fink-bac |       maxHeadersCount: null,
+0|fink-bac |       reusedSocket: false,
+0|fink-bac |       host: 've.dolarapi.com',
+0|fink-bac |       protocol: 'https:',
+0|fink-bac |       _redirectable: [Circular *2],
+0|fink-bac |       [Symbol(shapeMode)]: false,
+0|fink-bac |       [Symbol(kCapture)]: false,
+0|fink-bac |       [Symbol(kBytesWritten)]: 0,
+0|fink-bac |       [Symbol(kNeedDrain)]: false,
+0|fink-bac |       [Symbol(corked)]: 0,
+0|fink-bac |       [Symbol(kOutHeaders)]: [Object: null prototype],
+0|fink-bac |       [Symbol(errored)]: null,
+0|fink-bac |       [Symbol(kHighWaterMark)]: 16384,
+0|fink-bac |       [Symbol(kRejectNonStandardBodyWrites)]: false,
+0|fink-bac |       [Symbol(kUniqueHeaders)]: null,
+0|fink-bac |       [Symbol(kError)]: [Circular *1]
+0|fink-bac |     },
+0|fink-bac |     _currentUrl: 'https://ve.dolarapi.com/v1/dolares/oficial',
+0|fink-bac |     _timeout: null,
+0|fink-bac |     [Symbol(shapeMode)]: true,
+0|fink-bac |     [Symbol(kCapture)]: false
+0|fink-bac |   }
+0|fink-bac | }
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ECONNRESET"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | RequestError: Error: read ECONNRESET
+0|fink-bac |     at new RequestError (/home/fink/backend/node_modules/request-promise-core/lib/errors.js:14:15)
+0|fink-bac |     ... 11 lines matching cause stack trace ...
+0|fink-bac |     at processTicksAndRejections (node:internal/process/task_queues:82:21) {
+0|fink-bac |   code: 'EFATAL',
+0|fink-bac |   cause: RequestError: Error: read ECONNRESET
+0|fink-bac |       at new RequestError (/home/fink/backend/node_modules/request-promise-core/lib/errors.js:14:15)
+0|fink-bac |       at Request.plumbing.callback (/home/fink/backend/node_modules/request-promise-core/lib/plumbing.js:87:29)
+0|fink-bac |       at Request.RP$callback [as _callback] (/home/fink/backend/node_modules/request-promise-core/lib/plumbing.js:46:31)
+0|fink-bac |       at self.callback (/home/fink/backend/node_modules/@cypress/request/request.js:183:22)
+0|fink-bac |       at Request.emit (node:events:524:28)
+0|fink-bac |       at Request.onRequestError (/home/fink/backend/node_modules/@cypress/request/request.js:869:8)
+0|fink-bac |       at ClientRequest.emit (node:events:524:28)
+0|fink-bac |       at emitErrorEvent (node:_http_client:101:11)
+0|fink-bac |       at TLSSocket.socketErrorListener (node:_http_client:504:5)
+0|fink-bac |       at TLSSocket.emit (node:events:524:28)
+0|fink-bac |       at emitErrorNT (node:internal/streams/destroy:169:8)
+0|fink-bac |       at emitErrorCloseNT (node:internal/streams/destroy:128:3)
+0|fink-bac |       at processTicksAndRejections (node:internal/process/task_queues:82:21) {
+0|fink-bac |     cause: Error: read ECONNRESET
+0|fink-bac |         at TLSWrap.onStreamRead (node:internal/stream_base_commons:218:20) {
+0|fink-bac |       errno: -104,
+0|fink-bac |       code: 'ECONNRESET',
+0|fink-bac |       syscall: 'read'
+0|fink-bac |     },
+0|fink-bac |     error: Error: read ECONNRESET
+0|fink-bac |         at TLSWrap.onStreamRead (node:internal/stream_base_commons:218:20) {
+0|fink-bac |       errno: -104,
+0|fink-bac |       code: 'ECONNRESET',
+0|fink-bac |       syscall: 'read'
+0|fink-bac |     },
+0|fink-bac |     options: {
+0|fink-bac |       form: [Object],
+0|fink-bac |       method: 'POST',
+0|fink-bac |       url: 'https://api.telegram.org/bot7709705840:AAFjWmPmxtqCtOeinUPAnwkwKTmfhZu6290/sendMessage',
+0|fink-bac |       simple: false,
+0|fink-bac |       resolveWithFullResponse: true,
+0|fink-bac |       forever: true,
+0|fink-bac |       callback: [Function: RP$callback],
+0|fink-bac |       transform: undefined,
+0|fink-bac |       transform2xxOnly: false
+0|fink-bac |     },
+0|fink-bac |     response: undefined
+0|fink-bac |   }
+0|fink-bac | }
+0|fink-bac | ❌ Unhandled Rejection: RequestError: Error: read ECONNRESET
+0|fink-bac |     at new RequestError (/home/fink/backend/node_modules/request-promise-core/lib/errors.js:14:15)
+0|fink-bac |     ... 11 lines matching cause stack trace ...
+0|fink-bac |     at processTicksAndRejections (node:internal/process/task_queues:82:21) {
+0|fink-bac |   code: 'EFATAL',
+0|fink-bac |   cause: RequestError: Error: read ECONNRESET
+0|fink-bac |       at new RequestError (/home/fink/backend/node_modules/request-promise-core/lib/errors.js:14:15)
+0|fink-bac |       at Request.plumbing.callback (/home/fink/backend/node_modules/request-promise-core/lib/plumbing.js:87:29)
+0|fink-bac |       at Request.RP$callback [as _callback] (/home/fink/backend/node_modules/request-promise-core/lib/plumbing.js:46:31)
+0|fink-bac |       at self.callback (/home/fink/backend/node_modules/@cypress/request/request.js:183:22)
+0|fink-bac |       at Request.emit (node:events:524:28)
+0|fink-bac |       at Request.onRequestError (/home/fink/backend/node_modules/@cypress/request/request.js:869:8)
+0|fink-bac |       at ClientRequest.emit (node:events:524:28)
+0|fink-bac |       at emitErrorEvent (node:_http_client:101:11)
+0|fink-bac |       at TLSSocket.socketErrorListener (node:_http_client:504:5)
+0|fink-bac |       at TLSSocket.emit (node:events:524:28)
+0|fink-bac |       at emitErrorNT (node:internal/streams/destroy:169:8)
+0|fink-bac |       at emitErrorCloseNT (node:internal/streams/destroy:128:3)
+0|fink-bac |       at processTicksAndRejections (node:internal/process/task_queues:82:21) {
+0|fink-bac |     cause: Error: read ECONNRESET
+0|fink-bac |         at TLSWrap.onStreamRead (node:internal/stream_base_commons:218:20) {
+0|fink-bac |       errno: -104,
+0|fink-bac |       code: 'ECONNRESET',
+0|fink-bac |       syscall: 'read'
+0|fink-bac |     },
+0|fink-bac |     error: Error: read ECONNRESET
+0|fink-bac |         at TLSWrap.onStreamRead (node:internal/stream_base_commons:218:20) {
+0|fink-bac |       errno: -104,
+0|fink-bac |       code: 'ECONNRESET',
+0|fink-bac |       syscall: 'read'
+0|fink-bac |     },
+0|fink-bac |     options: {
+0|fink-bac |       form: [Object],
+0|fink-bac |       method: 'POST',
+0|fink-bac |       url: 'https://api.telegram.org/bot7709705840:AAFjWmPmxtqCtOeinUPAnwkwKTmfhZu6290/sendMessage',
+0|fink-bac |       simple: false,
+0|fink-bac |       resolveWithFullResponse: true,
+0|fink-bac |       forever: true,
+0|fink-bac |       callback: [Function: RP$callback],
+0|fink-bac |       transform: undefined,
+0|fink-bac |       transform2xxOnly: false
+0|fink-bac |     },
+0|fink-bac |     response: undefined
+0|fink-bac |   }
+0|fink-bac | }
+0|fink-bac | TypeError: terminated
+0|fink-bac |     at Fetch.onAborted (node:internal/deps/undici/undici:11350:53)
+0|fink-bac |     at Fetch.emit (node:events:524:28)
+0|fink-bac |     at Fetch.terminate (node:internal/deps/undici/undici:10508:14)
+0|fink-bac |     at Object.onError (node:internal/deps/undici/undici:11473:38)
+0|fink-bac |     at Request.onError (node:internal/deps/undici/undici:2232:31)
+0|fink-bac |     at Object.errorRequest (node:internal/deps/undici/undici:1726:17)
+0|fink-bac |     at TLSSocket.<anonymous> (node:internal/deps/undici/undici:6461:16)
+0|fink-bac |     at TLSSocket.emit (node:events:536:35)
+0|fink-bac |     at node:net:343:12
+0|fink-bac |     at TCP.done (node:_tls_wrap:669:7) {
+0|fink-bac |   [cause]: Error: read ECONNRESET
+0|fink-bac |       at TLSWrap.onStreamRead (node:internal/stream_base_commons:218:20) {
+0|fink-bac |     errno: -104,
+0|fink-bac |     code: 'ECONNRESET',
+0|fink-bac |     syscall: 'read'
+0|fink-bac |   }
+0|fink-bac | }
+0|fink-bac | RequestError: Error: read ECONNRESET
+0|fink-bac |     at new RequestError (/home/fink/backend/node_modules/request-promise-core/lib/errors.js:14:15)
+0|fink-bac |     ... 11 lines matching cause stack trace ...
+0|fink-bac |     at processTicksAndRejections (node:internal/process/task_queues:82:21) {
+0|fink-bac |   code: 'EFATAL',
+0|fink-bac |   cause: RequestError: Error: read ECONNRESET
+0|fink-bac |       at new RequestError (/home/fink/backend/node_modules/request-promise-core/lib/errors.js:14:15)
+0|fink-bac |       at Request.plumbing.callback (/home/fink/backend/node_modules/request-promise-core/lib/plumbing.js:87:29)
+0|fink-bac |       at Request.RP$callback [as _callback] (/home/fink/backend/node_modules/request-promise-core/lib/plumbing.js:46:31)
+0|fink-bac |       at self.callback (/home/fink/backend/node_modules/@cypress/request/request.js:183:22)
+0|fink-bac |       at Request.emit (node:events:524:28)
+0|fink-bac |       at Request.onRequestError (/home/fink/backend/node_modules/@cypress/request/request.js:869:8)
+0|fink-bac |       at ClientRequest.emit (node:events:524:28)
+0|fink-bac |       at emitErrorEvent (node:_http_client:101:11)
+0|fink-bac |       at TLSSocket.socketErrorListener (node:_http_client:504:5)
+0|fink-bac |       at TLSSocket.emit (node:events:524:28)
+0|fink-bac |       at emitErrorNT (node:internal/streams/destroy:169:8)
+0|fink-bac |       at emitErrorCloseNT (node:internal/streams/destroy:128:3)
+0|fink-bac |       at processTicksAndRejections (node:internal/process/task_queues:82:21) {
+0|fink-bac |     cause: Error: read ECONNRESET
+0|fink-bac |         at TLSWrap.onStreamRead (node:internal/stream_base_commons:218:20) {
+0|fink-bac |       errno: -104,
+0|fink-bac |       code: 'ECONNRESET',
+0|fink-bac |       syscall: 'read'
+0|fink-bac |     },
+0|fink-bac |     error: Error: read ECONNRESET
+0|fink-bac |         at TLSWrap.onStreamRead (node:internal/stream_base_commons:218:20) {
+0|fink-bac |       errno: -104,
+0|fink-bac |       code: 'ECONNRESET',
+0|fink-bac |       syscall: 'read'
+0|fink-bac |     },
+0|fink-bac |     options: {
+0|fink-bac |       form: [Object],
+0|fink-bac |       method: 'POST',
+0|fink-bac |       url: 'https://api.telegram.org/bot7709705840:AAFjWmPmxtqCtOeinUPAnwkwKTmfhZu6290/getFile',
+0|fink-bac |       simple: false,
+0|fink-bac |       resolveWithFullResponse: true,
+0|fink-bac |       forever: true,
+0|fink-bac |       callback: [Function: RP$callback],
+0|fink-bac |       transform: undefined,
+0|fink-bac |       transform2xxOnly: false
+0|fink-bac |     },
+0|fink-bac |     response: undefined
+0|fink-bac |   }
+0|fink-bac | }
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ECONNRESET"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ECONNRESET"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ECONNRESET"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ECONNRESET"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | Backup Stderr: pg_dump: last built-in OID is 16383
+0|fink-bac | pg_dump: reading extensions
+0|fink-bac | pg_dump: identifying extension members
+0|fink-bac | pg_dump: reading schemas
+0|fink-bac | pg_dump: reading user-defined tables
+0|fink-bac | pg_dump: reading user-defined functions
+0|fink-bac | pg_dump: reading user-defined types
+0|fink-bac | pg_dump: reading procedural languages
+0|fink-bac | pg_dump: reading user-defined aggregate functions
+0|fink-bac | pg_dump: reading user-defined operators
+0|fink-bac | pg_dump: reading user-defined access methods
+0|fink-bac | pg_dump: reading user-defined operator classes
+0|fink-bac | pg_dump: reading user-defined operator families
+0|fink-bac | pg_dump: reading user-defined text search parsers
+0|fink-bac | pg_dump: reading user-defined text search templates
+0|fink-bac | pg_dump: reading user-defined text search dictionaries
+0|fink-bac | pg_dump: reading user-defined text search configurations
+0|fink-bac | pg_dump: reading user-defined foreign-data wrappers
+0|fink-bac | pg_dump: reading user-defined foreign servers
+0|fink-bac | pg_dump: reading default privileges
+0|fink-bac | pg_dump: reading user-defined collations
+0|fink-bac | pg_dump: reading user-defined conversions
+0|fink-bac | pg_dump: reading type casts
+0|fink-bac | pg_dump: reading transforms
+0|fink-bac | pg_dump: reading table inheritance information
+0|fink-bac | pg_dump: reading event triggers
+0|fink-bac | pg_dump: finding extension tables
+0|fink-bac | pg_dump: finding inheritance relationships
+0|fink-bac | pg_dump: reading column info for interesting tables
+0|fink-bac | pg_dump: finding table default expressions
+0|fink-bac | pg_dump: flagging inherited columns in subtables
+0|fink-bac | pg_dump: reading partitioning data
+0|fink-bac | pg_dump: reading indexes
+0|fink-bac | pg_dump: flagging indexes in partitioned tables
+0|fink-bac | pg_dump: reading extended statistics
+0|fink-bac | pg_dump: reading constraints
+0|fink-bac | pg_dump: reading triggers
+0|fink-bac | pg_dump: reading rewrite rules
+0|fink-bac | pg_dump: reading policies
+0|fink-bac | pg_dump: reading row-level security policies
+0|fink-bac | pg_dump: reading publications
+0|fink-bac | pg_dump: reading publication membership of tables
+0|fink-bac | pg_dump: reading publication membership of schemas
+0|fink-bac | pg_dump: reading subscriptions
+0|fink-bac | pg_dump: reading large objects
+0|fink-bac | pg_dump: reading dependency data
+0|fink-bac | pg_dump: saving encoding = UTF8
+0|fink-bac | pg_dump: saving standard_conforming_strings = on
+0|fink-bac | pg_dump: saving search_path = 
+0|fink-bac | pg_dump: saving database definition
+0|fink-bac | pg_dump: dumping contents of table "public.account_code_sequences"
+0|fink-bac | pg_dump: dumping contents of table "public.accounts"
+0|fink-bac | pg_dump: dumping contents of table "public.activity_logs"
+0|fink-bac | pg_dump: dumping contents of table "public.ai_insights"
+0|fink-bac | pg_dump: dumping contents of table "public.analytics_events"
+0|fink-bac | pg_dump: dumping contents of table "public.budgets"
+0|fink-bac | pg_dump: dumping contents of table "public.consolidation_group_accounts"
+0|fink-bac | pg_dump: dumping contents of table "public.consolidation_groups"
+0|fink-bac | pg_dump: dumping contents of table "public.contact_persons"
+0|fink-bac | pg_dump: dumping contents of table "public.documents"
+0|fink-bac | pg_dump: dumping contents of table "public.exchange_rates"
+0|fink-bac | pg_dump: dumping contents of table "public.invoices"
+0|fink-bac | pg_dump: dumping contents of table "public.notifications"
+0|fink-bac | pg_dump: dumping contents of table "public.occurrence_batches"
+0|fink-bac | pg_dump: dumping contents of table "public.payment_allocations"
+0|fink-bac | pg_dump: dumping contents of table "public.payments"
+0|fink-bac | pg_dump: dumping contents of table "public.products"
+0|fink-bac | pg_dump: dumping contents of table "public.project_settings"
+0|fink-bac | pg_dump: dumping contents of table "public.project_users"
+0|fink-bac | pg_dump: dumping contents of table "public.projects"
+0|fink-bac | pg_dump: dumping contents of table "public.recurring_rules"
+0|fink-bac | pg_dump: dumping contents of table "public.scheduled_occurrences"
+0|fink-bac | pg_dump: dumping contents of table "public.system_config"
+0|fink-bac | pg_dump: dumping contents of table "public.transaction_categories"
+0|fink-bac | pg_dump: dumping contents of table "public.transaction_code_sequences"
+0|fink-bac | pg_dump: dumping contents of table "public.transaction_entries"
+0|fink-bac | pg_dump: dumping contents of table "public.transaction_templates"
+0|fink-bac | pg_dump: dumping contents of table "public.transactions"
+0|fink-bac | pg_dump: dumping contents of table "public.users"
+0|fink-bac | 
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ECONNRESET"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ECONNRESET"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ECONNRESET"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ECONNRESET"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ECONNRESET"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ECONNRESET"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ECONNRESET"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | ⚠️ CriptoYa API failed, trying fallback... timeout of 5000ms exceeded
+0|fink-bac | ❌ Error fetching Binance rates: timeout of 5000ms exceeded
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ECONNRESET"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ECONNRESET"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ECONNRESET"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ECONNRESET"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ECONNRESET"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ECONNRESET"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | Error in getCFOAdvice: 429 Provider returned error
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ECONNRESET"}
+0|fink-bac | Backup Stderr: pg_dump: last built-in OID is 16383
+0|fink-bac | pg_dump: reading extensions
+0|fink-bac | pg_dump: identifying extension members
+0|fink-bac | pg_dump: reading schemas
+0|fink-bac | pg_dump: reading user-defined tables
+0|fink-bac | pg_dump: reading user-defined functions
+0|fink-bac | pg_dump: reading user-defined types
+0|fink-bac | pg_dump: reading procedural languages
+0|fink-bac | pg_dump: reading user-defined aggregate functions
+0|fink-bac | pg_dump: reading user-defined operators
+0|fink-bac | pg_dump: reading user-defined access methods
+0|fink-bac | pg_dump: reading user-defined operator classes
+0|fink-bac | pg_dump: reading user-defined operator families
+0|fink-bac | pg_dump: reading user-defined text search parsers
+0|fink-bac | pg_dump: reading user-defined text search templates
+0|fink-bac | pg_dump: reading user-defined text search dictionaries
+0|fink-bac | pg_dump: reading user-defined text search configurations
+0|fink-bac | pg_dump: reading user-defined foreign-data wrappers
+0|fink-bac | pg_dump: reading user-defined foreign servers
+0|fink-bac | pg_dump: reading default privileges
+0|fink-bac | pg_dump: reading user-defined collations
+0|fink-bac | pg_dump: reading user-defined conversions
+0|fink-bac | pg_dump: reading type casts
+0|fink-bac | pg_dump: reading transforms
+0|fink-bac | pg_dump: reading table inheritance information
+0|fink-bac | pg_dump: reading event triggers
+0|fink-bac | pg_dump: finding extension tables
+0|fink-bac | pg_dump: finding inheritance relationships
+0|fink-bac | pg_dump: reading column info for interesting tables
+0|fink-bac | pg_dump: finding table default expressions
+0|fink-bac | pg_dump: flagging inherited columns in subtables
+0|fink-bac | pg_dump: reading partitioning data
+0|fink-bac | pg_dump: reading indexes
+0|fink-bac | pg_dump: flagging indexes in partitioned tables
+0|fink-bac | pg_dump: reading extended statistics
+0|fink-bac | pg_dump: reading constraints
+0|fink-bac | pg_dump: reading triggers
+0|fink-bac | pg_dump: reading rewrite rules
+0|fink-bac | pg_dump: reading policies
+0|fink-bac | pg_dump: reading row-level security policies
+0|fink-bac | pg_dump: reading publications
+0|fink-bac | pg_dump: reading publication membership of tables
+0|fink-bac | pg_dump: reading publication membership of schemas
+0|fink-bac | pg_dump: reading subscriptions
+0|fink-bac | pg_dump: reading large objects
+0|fink-bac | pg_dump: reading dependency data
+0|fink-bac | pg_dump: saving encoding = UTF8
+0|fink-bac | pg_dump: saving standard_conforming_strings = on
+0|fink-bac | pg_dump: saving search_path = 
+0|fink-bac | pg_dump: saving database definition
+0|fink-bac | pg_dump: dumping contents of table "public.account_code_sequences"
+0|fink-bac | pg_dump: dumping contents of table "public.accounts"
+0|fink-bac | pg_dump: dumping contents of table "public.activity_logs"
+0|fink-bac | pg_dump: dumping contents of table "public.ai_insights"
+0|fink-bac | pg_dump: dumping contents of table "public.analytics_events"
+0|fink-bac | pg_dump: dumping contents of table "public.budgets"
+0|fink-bac | pg_dump: dumping contents of table "public.consolidation_group_accounts"
+0|fink-bac | pg_dump: dumping contents of table "public.consolidation_groups"
+0|fink-bac | pg_dump: dumping contents of table "public.contact_persons"
+0|fink-bac | pg_dump: dumping contents of table "public.documents"
+0|fink-bac | pg_dump: dumping contents of table "public.exchange_rates"
+0|fink-bac | pg_dump: dumping contents of table "public.invoices"
+0|fink-bac | pg_dump: dumping contents of table "public.notifications"
+0|fink-bac | pg_dump: dumping contents of table "public.occurrence_batches"
+0|fink-bac | pg_dump: dumping contents of table "public.payment_allocations"
+0|fink-bac | pg_dump: dumping contents of table "public.payments"
+0|fink-bac | pg_dump: dumping contents of table "public.products"
+0|fink-bac | pg_dump: dumping contents of table "public.project_settings"
+0|fink-bac | pg_dump: dumping contents of table "public.project_users"
+0|fink-bac | pg_dump: dumping contents of table "public.projects"
+0|fink-bac | pg_dump: dumping contents of table "public.recurring_rules"
+0|fink-bac | pg_dump: dumping contents of table "public.scheduled_occurrences"
+0|fink-bac | pg_dump: dumping contents of table "public.system_config"
+0|fink-bac | pg_dump: dumping contents of table "public.transaction_categories"
+0|fink-bac | pg_dump: dumping contents of table "public.transaction_code_sequences"
+0|fink-bac | pg_dump: dumping contents of table "public.transaction_entries"
+0|fink-bac | pg_dump: dumping contents of table "public.transaction_templates"
+0|fink-bac | pg_dump: dumping contents of table "public.transactions"
+0|fink-bac | pg_dump: dumping contents of table "public.users"
+0|fink-bac | 
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ECONNRESET"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ECONNRESET"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | ❌ Error generating AI insights: AuthenticationError: 401 Incorrect API key provided: sk-or-v1*************************************************************77b7. You can find your API key at https://platform.openai.com/account/api-keys.
+0|fink-bac |     at Function.generate (/home/fink/backend/node_modules/openai/src/error.ts:76:14)
+0|fink-bac |     at OpenAI.makeStatusError (/home/fink/backend/node_modules/openai/src/core.ts:462:21)
+0|fink-bac |     at OpenAI.makeRequest (/home/fink/backend/node_modules/openai/src/core.ts:526:24)
+0|fink-bac |     at processTicksAndRejections (node:internal/process/task_queues:95:5)
+0|fink-bac |     at generateAIInsights (/home/fink/backend/src/services/ai.service.ts:140:26)
+0|fink-bac |     at Task.node_cron_1.default.schedule.timezone [as _execution] (/home/fink/backend/src/services/cron.service.ts:61:9) {
+0|fink-bac |   status: 401,
+0|fink-bac |   headers: {
+0|fink-bac |     'alt-svc': 'h3=":443"; ma=86400',
+0|fink-bac |     'cf-cache-status': 'DYNAMIC',
+0|fink-bac |     'cf-ray': '9f66ffd169e31182-FRA',
+0|fink-bac |     connection: 'keep-alive',
+0|fink-bac |     'content-length': '319',
+0|fink-bac |     'content-type': 'text/plain',
+0|fink-bac |     date: 'Mon, 04 May 2026 11:00:01 GMT',
+0|fink-bac |     server: 'cloudflare',
+0|fink-bac |     'set-cookie': '__cf_bm=h08c0gFbGcMJ5Nsx2uf6XsedZPqtCb5oiK91yn061wM-1777892400.864829-1.0.1.1-W_Q.wBDYLMCwcTTuIIz3L595ccMcOggKJ6gsPYLxVXKEw9b7XhW8pG52NvNuCJe6AEi1.W2YQA4S29Lfs0Hj9bxRmAuu3w2IaMELsxEdswPMHZA_PiUy_pSN99jQdDNP; HttpOnly; Secure; Path=/; Domain=api.openai.com; Expires=Mon, 04 May 2026 11:30:01 GMT, _cfuvid=.125I3Y7HT_MAFT2o1qFiXgnpSgIbgabx4mf9yY3uQ0-1777892400.864829-1.0.1.1-bvbhMbXh6Ol1SyxtObm.U2AuFu5KqoYPbcXyaLgsvq8; HttpOnly; SameSite=None; Secure; Path=/; Domain=api.openai.com',
+0|fink-bac |     'strict-transport-security': 'max-age=31536000; includeSubDomains; preload',
+0|fink-bac |     'x-content-type-options': 'nosniff',
+0|fink-bac |     'x-error-json': 'ewogICJlcnJvciI6IHsKICAgICJtZXNzYWdlIjogIkluY29ycmVjdCBBUEkga2V5IHByb3ZpZGVkOiBzay1vci12MSoqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKioqKio3N2I3LiBZb3UgY2FuIGZpbmQgeW91ciBBUEkga2V5IGF0IGh0dHBzOi8vcGxhdGZvcm0ub3BlbmFpLmNvbS9hY2NvdW50L2FwaS1rZXlzLiIsCiAgICAidHlwZSI6ICJpbnZhbGlkX3JlcXVlc3RfZXJyb3IiLAogICAgImNvZGUiOiAiaW52YWxpZF9hcGlfa2V5IiwKICAgICJwYXJhbSI6IG51bGwKICB9LAogICJzdGF0dXMiOiA0MDEKfQ==',
+0|fink-bac |     'x-openai-authorization-error': '401',
+0|fink-bac |     'x-openai-ide-error-code': 'invalid_api_key',
+0|fink-bac |     'x-openai-internal-caller': 'unknown_through_ide',
+0|fink-bac |     'x-openai-proxy-wasm': 'v0.1',
+0|fink-bac |     'x-request-id': 'req_4e03b4f2b4494658bc3e157cd447b1bb'
+0|fink-bac |   },
+0|fink-bac |   request_id: 'req_4e03b4f2b4494658bc3e157cd447b1bb',
+0|fink-bac |   error: {
+0|fink-bac |     message: 'Incorrect API key provided: sk-or-v1*************************************************************77b7. You can find your API key at https://platform.openai.com/account/api-keys.',
+0|fink-bac |     type: 'invalid_request_error',
+0|fink-bac |     code: 'invalid_api_key',
+0|fink-bac |     param: null
+0|fink-bac |   },
+0|fink-bac |   code: 'invalid_api_key',
+0|fink-bac |   param: null,
+0|fink-bac |   type: 'invalid_request_error'
+0|fink-bac | }
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ECONNRESET"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | ⚠️ Error fetching EUR rate, calculating fallback: timeout of 5000ms exceeded
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ECONNRESET"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ECONNRESET"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | error: [polling_error] {"code":"EFATAL","message":"EFATAL: Error: read ETIMEDOUT"}
+0|fink-bac | ⚠️ CriptoYa API failed, trying fallback... timeout of 5000ms exceeded
+
+/home/fink/.pm2/logs/fink-backend-out.log last 500 lines:
+0|fink-bac |   email: 'jorge.verenzuela@gmail.com',
+0|fink-bac |   role: 'ADMIN',
+0|fink-bac |   iat: 1777757861,
+0|fink-bac |   exp: 1778362661
+0|fink-bac | }
+0|fink-bac | [auth] User from DB: {
+0|fink-bac |   id: 'fbe74ffd-5451-4d2f-b8a3-4f110ecd9b6f',
+0|fink-bac |   email: 'jorge.verenzuela@gmail.com',
+0|fink-bac |   role: 'ADMIN',
+0|fink-bac |   isActive: true
+0|fink-bac | }
+0|fink-bac | [auth] Decoded JWT: {
+0|fink-bac |   userId: 'fbe74ffd-5451-4d2f-b8a3-4f110ecd9b6f',
+0|fink-bac |   email: 'jorge.verenzuela@gmail.com',
+0|fink-bac |   role: 'ADMIN',
+0|fink-bac |   iat: 1777757861,
+0|fink-bac |   exp: 1778362661
+0|fink-bac | }
+0|fink-bac | [auth] User from DB: {
+0|fink-bac |   id: 'fbe74ffd-5451-4d2f-b8a3-4f110ecd9b6f',
+0|fink-bac |   email: 'jorge.verenzuela@gmail.com',
+0|fink-bac |   role: 'ADMIN',
+0|fink-bac |   isActive: true
+0|fink-bac | }
+0|fink-bac | [0mGET /api/transactions?type=&status=&paymentStatus=&search=&startDate=&endDate=&category=&categoryId=&projectId= [32m200[0m 12.840 ms - -[0m
+0|fink-bac | [0mGET /api/exchange-rates/latest [32m200[0m 6.166 ms - 157[0m
+0|fink-bac | [auth] Decoded JWT: {
+0|fink-bac |   userId: 'fbe74ffd-5451-4d2f-b8a3-4f110ecd9b6f',
+0|fink-bac |   email: 'jorge.verenzuela@gmail.com',
+0|fink-bac |   role: 'ADMIN',
+0|fink-bac |   iat: 1777757861,
+0|fink-bac |   exp: 1778362661
+0|fink-bac | }
+0|fink-bac | [auth] User from DB: {
+0|fink-bac |   id: 'fbe74ffd-5451-4d2f-b8a3-4f110ecd9b6f',
+0|fink-bac |   email: 'jorge.verenzuela@gmail.com',
+0|fink-bac |   role: 'ADMIN',
+0|fink-bac |   isActive: true
+0|fink-bac | }
+0|fink-bac | [0mGET /api/projects [32m200[0m 6.045 ms - -[0m
+0|fink-bac | [auth] Decoded JWT: {
+0|fink-bac |   userId: 'fbe74ffd-5451-4d2f-b8a3-4f110ecd9b6f',
+0|fink-bac |   email: 'jorge.verenzuela@gmail.com',
+0|fink-bac |   role: 'ADMIN',
+0|fink-bac |   iat: 1777757861,
+0|fink-bac |   exp: 1778362661
+0|fink-bac | }
+0|fink-bac | [auth] User from DB: {
+0|fink-bac |   id: 'fbe74ffd-5451-4d2f-b8a3-4f110ecd9b6f',
+0|fink-bac |   email: 'jorge.verenzuela@gmail.com',
+0|fink-bac |   role: 'ADMIN',
+0|fink-bac |   isActive: true
+0|fink-bac | }
+0|fink-bac | [0mGET /api/exchange-rates/latest [32m200[0m 4.374 ms - 157[0m
+0|fink-bac | [auth] Decoded JWT: {
+0|fink-bac |   userId: 'fbe74ffd-5451-4d2f-b8a3-4f110ecd9b6f',
+0|fink-bac |   email: 'jorge.verenzuela@gmail.com',
+0|fink-bac |   role: 'ADMIN',
+0|fink-bac |   iat: 1777757861,
+0|fink-bac |   exp: 1778362661
+0|fink-bac | }
+0|fink-bac | [auth] Decoded JWT: {
+0|fink-bac |   userId: 'fbe74ffd-5451-4d2f-b8a3-4f110ecd9b6f',
+0|fink-bac |   email: 'jorge.verenzuela@gmail.com',
+0|fink-bac |   role: 'ADMIN',
+0|fink-bac |   iat: 1777757861,
+0|fink-bac |   exp: 1778362661
+0|fink-bac | }
+0|fink-bac | [auth] Decoded JWT: {
+0|fink-bac |   userId: 'fbe74ffd-5451-4d2f-b8a3-4f110ecd9b6f',
+0|fink-bac |   email: 'jorge.verenzuela@gmail.com',
+0|fink-bac |   role: 'ADMIN',
+0|fink-bac |   iat: 1777757861,
+0|fink-bac |   exp: 1778362661
+0|fink-bac | }
+0|fink-bac | [auth] User from DB: {
+0|fink-bac |   id: 'fbe74ffd-5451-4d2f-b8a3-4f110ecd9b6f',
+0|fink-bac |   email: 'jorge.verenzuela@gmail.com',
+0|fink-bac |   role: 'ADMIN',
+0|fink-bac |   isActive: true
+0|fink-bac | }
+0|fink-bac | [auth] User from DB: {
+0|fink-bac |   id: 'fbe74ffd-5451-4d2f-b8a3-4f110ecd9b6f',
+0|fink-bac |   email: 'jorge.verenzuela@gmail.com',
+0|fink-bac |   role: 'ADMIN',
+0|fink-bac |   isActive: true
+0|fink-bac | }
+0|fink-bac | [auth] User from DB: {
+0|fink-bac |   id: 'fbe74ffd-5451-4d2f-b8a3-4f110ecd9b6f',
+0|fink-bac |   email: 'jorge.verenzuela@gmail.com',
+0|fink-bac |   role: 'ADMIN',
+0|fink-bac |   isActive: true
+0|fink-bac | }
+0|fink-bac | [0mGET /api/transaction-categories [32m200[0m 4.558 ms - 794[0m
+0|fink-bac | [0mGET /api/projects?limit=100 [32m200[0m 8.269 ms - -[0m
+0|fink-bac | [0mGET /api/accounts?limit=1000 [32m200[0m 7.026 ms - -[0m
+0|fink-bac | [auth] Decoded JWT: {
+0|fink-bac |   userId: 'fbe74ffd-5451-4d2f-b8a3-4f110ecd9b6f',
+0|fink-bac |   email: 'jorge.verenzuela@gmail.com',
+0|fink-bac |   role: 'ADMIN',
+0|fink-bac |   iat: 1777757861,
+0|fink-bac |   exp: 1778362661
+0|fink-bac | }
+0|fink-bac | [auth] User from DB: {
+0|fink-bac |   id: 'fbe74ffd-5451-4d2f-b8a3-4f110ecd9b6f',
+0|fink-bac |   email: 'jorge.verenzuela@gmail.com',
+0|fink-bac |   role: 'ADMIN',
+0|fink-bac |   isActive: true
+0|fink-bac | }
+0|fink-bac | [0mGET /api/products?limit=1000 [32m200[0m 5.343 ms - 393[0m
+0|fink-bac | [auth] Decoded JWT: {
+0|fink-bac |   userId: 'fbe74ffd-5451-4d2f-b8a3-4f110ecd9b6f',
+0|fink-bac |   email: 'jorge.verenzuela@gmail.com',
+0|fink-bac |   role: 'ADMIN',
+0|fink-bac |   iat: 1777757861,
+0|fink-bac |   exp: 1778362661
+0|fink-bac | }
+0|fink-bac | [auth] Decoded JWT: {
+0|fink-bac |   userId: 'fbe74ffd-5451-4d2f-b8a3-4f110ecd9b6f',
+0|fink-bac |   email: 'jorge.verenzuela@gmail.com',
+0|fink-bac |   role: 'ADMIN',
+0|fink-bac |   iat: 1777757861,
+0|fink-bac |   exp: 1778362661
+0|fink-bac | }
+0|fink-bac | [auth] User from DB: {
+0|fink-bac |   id: 'fbe74ffd-5451-4d2f-b8a3-4f110ecd9b6f',
+0|fink-bac |   email: 'jorge.verenzuela@gmail.com',
+0|fink-bac |   role: 'ADMIN',
+0|fink-bac |   isActive: true
+0|fink-bac | }
+0|fink-bac | [auth] User from DB: {
+0|fink-bac |   id: 'fbe74ffd-5451-4d2f-b8a3-4f110ecd9b6f',
+0|fink-bac |   email: 'jorge.verenzuela@gmail.com',
+0|fink-bac |   role: 'ADMIN',
+0|fink-bac |   isActive: true
+0|fink-bac | }
+0|fink-bac | [0mGET /api/exchange-rates/latest [32m200[0m 3.704 ms - 157[0m
+0|fink-bac | [0mGET /api/exchange-rates/latest-by-source [32m200[0m 8.413 ms - 494[0m
+0|fink-bac | [auth] Decoded JWT: {
+0|fink-bac |   userId: 'fbe74ffd-5451-4d2f-b8a3-4f110ecd9b6f',
+0|fink-bac |   email: 'jorge.verenzuela@gmail.com',
+0|fink-bac |   role: 'ADMIN',
+0|fink-bac |   iat: 1777757861,
+0|fink-bac |   exp: 1778362661
+0|fink-bac | }
+0|fink-bac | [auth] User from DB: {
+0|fink-bac |   id: 'fbe74ffd-5451-4d2f-b8a3-4f110ecd9b6f',
+0|fink-bac |   email: 'jorge.verenzuela@gmail.com',
+0|fink-bac |   role: 'ADMIN',
+0|fink-bac |   isActive: true
+0|fink-bac | }
+0|fink-bac | [0mGET /api/transactions?type=&status=&paymentStatus=&search=&startDate=&endDate=&category=&categoryId=&projectId= [32m200[0m 11.889 ms - -[0m
+0|fink-bac | [auth] Decoded JWT: {
+0|fink-bac |   userId: 'fbe74ffd-5451-4d2f-b8a3-4f110ecd9b6f',
+0|fink-bac |   email: 'jorge.verenzuela@gmail.com',
+0|fink-bac |   role: 'ADMIN',
+0|fink-bac |   iat: 1777757861,
+0|fink-bac |   exp: 1778362661
+0|fink-bac | }
+0|fink-bac | [auth] User from DB: {
+0|fink-bac |   id: 'fbe74ffd-5451-4d2f-b8a3-4f110ecd9b6f',
+0|fink-bac |   email: 'jorge.verenzuela@gmail.com',
+0|fink-bac |   role: 'ADMIN',
+0|fink-bac |   isActive: true
+0|fink-bac | }
+0|fink-bac | [0mGET /api/exchange-rates/latest [32m200[0m 4.073 ms - 157[0m
+0|fink-bac | 🔄 Initializing Backup Scheduler...
+0|fink-bac | ⏰ Cron jobs scheduled successfully
+0|fink-bac | 🤖 Bot de Telegram inicializado y escuchando...
+0|fink-bac | 
+0|fink-bac | 🚀 Server running on port 4002
+0|fink-bac | 📍 Environment: production
+0|fink-bac | 🌐 API URL: http://localhost:4002
+0|fink-bac | 💚 Health check: http://localhost:4002/health
+0|fink-bac | 
+0|fink-bac | ✅ Scheduling backup with pattern: "0 2 * * *" (Timezone: America/Caracas)
+0|fink-bac | 🔄 Running scheduled task: Process recurring rules
+0|fink-bac | 🔁 No recurring rules due at this time
+0|fink-bac | Telegram Polling warning: EFATAL: Error: read ETIMEDOUT
+0|fink-bac | [0mGET / [33m404[0m 2.527 ms - 74[0m
+0|fink-bac | [0mOPTIONS / [32m204[0m 0.290 ms - 0[0m
+0|fink-bac | Telegram Polling warning: EFATAL: Error: read ETIMEDOUT
+0|fink-bac | SENDING TO PRISMA: {
+0|fink-bac |   "code": "BOT-1777927908909",
+0|fink-bac |   "date": "2026-05-03T20:51:00.000Z",
+0|fink-bac |   "type": "TRANSFER",
+0|fink-bac |   "description": "Cambio de USDT de Binance a cuenta Banesco",
+0|fink-bac |   "projectId": "d595ce90-85a8-42e6-9668-95d5805e9ab8",
+0|fink-bac |   "contactPersonId": null,
+0|fink-bac |   "currency": "USD",
+0|fink-bac |   "amount": 10,
+0|fink-bac |   "amountBs": 6206,
+0|fink-bac |   "amountUsd": 10,
+0|fink-bac |   "amountEur": 0,
+0|fink-bac |   "exchangeRateId": "c19076e4-10f3-4890-8f32-21c301c07022",
+0|fink-bac |   "userId": "c5f8a709-db21-4ecf-97d2-572bdde776b3",
+0|fink-bac |   "category": "transferencia",
+0|fink-bac |   "tags": "[\"telegram-bot\"]",
+0|fink-bac |   "attachments": "[]",
+0|fink-bac |   "status": "COMPLETED",
+0|fink-bac |   "paymentStatus": "PAID",
+0|fink-bac |   "amountPaid": 10,
+0|fink-bac |   "_botFx": {
+0|fink-bac |     "sourceAmount": 10,
+0|fink-bac |     "sourceCurrency": "USD",
+0|fink-bac |     "targetAmount": 6206,
+0|fink-bac |     "targetCurrency": "BS",
+0|fink-bac |     "sourceAccountId": "b60532d2-77c8-4e3d-8d63-dd22b72c05cf",
+0|fink-bac |     "destinationAccountId": "ce7146b6-7fd9-472e-a643-73da4646c8d9",
+0|fink-bac |     "effectiveUsdToBs": 620.6
+0|fink-bac |   },
+0|fink-bac |   "entries": {
+0|fink-bac |     "create": [
+0|fink-bac |       {
+0|fink-bac |         "debitAccountId": "ce7146b6-7fd9-472e-a643-73da4646c8d9",
+0|fink-bac |         "debitAmount": 6206
+0|fink-bac |       },
+0|fink-bac |       {
+0|fink-bac |         "creditAccountId": "b60532d2-77c8-4e3d-8d63-dd22b72c05cf",
+0|fink-bac |         "creditAmount": 10
+0|fink-bac |       }
+0|fink-bac |     ]
+0|fink-bac |   }
+0|fink-bac | }
+0|fink-bac | SENDING TO PRISMA: {
+0|fink-bac |   "code": "BOT-1777927908909",
+0|fink-bac |   "date": "2026-05-03T20:51:00.000Z",
+0|fink-bac |   "type": "TRANSFER",
+0|fink-bac |   "description": "Cambio de USDT de Binance a cuenta Banesco",
+0|fink-bac |   "projectId": "d595ce90-85a8-42e6-9668-95d5805e9ab8",
+0|fink-bac |   "contactPersonId": null,
+0|fink-bac |   "currency": "USD",
+0|fink-bac |   "amount": 10,
+0|fink-bac |   "amountBs": 6206,
+0|fink-bac |   "amountUsd": 10,
+0|fink-bac |   "amountEur": 0,
+0|fink-bac |   "exchangeRateId": "c19076e4-10f3-4890-8f32-21c301c07022",
+0|fink-bac |   "userId": "c5f8a709-db21-4ecf-97d2-572bdde776b3",
+0|fink-bac |   "category": "transferencia",
+0|fink-bac |   "tags": "[\"telegram-bot\"]",
+0|fink-bac |   "attachments": "[]",
+0|fink-bac |   "status": "COMPLETED",
+0|fink-bac |   "paymentStatus": "PAID",
+0|fink-bac |   "amountPaid": 10,
+0|fink-bac |   "_botFx": {
+0|fink-bac |     "sourceAmount": 10,
+0|fink-bac |     "sourceCurrency": "USD",
+0|fink-bac |     "targetAmount": 6206,
+0|fink-bac |     "targetCurrency": "BS",
+0|fink-bac |     "sourceAccountId": "b60532d2-77c8-4e3d-8d63-dd22b72c05cf",
+0|fink-bac |     "destinationAccountId": "ce7146b6-7fd9-472e-a643-73da4646c8d9",
+0|fink-bac |     "effectiveUsdToBs": 620.6
+0|fink-bac |   },
+0|fink-bac |   "entries": {
+0|fink-bac |     "create": [
+0|fink-bac |       {
+0|fink-bac |         "debitAccountId": "ce7146b6-7fd9-472e-a643-73da4646c8d9",
+0|fink-bac |         "debitAmount": 6206
+0|fink-bac |       },
+0|fink-bac |       {
+0|fink-bac |         "creditAccountId": "b60532d2-77c8-4e3d-8d63-dd22b72c05cf",
+0|fink-bac |         "creditAmount": 10
+0|fink-bac |       }
+0|fink-bac |     ]
+0|fink-bac |   }
+0|fink-bac | }
+0|fink-bac | [auth] Decoded JWT: {
+0|fink-bac |   userId: 'fbe74ffd-5451-4d2f-b8a3-4f110ecd9b6f',
+0|fink-bac |   email: 'jorge.verenzuela@gmail.com',
+0|fink-bac |   role: 'ADMIN',
+0|fink-bac |   iat: 1777757861,
+0|fink-bac |   exp: 1778362661
+0|fink-bac | }
+0|fink-bac | [auth] Decoded JWT: {
+0|fink-bac |   userId: 'fbe74ffd-5451-4d2f-b8a3-4f110ecd9b6f',
+0|fink-bac |   email: 'jorge.verenzuela@gmail.com',
+0|fink-bac |   role: 'ADMIN',
+0|fink-bac |   iat: 1777757861,
+0|fink-bac |   exp: 1778362661
+0|fink-bac | }
+0|fink-bac | [auth] User from DB: {
+0|fink-bac |   id: 'fbe74ffd-5451-4d2f-b8a3-4f110ecd9b6f',
+0|fink-bac |   email: 'jorge.verenzuela@gmail.com',
+0|fink-bac |   role: 'ADMIN',
+0|fink-bac |   isActive: true
+0|fink-bac | }
+0|fink-bac | [auth] User from DB: {
+0|fink-bac |   id: 'fbe74ffd-5451-4d2f-b8a3-4f110ecd9b6f',
+0|fink-bac |   email: 'jorge.verenzuela@gmail.com',
+0|fink-bac |   role: 'ADMIN',
+0|fink-bac |   isActive: true
+0|fink-bac | }
+0|fink-bac | [auth] Decoded JWT: {
+0|fink-bac |   userId: 'fbe74ffd-5451-4d2f-b8a3-4f110ecd9b6f',
+0|fink-bac |   email: 'jorge.verenzuela@gmail.com',
+0|fink-bac |   role: 'ADMIN',
+0|fink-bac |   iat: 1777757861,
+0|fink-bac |   exp: 1778362661
+0|fink-bac | }
+0|fink-bac | [0mGET /api/exchange-rates/latest [32m200[0m 6.330 ms - 157[0m
+0|fink-bac | [auth] User from DB: {
+0|fink-bac |   id: 'fbe74ffd-5451-4d2f-b8a3-4f110ecd9b6f',
+0|fink-bac |   email: 'jorge.verenzuela@gmail.com',
+0|fink-bac |   role: 'ADMIN',
+0|fink-bac |   isActive: true
+0|fink-bac | }
+0|fink-bac | [0mGET /api/projects [32m200[0m 7.295 ms - -[0m
+0|fink-bac | [0mGET /api/transactions?type=&status=&paymentStatus=&search=&startDate=&endDate=&category=&categoryId=&projectId= [32m200[0m 61.464 ms - -[0m
+0|fink-bac | [auth] Decoded JWT: {
+0|fink-bac |   userId: 'fbe74ffd-5451-4d2f-b8a3-4f110ecd9b6f',
+0|fink-bac |   email: 'jorge.verenzuela@gmail.com',
+0|fink-bac |   role: 'ADMIN',
+0|fink-bac |   iat: 1777757861,
+0|fink-bac |   exp: 1778362661
+0|fink-bac | }
+0|fink-bac | [auth] User from DB: {
+0|fink-bac |   id: 'fbe74ffd-5451-4d2f-b8a3-4f110ecd9b6f',
+0|fink-bac |   email: 'jorge.verenzuela@gmail.com',
+0|fink-bac |   role: 'ADMIN',
+0|fink-bac |   isActive: true
+0|fink-bac | }
+0|fink-bac | [0mGET /api/transactions?type=&status=&paymentStatus=&search=&startDate=&endDate=&category=&categoryId=&projectId= [32m200[0m 14.558 ms - -[0m
+0|fink-bac | [auth] Decoded JWT: {
+0|fink-bac |   userId: 'fbe74ffd-5451-4d2f-b8a3-4f110ecd9b6f',
+0|fink-bac |   email: 'jorge.verenzuela@gmail.com',
+0|fink-bac |   role: 'ADMIN',
+0|fink-bac |   iat: 1777757861,
+0|fink-bac |   exp: 1778362661
+0|fink-bac | }
+0|fink-bac | [auth] User from DB: {
+0|fink-bac |   id: 'fbe74ffd-5451-4d2f-b8a3-4f110ecd9b6f',
+0|fink-bac |   email: 'jorge.verenzuela@gmail.com',
+0|fink-bac |   role: 'ADMIN',
+0|fink-bac |   isActive: true
+0|fink-bac | }
+0|fink-bac | [0mGET /api/exchange-rates/latest [32m200[0m 4.362 ms - 157[0m
+0|fink-bac | [auth] Decoded JWT: {
+0|fink-bac |   userId: 'fbe74ffd-5451-4d2f-b8a3-4f110ecd9b6f',
+0|fink-bac |   email: 'jorge.verenzuela@gmail.com',
+0|fink-bac |   role: 'ADMIN',
+0|fink-bac |   iat: 1777757861,
+0|fink-bac |   exp: 1778362661
+0|fink-bac | }
+0|fink-bac | [auth] User from DB: {
+0|fink-bac |   id: 'fbe74ffd-5451-4d2f-b8a3-4f110ecd9b6f',
+0|fink-bac |   email: 'jorge.verenzuela@gmail.com',
+0|fink-bac |   role: 'ADMIN',
+0|fink-bac |   isActive: true
+0|fink-bac | }
+0|fink-bac | [auth] Decoded JWT: {
+0|fink-bac |   userId: 'fbe74ffd-5451-4d2f-b8a3-4f110ecd9b6f',
+0|fink-bac |   email: 'jorge.verenzuela@gmail.com',
+0|fink-bac |   role: 'ADMIN',
+0|fink-bac |   iat: 1777757861,
+0|fink-bac |   exp: 1778362661
+0|fink-bac | }
+0|fink-bac | [auth] User from DB: {
+0|fink-bac |   id: 'fbe74ffd-5451-4d2f-b8a3-4f110ecd9b6f',
+0|fink-bac |   email: 'jorge.verenzuela@gmail.com',
+0|fink-bac |   role: 'ADMIN',
+0|fink-bac |   isActive: true
+0|fink-bac | }
+0|fink-bac | [0mGET /api/exchange-rates/latest-by-source [32m200[0m 6.251 ms - 494[0m
+0|fink-bac | [auth] Decoded JWT: {
+0|fink-bac |   userId: 'fbe74ffd-5451-4d2f-b8a3-4f110ecd9b6f',
+0|fink-bac |   email: 'jorge.verenzuela@gmail.com',
+0|fink-bac |   role: 'ADMIN',
+0|fink-bac |   iat: 1777757861,
+0|fink-bac |   exp: 1778362661
+0|fink-bac | }
+0|fink-bac | [auth] User from DB: {
+0|fink-bac |   id: 'fbe74ffd-5451-4d2f-b8a3-4f110ecd9b6f',
+0|fink-bac |   email: 'jorge.verenzuela@gmail.com',
+0|fink-bac |   role: 'ADMIN',
+0|fink-bac |   isActive: true
+0|fink-bac | }
+0|fink-bac | [auth] Decoded JWT: {
+0|fink-bac |   userId: 'fbe74ffd-5451-4d2f-b8a3-4f110ecd9b6f',
+0|fink-bac |   email: 'jorge.verenzuela@gmail.com',
+0|fink-bac |   role: 'ADMIN',
+0|fink-bac |   iat: 1777757861,
+0|fink-bac |   exp: 1778362661
+0|fink-bac | }
+0|fink-bac | [auth] User from DB: {
+0|fink-bac |   id: 'fbe74ffd-5451-4d2f-b8a3-4f110ecd9b6f',
+0|fink-bac |   email: 'jorge.verenzuela@gmail.com',
+0|fink-bac |   role: 'ADMIN',
+0|fink-bac |   isActive: true
+0|fink-bac | }
+0|fink-bac | [0mGET /api/products?limit=1000 [32m200[0m 4.622 ms - 393[0m
+0|fink-bac | [0mGET /api/transaction-categories [32m200[0m 31.027 ms - 794[0m
+0|fink-bac | [0mGET /api/accounts?limit=1000 [32m200[0m 40.116 ms - -[0m
+0|fink-bac | [auth] Decoded JWT: {
+0|fink-bac |   userId: 'fbe74ffd-5451-4d2f-b8a3-4f110ecd9b6f',
+0|fink-bac |   email: 'jorge.verenzuela@gmail.com',
+0|fink-bac |   role: 'ADMIN',
+0|fink-bac |   iat: 1777757861,
+0|fink-bac |   exp: 1778362661
+0|fink-bac | }
+0|fink-bac | [auth] Decoded JWT: {
+0|fink-bac |   userId: 'fbe74ffd-5451-4d2f-b8a3-4f110ecd9b6f',
+0|fink-bac |   email: 'jorge.verenzuela@gmail.com',
+0|fink-bac |   role: 'ADMIN',
+0|fink-bac |   iat: 1777757861,
+0|fink-bac |   exp: 1778362661
+0|fink-bac | }
+0|fink-bac | [auth] User from DB: {
+0|fink-bac |   id: 'fbe74ffd-5451-4d2f-b8a3-4f110ecd9b6f',
+0|fink-bac |   email: 'jorge.verenzuela@gmail.com',
+0|fink-bac |   role: 'ADMIN',
+0|fink-bac |   isActive: true
+0|fink-bac | }
+0|fink-bac | [auth] User from DB: {
+0|fink-bac |   id: 'fbe74ffd-5451-4d2f-b8a3-4f110ecd9b6f',
+0|fink-bac |   email: 'jorge.verenzuela@gmail.com',
+0|fink-bac |   role: 'ADMIN',
+0|fink-bac |   isActive: true
+0|fink-bac | }
+0|fink-bac | [0mGET /api/projects?limit=100 [32m200[0m 5.475 ms - -[0m
+0|fink-bac | [0mGET /api/exchange-rates/latest [32m200[0m 14.891 ms - 157[0m
+0|fink-bac | [auth] Decoded JWT: {
+0|fink-bac |   userId: 'fbe74ffd-5451-4d2f-b8a3-4f110ecd9b6f',
+0|fink-bac |   email: 'jorge.verenzuela@gmail.com',
+0|fink-bac |   role: 'ADMIN',
+0|fink-bac |   iat: 1777757861,
+0|fink-bac |   exp: 1778362661
+0|fink-bac | }
+0|fink-bac | [auth] User from DB: {
+0|fink-bac |   id: 'fbe74ffd-5451-4d2f-b8a3-4f110ecd9b6f',
+0|fink-bac |   email: 'jorge.verenzuela@gmail.com',
+0|fink-bac |   role: 'ADMIN',
+0|fink-bac |   isActive: true
+0|fink-bac | }
+0|fink-bac | [0mGET /api/exchange-rates/latest [32m200[0m 4.298 ms - 157[0m
+0|fink-bac | SENDING TO PRISMA: {
+0|fink-bac |   "code": "BOT-1777928236718",
+0|fink-bac |   "date": "2026-05-03T20:56:00.000Z",
+0|fink-bac |   "type": "TRANSFER",
+0|fink-bac |   "description": "Transferencia de fondos",
+0|fink-bac |   "projectId": "d595ce90-85a8-42e6-9668-95d5805e9ab8",
+0|fink-bac |   "contactPersonId": null,
+0|fink-bac |   "currency": "BS",
+0|fink-bac |   "amount": 6200,
+0|fink-bac |   "amountBs": 6200,
+0|fink-bac |   "amountUsd": 12.727890832469754,
+0|fink-bac |   "amountEur": 0,
+0|fink-bac |   "exchangeRateId": "c19076e4-10f3-4890-8f32-21c301c07022",
+0|fink-bac |   "userId": "c5f8a709-db21-4ecf-97d2-572bdde776b3",
+0|fink-bac |   "category": "transferencia",
+0|fink-bac |   "tags": "[\"telegram-bot\"]",
+0|fink-bac |   "attachments": "[]",
+0|fink-bac |   "status": "COMPLETED",
+0|fink-bac |   "paymentStatus": "PAID",
+0|fink-bac |   "amountPaid": 6200,
+0|fink-bac |   "entries": {
+0|fink-bac |     "create": [
+0|fink-bac |       {
+0|fink-bac |         "debitAccountId": "532ec399-376d-47c2-bbf1-517698082194",
+0|fink-bac |         "debitAmount": 6200
+0|fink-bac |       },
+0|fink-bac |       {
+0|fink-bac |         "creditAccountId": "ce7146b6-7fd9-472e-a643-73da4646c8d9",
+0|fink-bac |         "creditAmount": 6200
+0|fink-bac |       }
+0|fink-bac |     ]
+0|fink-bac |   }
+0|fink-bac | }
+0|fink-bac | SENDING TO PRISMA: {
+0|fink-bac |   "code": "BOT-1777928236718",
+0|fink-bac |   "date": "2026-05-03T20:56:00.000Z",
+0|fink-bac |   "type": "TRANSFER",
+0|fink-bac |   "description": "Transferencia de fondos",
+0|fink-bac |   "projectId": "d595ce90-85a8-42e6-9668-95d5805e9ab8",
+0|fink-bac |   "contactPersonId": null,
+0|fink-bac |   "currency": "BS",
+0|fink-bac |   "amount": 6200,
+0|fink-bac |   "amountBs": 6200,
+0|fink-bac |   "amountUsd": 12.727890832469754,
+0|fink-bac |   "amountEur": 0,
+0|fink-bac |   "exchangeRateId": "c19076e4-10f3-4890-8f32-21c301c07022",
+0|fink-bac |   "userId": "c5f8a709-db21-4ecf-97d2-572bdde776b3",
+0|fink-bac |   "category": "transferencia",
+0|fink-bac |   "tags": "[\"telegram-bot\"]",
+0|fink-bac |   "attachments": "[]",
+0|fink-bac |   "status": "COMPLETED",
+0|fink-bac |   "paymentStatus": "PAID",
+0|fink-bac |   "amountPaid": 6200,
+0|fink-bac |   "entries": {
+0|fink-bac |     "create": [
+0|fink-bac |       {
+0|fink-bac |         "debitAccountId": "532ec399-376d-47c2-bbf1-517698082194",
+0|fink-bac |         "debitAmount": 6200
+0|fink-bac |       },
+0|fink-bac |       {
+0|fink-bac |         "creditAccountId": "ce7146b6-7fd9-472e-a643-73da4646c8d9",
+0|fink-bac |         "creditAmount": 6200
+0|fink-bac |       }
+0|fink-bac |     ]
+0|fink-bac |   }
+0|fink-bac | }
+
+0|fink-backend  | 🔄 Running scheduled task: Process recurring rules
+0|fink-backend  | 🔁 No recurring rules due at this time

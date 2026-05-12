@@ -9,6 +9,7 @@ import {
   createTransaction,
   updateTransaction,
   cancelTransaction,
+  reverseTransaction,
   deleteTransaction,
   getTransactionCategories,
   uploadTransactionAttachments,
@@ -74,6 +75,7 @@ router.delete('/:id', deleteTransaction);
 
 // Acciones especiales
 router.post('/:id/cancel', cancelTransaction);
+router.post('/:id/reverse', reverseTransaction);
 
 // Attachments
 router.post('/:id/attachments', upload.array('files'), uploadTransactionAttachments);
