@@ -1120,6 +1120,15 @@ export const getAccountLedger = async (req: Request, res: Response) => {
               amountUsd: true,
               amountEur: true,
               status: true,
+              entries: {
+                select: {
+                  id: true,
+                  debitAccountId: true,
+                  creditAccountId: true,
+                  debitAccount: { select: { name: true } },
+                  creditAccount: { select: { name: true } }
+                }
+              }
             },
           },
           debitAccount: {

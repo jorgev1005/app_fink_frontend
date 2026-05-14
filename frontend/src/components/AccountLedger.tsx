@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import api from '@/lib/api';
 import { format } from 'date-fns';
 
@@ -31,6 +31,7 @@ export default function AccountLedger({ accountId, accountType, currency }: Acco
   const defaults = getDefaultDates();
   const [startDate, setStartDate] = useState(defaults.start);
   const [endDate, setEndDate] = useState(defaults.end);
+  const [sortConfig, setSortConfig] = useState<{ key: string, direction: 'asc' | 'desc' }>({ key: 'date', direction: 'desc' });
 
   const loadData = async () => {
     if (!accountId) return;
@@ -116,7 +117,108 @@ export default function AccountLedger({ accountId, accountType, currency }: Acco
   // Totals for the period
   const totalDebits = rows.reduce((sum, r) => sum + r.displayDebit, 0);
   const totalCredits = rows.reduce((sum, r) => sum + r.displayCredit, 0);
+
+  const handleSort = (key: string) => {
+    let direction: 'asc' | 'desc' = 'asc';
+    if (sortConfig.key === key && sortConfig.direction === 'asc') {
+      direction = 'desc';
+    } else if (sortConfig.key === key && sortConfig.direction === 'desc') {
+      direction = 'asc';
+    } else if (key === 'date') {
+      direction = 'desc'; // Por defecto fecha es descendente primero
+    }
+    setSortConfig({ key, direction });
+  };
+
+  const sortedRows = useMemo(() => {
+    const sortableItems = [...rows];
+    
+    sortableItems.sort((a, b) => {
+      let aValue: any = '';
+      let bValue: any = '';
+
+      switch (sortConfig.key) {
+        case 'date':
+          aValue = new Date(a.transaction?.date || 0).getTime();
+          bValue = new Date(b.transaction?.date || 0).getTime();
+          break;
+        case 'ref':
+          aValue = a.transaction?.reference || a.transaction?.code || '';
+          bValue = b.transaction?.reference || b.transaction?.code || '';
+          break;
+        case 'desc':
+          aValue = a.transaction?.description || '';
+          bValue = b.transaction?.description || '';
+          break;
+        case 'debit':
+          aValue = a.displayDebit;
+          bValue = b.displayDebit;
+          break;
+        case 'credit':
+          aValue = a.displayCredit;
+          bValue = b.displayCredit;
+          break;
+        case 'balance':
+          aValue = a.balance;
+          bValue = b.balance;
+          break;
+      }
+
+      if (aValue < bValue) {
+        return sortConfig.direction === 'asc' ? -1 : 1;
+      }
+      if (aValue > bValue) {
+        return sortConfig.direction === 'asc' ? 1 : -1;
+      }
+      return 0;
+    });
+
+    return sortableItems;
+  }, [rows, sortConfig]);
+
+  const renderSortableHeader = (label: string, key: string, align: 'left' | 'right' | 'center' = 'left') => {
+    return (
+      <th 
+        className={`px-4 py-3 text-${align} font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 select-none group transition-colors`}
+        onClick={() => handleSort(key)}
+      >
+        <div className={`flex items-center ${align === 'right' ? 'justify-end' : 'justify-start'} gap-1`}>
+          {label}
+          <span className={`text-xs ${sortConfig.key === key ? 'text-blue-500 font-bold' : 'text-gray-300 opacity-0 group-hover:opacity-100'}`}>
+            {sortConfig.key === key ? (sortConfig.direction === 'asc' ? '↑' : '↓') : '↕'}
+          </span>
+        </div>
+      </th>
+    );
+  };
   
+  // Resolve counterparty function
+  const getCounterpartyName = (row: any) => {
+    const otherEntries = row.transaction?.entries?.filter((e: any) => e.id !== row.id) || [];
+    let name = '?';
+    
+    // Fallback original mechanism if the backend returns it directly on the same entry!
+    if (row.debitAccountId === accountId && row.creditAccount?.name) {
+      return `De: ${row.creditAccount.name}`;
+    }
+    if (row.creditAccountId === accountId && row.debitAccount?.name) {
+      return `A: ${row.debitAccount.name}`;
+    }
+
+    // New mechanism matching split entries
+    if (row.debitAccountId === accountId) {
+      const credits = otherEntries.filter((e: any) => e.creditAccountId);
+      if (credits.length === 1) name = credits[0].creditAccount?.name || '?';
+      else if (credits.length > 1) name = 'Múltiples cuentas';
+      return `De: ${name}`;
+    } else {
+      const debits = otherEntries.filter((e: any) => e.debitAccountId);
+      if (debits.length === 1) name = debits[0].debitAccount?.name || '?';
+      else if (debits.length > 1) name = 'Múltiples cuentas';
+      return `A: ${name}`;
+    }
+  };
+
   return (
     <div className="space-y-4">
         {/* Filters */}
@@ -179,16 +281,12 @@ export default function AccountLedger({ accountId, accountType, currency }: Acco
             <table className="min-w-full divide-y divide-gray-200 bg-white text-sm">
                 <thead className="bg-gray-50">
                     <tr>
-                        <th className="px-4 py-3 text-left font-semibold text-gray-600">Fecha</th>
-                        <th className="px-4 py-3 text-left font-semibold text-gray-600">Ref</th>
-                        <th className="px-4 py-3 text-left font-semibold text-gray-600">Descripción</th>
-                        <th className="px-4 py-3 text-right font-semibold text-gray-600">
-                            {isAssetNature ? 'Débito (+)' : 'Débito (-)'}
-                        </th>
-                        <th className="px-4 py-3 text-right font-semibold text-gray-600">
-                            {isAssetNature ? 'Crédito (-)' : 'Crédito (+)'}
-                        </th>
-                        <th className="px-4 py-3 text-right font-semibold text-gray-600">Saldo</th>
+                        {renderSortableHeader('Fecha', 'date', 'left')}
+                        {renderSortableHeader('Ref', 'ref', 'left')}
+                        {renderSortableHeader('Descripción', 'desc', 'left')}
+                        {renderSortableHeader(isAssetNature ? 'Débito (+)' : 'Débito (-)', 'debit', 'right')}
+                        {renderSortableHeader(isAssetNature ? 'Crédito (-)' : 'Crédito (+)', 'credit', 'right')}
+                        {renderSortableHeader('Saldo', 'balance', 'right')}
                     </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
@@ -202,7 +300,7 @@ export default function AccountLedger({ accountId, accountType, currency }: Acco
                         <td className="px-4 py-2 text-right font-mono">{openingBalance.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</td>
                     </tr>
 
-                    {rows.length === 0 && !loading && (
+                    {sortedRows.length === 0 && !loading && (
                         <tr>
                             <td colSpan={6} className="px-4 py-8 text-center text-gray-500">
                                 No se encontraron movimientos en este periodo.
@@ -210,7 +308,7 @@ export default function AccountLedger({ accountId, accountType, currency }: Acco
                         </tr>
                     )}
 
-                    {rows.map((row) => (
+                    {sortedRows.map((row) => (
                         <tr key={row.id} className="hover:bg-gray-50">
                             <td className="px-4 py-2 text-gray-900 whitespace-nowrap">
                                 {row.transaction?.date ? format(new Date(row.transaction.date), 'dd/MM/yyyy') : '-'}
@@ -224,9 +322,7 @@ export default function AccountLedger({ accountId, accountType, currency }: Acco
                                 </div>
                                 <div className="text-xs text-gray-400">
                                     {/* Show counterparty account name */}
-                                    {row.debitAccountId === accountId 
-                                        ? `De: ${row.creditAccount?.name || '?'}` 
-                                        : `A: ${row.debitAccount?.name || '?'}`}
+                                    {getCounterpartyName(row)}
                                 </div>
                             </td>
                             <td className={`px-4 py-2 text-right font-mono ${row.displayDebit > 0 ? 'text-gray-900' : 'text-gray-300'}`}>
