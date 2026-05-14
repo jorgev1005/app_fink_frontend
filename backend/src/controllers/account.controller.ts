@@ -1022,12 +1022,12 @@ export const getAccountLedger = async (req: Request, res: Response) => {
       where.transaction = {};
 
       if (startDate) {
-        where.transaction.date = { gte: new Date(startDate as string) };
+        where.transaction.date = { gte: new Date(`${startDate}T00:00:00-04:00`) };
       }
 
       if (endDate) {
         if (!where.transaction.date) where.transaction.date = {};
-        where.transaction.date.lte = new Date(endDate as string);
+        where.transaction.date.lte = new Date(`${endDate}T23:59:59-04:00`);
       }
     }
 
@@ -1058,7 +1058,7 @@ export const getAccountLedger = async (req: Request, res: Response) => {
     };
 
     if (startDate) {
-       const start = new Date(startDate as string);
+       const start = new Date(`${startDate}T00:00:00-04:00`);
        
        const prevEntries = await prisma.transactionEntry.findMany({
             where: { 

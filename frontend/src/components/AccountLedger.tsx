@@ -179,7 +179,7 @@ export default function AccountLedger({ accountId, accountType, currency }: Acco
   const renderSortableHeader = (label: string, key: string, align: 'left' | 'right' | 'center' = 'left') => {
     return (
       <th 
-        className={`px-4 py-3 text-${align} font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 select-none group transition-colors`}
+        className={`px-4 py-3 text-${align} font-semibold text-gray-600 cursor-pointer hover:bg-gray-100 select-none group transition-colors whitespace-nowrap`}
         onClick={() => handleSort(key)}
       >
         <div className={`flex items-center ${align === 'right' ? 'justify-end' : 'justify-start'} gap-1`}>
@@ -325,13 +325,13 @@ export default function AccountLedger({ accountId, accountType, currency }: Acco
                                     {getCounterpartyName(row)}
                                 </div>
                             </td>
-                            <td className={`px-4 py-2 text-right font-mono ${row.displayDebit > 0 ? 'text-gray-900' : 'text-gray-300'}`}>
+                            <td className={`px-4 py-2 text-right font-mono whitespace-nowrap ${row.displayDebit > 0 ? 'text-gray-900' : 'text-gray-300'}`}>
                                 {row.displayDebit > 0 ? row.displayDebit.toLocaleString('es-VE', { minimumFractionDigits: 2 }) : '-'}
                             </td>
-                            <td className={`px-4 py-2 text-right font-mono ${row.displayCredit > 0 ? 'text-gray-900' : 'text-gray-300'}`}>
+                            <td className={`px-4 py-2 text-right font-mono whitespace-nowrap ${row.displayCredit > 0 ? 'text-gray-900' : 'text-gray-300'}`}>
                                 {row.displayCredit > 0 ? row.displayCredit.toLocaleString('es-VE', { minimumFractionDigits: 2 }) : '-'}
                             </td>
-                            <td className="px-4 py-2 text-right font-mono font-medium text-blue-900">
+                            <td className="px-4 py-2 text-right font-mono font-medium text-blue-900 whitespace-nowrap">
                                 {row.balance.toLocaleString('es-VE', { minimumFractionDigits: 2 })}
                             </td>
                         </tr>

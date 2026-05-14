@@ -1010,20 +1010,41 @@ export const updateTransaction = async (req: Request, res: Response) => {
          debitAccountId: e.debitAccountId || null,
          creditAccountId: e.creditAccountId || null
        }));
-    } else if (amount !== undefined && existingTx.amount && Number(amount) !== Number(existingTx.amount)) {
-       // Calcular proporcionalidad para las entradas existentes. Si tenía 100 y pasa a 50, factor 0.5.
-       const factor = Number(amount) / Number(existingTx.amount);
-       // Ya que Prisma no permite operaciones matemáticas directas en anidados para MySQL/SQLite fácilmente (updateMany permite set pero no multiply), sacamos las viejas y las reescribimos.
+    } else {
+       // Auto-Heal: Calcular proporcionalidad para las entradas existentes si el monto cambió O si estaban desfasados debido a un bug previo
        const oldEntries = await prisma.transactionEntry.findMany({ where: { transactionId: id } });
-       if (oldEntries.length > 0) {
+       
+       let previousTotalCredits = 0;
+       oldEntries.forEach(e => { previousTotalCredits += e.creditAmount; });
+       let previousTotalDebits = 0;
+       oldEntries.forEach(e => { previousTotalDebits += e.debitAmount; });
+       
+       const maxOldTotal = Math.max(previousTotalCredits, previousTotalDebits);
+       const targetAmount = amount !== undefined ? Number(amount) : Number(existingTx.amount);
+
+       // Si hay un saldo incorrecto en base al monto de la transacción (con tolerancia de 0.01)
+       if (oldEntries.length > 0 && Math.abs(maxOldTotal - targetAmount) > 0.01) {
           overrideEntries = true;
-          newEntriesData = oldEntries.map(e => ({
-            debitAmount: e.debitAmount ? e.debitAmount * factor : 0,
-            creditAmount: e.creditAmount ? e.creditAmount * factor : 0,
-            description: e.description,
-            debitAccountId: e.debitAccountId,
-            creditAccountId: e.creditAccountId
-          }));
+          const factor = maxOldTotal > 0 ? targetAmount / maxOldTotal : 0;
+          
+          if (factor > 0) {
+             newEntriesData = oldEntries.map(e => ({
+               debitAmount: e.debitAmount ? e.debitAmount * factor : 0,
+               creditAmount: e.creditAmount ? e.creditAmount * factor : 0,
+               description: e.description,
+               debitAccountId: e.debitAccountId,
+               creditAccountId: e.creditAccountId
+             }));
+          } else {
+             // Fallback si estaban en cero, asignar todo al primero (poco probable, pero seguro)
+             newEntriesData = oldEntries.map((e, idx) => ({
+               debitAmount: e.debitAccountId && idx === 0 ? targetAmount : 0,
+               creditAmount: e.creditAccountId && idx === 0 ? targetAmount : 0,
+               description: e.description,
+               debitAccountId: e.debitAccountId,
+               creditAccountId: e.creditAccountId
+             }));
+          }
        }
     }
 
