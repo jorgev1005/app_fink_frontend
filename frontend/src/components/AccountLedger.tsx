@@ -100,6 +100,10 @@ export default function AccountLedger({ accountId, accountType, currency }: Acco
         creditVal = entry.creditAmount;
     }
 
+    // Capture originals
+    const origDebitVal = entry.debitAccountId === accountId ? (entry.originalDebit || 0) : 0;
+    const origCreditVal = entry.creditAccountId === accountId ? (entry.originalCredit || 0) : 0;
+
     // Net Change
     // Asset: +Debit -Credit
     // Liability: +Credit -Debit
@@ -110,6 +114,8 @@ export default function AccountLedger({ accountId, accountType, currency }: Acco
       ...entry,
       displayDebit: debitVal,
       displayCredit: creditVal,
+      displayOrigDebit: origDebitVal,
+      displayOrigCredit: origCreditVal,
       balance: currentBalance
     };
   });
@@ -196,6 +202,7 @@ export default function AccountLedger({ accountId, accountType, currency }: Acco
   const getCounterpartyName = (row: any) => {
     const otherEntries = row.transaction?.entries?.filter((e: any) => e.id !== row.id) || [];
     let name = '?';
+    const fallbackName = row.transaction?.category || row.transaction?.type || 'General';
     
     // Fallback original mechanism if the backend returns it directly on the same entry!
     if (row.debitAccountId === accountId && row.creditAccount?.name) {
@@ -208,13 +215,15 @@ export default function AccountLedger({ accountId, accountType, currency }: Acco
     // New mechanism matching split entries
     if (row.debitAccountId === accountId) {
       const credits = otherEntries.filter((e: any) => e.creditAccountId);
-      if (credits.length === 1) name = credits[0].creditAccount?.name || '?';
+      if (credits.length === 1) name = credits[0].creditAccount?.name || fallbackName;
       else if (credits.length > 1) name = 'Múltiples cuentas';
+      else name = fallbackName;
       return `De: ${name}`;
     } else {
       const debits = otherEntries.filter((e: any) => e.debitAccountId);
-      if (debits.length === 1) name = debits[0].debitAccount?.name || '?';
+      if (debits.length === 1) name = debits[0].debitAccount?.name || fallbackName;
       else if (debits.length > 1) name = 'Múltiples cuentas';
+      else name = fallbackName;
       return `A: ${name}`;
     }
   };
@@ -326,10 +335,24 @@ export default function AccountLedger({ accountId, accountType, currency }: Acco
                                 </div>
                             </td>
                             <td className={`px-4 py-2 text-right font-mono whitespace-nowrap ${row.displayDebit > 0 ? 'text-gray-900' : 'text-gray-300'}`}>
-                                {row.displayDebit > 0 ? row.displayDebit.toLocaleString('es-VE', { minimumFractionDigits: 2 }) : '-'}
+                                {row.displayDebit > 0 ? (
+                                    <>
+                                        <div>{row.displayDebit.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</div>
+                                        {row.originalCurrency && row.originalCurrency !== currency && (
+                                            <div className="text-xs text-gray-400">{row.displayOrigDebit.toLocaleString('es-VE', { minimumFractionDigits: 2 })} {row.originalCurrency}</div>
+                                        )}
+                                    </>
+                                ) : '-'}
                             </td>
                             <td className={`px-4 py-2 text-right font-mono whitespace-nowrap ${row.displayCredit > 0 ? 'text-gray-900' : 'text-gray-300'}`}>
-                                {row.displayCredit > 0 ? row.displayCredit.toLocaleString('es-VE', { minimumFractionDigits: 2 }) : '-'}
+                                {row.displayCredit > 0 ? (
+                                    <>
+                                        <div>{row.displayCredit.toLocaleString('es-VE', { minimumFractionDigits: 2 })}</div>
+                                        {row.originalCurrency && row.originalCurrency !== currency && (
+                                            <div className="text-xs text-gray-400">{row.displayOrigCredit.toLocaleString('es-VE', { minimumFractionDigits: 2 })} {row.originalCurrency}</div>
+                                        )}
+                                    </>
+                                ) : '-'}
                             </td>
                             <td className="px-4 py-2 text-right font-mono font-medium text-blue-900 whitespace-nowrap">
                                 {row.balance.toLocaleString('es-VE', { minimumFractionDigits: 2 })}

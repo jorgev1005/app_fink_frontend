@@ -1175,7 +1175,9 @@ export const getAccountLedger = async (req: Request, res: Response) => {
             ...e,
             debitAmount: d,
             creditAmount: c,
-            originalCurrency: tx.currency
+            originalCurrency: tx.currency,
+            originalDebit: e.debitAmount,
+            originalCredit: e.creditAmount
         };
     });
     
