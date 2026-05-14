@@ -995,6 +995,45 @@ export const updateTransaction = async (req: Request, res: Response) => {
     if (currency !== undefined) updateData.currency = currency;
     if (amount !== undefined) updateData.amount = Number(amount);
 
+    // Si viene la opción express de entries desde el admin UI o modal:
+    const { entries: reqEntries } = req.body;
+    let overrideEntries = false;
+    let newEntriesData: any[] = [];
+    
+    if (reqEntries && Array.isArray(reqEntries)) {
+       overrideEntries = true;
+       // Permite sobreescribir entradas (borra y crea)
+       newEntriesData = reqEntries.map((e: any) => ({
+         debitAmount: Number(e.debitAmount || 0),
+         creditAmount: Number(e.creditAmount || 0),
+         description: e.description || null,
+         debitAccountId: e.debitAccountId || null,
+         creditAccountId: e.creditAccountId || null
+       }));
+    } else if (amount !== undefined && existingTx.amount && Number(amount) !== Number(existingTx.amount)) {
+       // Calcular proporcionalidad para las entradas existentes. Si tenía 100 y pasa a 50, factor 0.5.
+       const factor = Number(amount) / Number(existingTx.amount);
+       // Ya que Prisma no permite operaciones matemáticas directas en anidados para MySQL/SQLite fácilmente (updateMany permite set pero no multiply), sacamos las viejas y las reescribimos.
+       const oldEntries = await prisma.transactionEntry.findMany({ where: { transactionId: id } });
+       if (oldEntries.length > 0) {
+          overrideEntries = true;
+          newEntriesData = oldEntries.map(e => ({
+            debitAmount: e.debitAmount ? e.debitAmount * factor : 0,
+            creditAmount: e.creditAmount ? e.creditAmount * factor : 0,
+            description: e.description,
+            debitAccountId: e.debitAccountId,
+            creditAccountId: e.creditAccountId
+          }));
+       }
+    }
+
+    if (overrideEntries) {
+       updateData.entries = {
+          deleteMany: {}, // Borrar todas las entradas viejas
+          create: newEntriesData // Crear las entradas calculadas o proporcionadas con saldos actualizados
+       };
+    }
+
     // If exchangeRateId is provided, update the scalar field directly
     if (exchangeRateId !== undefined) {
       updateData.exchangeRateId = exchangeRateId || null;

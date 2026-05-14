@@ -285,7 +285,9 @@ export default function QuickEditTransactionModal({ transactionId, onClose, onSu
         // 1. Try to find in entries (Best way)
         if (transaction.entries && Array.isArray(transaction.entries)) {
            const assetEntry = transaction.entries.find((e: any) => {
-              const acct = accounts.find(a => a.id === e.accountId);
+              // Now entries have debitAccountId and creditAccountId instead of accountId
+              const acctId = e.debitAccountId || e.creditAccountId;
+              const acct = accounts.find(a => a.id === acctId);
               // Check for Asset/Bank/Cash OR if the account name looks like a bank
               if (acct) {
                  return acct.type === 'ASSET' || acct.subType === 'BANK' || acct.subType === 'CASH' || 
@@ -293,7 +295,7 @@ export default function QuickEditTransactionModal({ transactionId, onClose, onSu
               }
               return false;
            });
-           if (assetEntry) targetAccountId = assetEntry.accountId;
+           if (assetEntry) targetAccountId = assetEntry.debitAccountId || assetEntry.creditAccountId;
         }
 
         // 2. Fallback: If no entry found, check if transaction object has account info directly
@@ -317,16 +319,22 @@ export default function QuickEditTransactionModal({ transactionId, onClose, onSu
       if (transaction.entries && bankAccountId) {
           // Find old asset entry to replace it
           const assetEntryIndex = transaction.entries.findIndex((e: any) => {
-             const acct = accounts.find(a => a.id === e.accountId);
+             const acctId = e.debitAccountId || e.creditAccountId;
+             const acct = accounts.find(a => a.id === acctId);
              return acct && (acct.type === 'ASSET' || acct.subType === 'BANK' || acct.subType === 'CASH');
           });
           
-          if (assetEntryIndex >= 0 && transaction.entries[assetEntryIndex].accountId !== bankAccountId) {
-             updatedEntries = [...transaction.entries];
-             updatedEntries[assetEntryIndex] = {
-                ...updatedEntries[assetEntryIndex],
-                accountId: bankAccountId
-             };
+          if (assetEntryIndex >= 0) {
+             const oldEntry = transaction.entries[assetEntryIndex];
+             const oldAcctId = oldEntry.debitAccountId || oldEntry.creditAccountId;
+             if (oldAcctId !== bankAccountId) {
+                updatedEntries = [...transaction.entries];
+                updatedEntries[assetEntryIndex] = {
+                   ...oldEntry,
+                };
+                if (oldEntry.debitAccountId) updatedEntries[assetEntryIndex].debitAccountId = bankAccountId;
+                if (oldEntry.creditAccountId) updatedEntries[assetEntryIndex].creditAccountId = bankAccountId;
+             }
           }
       }
 
