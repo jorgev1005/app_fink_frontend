@@ -14,7 +14,7 @@ interface BCVRate {
 /**
  * Obtener tasa de cambio del BCV
  * Usa: https://ve.dolarapi.com/v1/dolares/oficial para USD
- * Usa: https://api.exchangerate-api.com/v4/latest/EUR para EUR
+ * Usa: https://ve.dolarapi.com/v1/euros/oficial para EUR
  */
 export const fetchBCVRates = async (): Promise<BCVRate | null> => {
   try {
@@ -29,13 +29,13 @@ export const fetchBCVRates = async (): Promise<BCVRate | null> => {
       usdRate = parseFloat(bcvData.promedio);
     }
 
-    // 2. Obtener EUR/BCV desde exchangerate-api
+    // 2. Obtener EUR/BCV desde dolarapi (oficial)
     let eurRate = 0;
     try {
-      const eurResponse = await axios.get('https://api.exchangerate-api.com/v4/latest/EUR', { timeout: 5000 });
+      const eurResponse = await axios.get('https://ve.dolarapi.com/v1/euros/oficial', { timeout: 5000 });
       const eurData = eurResponse.data;
-      if (eurData && eurData.rates && eurData.rates.VES) {
-        eurRate = parseFloat(eurData.rates.VES);
+      if (eurData && eurData.promedio) {
+        eurRate = parseFloat(eurData.promedio);
       }
     } catch (eurErr) {
       console.warn('⚠️ Error fetching EUR rate, calculating fallback:', (eurErr as any)?.message);
