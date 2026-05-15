@@ -1,4 +1,4 @@
-# Scripts de despliegue principal
+                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    # Scripts de despliegue principal
 # Uso: .\scripts\deploy.ps1
 
 # Configuración
@@ -123,7 +123,7 @@ Set-Content "$LOCAL_BACKEND\prisma\schema.prisma" $schemaContent
 try {
     # Definir el scriptblock action correctamente
     $backendAction = {
-        return "echo 'Permisos scripts...'; chmod +x scripts/*.sh; echo 'Dependencias Backend...'; npm install; echo 'Compilando Backend...'; npm run build; echo 'Actualizando BD...'; npx prisma generate; npx prisma db push --accept-data-loss; "
+        return "echo 'Permisos scripts...'; chmod +x scripts/*.sh; echo 'Dependencias Backend...'; npm install; echo 'Generando Prisma Cliente...'; npx prisma generate; echo 'Compilando Backend...'; npm run build; echo 'Actualizando BD...'; npx prisma db push --accept-data-loss; "
     }
 
     Deploy-Component `
