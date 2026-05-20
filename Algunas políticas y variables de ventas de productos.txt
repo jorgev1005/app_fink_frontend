@@ -1,0 +1,16 @@
+Algunas políticas y variables a considerar:
+
+1.- Descuento por pago en divisas (efectivo) o (USDT, USDC, Bitcoin) 
+
+2.- Variable de Compra minina de productos.
+
+3.- Variable Despacho de productos en puerta de fabrica o despacho hasta el cliente.
+
+Estas variables solo aplicarían a algunos clientes:
+
+4.- Variable de Descuento por prepagar en Bolívares y USD
+
+5.- Recargo por días de crédito:	7 días - 5%
+					15 días 10% 
+					
+	máximo 15 días de credito, si el cliente sobrepasa los 15 días se aplica un 20%

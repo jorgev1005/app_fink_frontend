@@ -253,6 +253,16 @@ export const entriesAPI = {
   parse: (data: { text: string }) => apiClient.post('/api/entries/parse', data),
 }
 
+
+export const loansAPI = {
+  getLoans: (projectId: string) => apiClient.get('/api/loans?projectId=' + projectId),
+  getLoanById: (id: string) => apiClient.get(`/api/loans/${id}`),
+  createLoan: (data: any) => apiClient.post('/api/loans', data),
+  deleteLoan: (id: string) => apiClient.delete(`/api/loans/${id}`),
+  addPayment: (id: string, data: any) => apiClient.post(`/api/loans/${id}/payment`, data),
+  addCharge: (id: string, data: any) => apiClient.post(`/api/loans/${id}/charge`, data),
+};
+
 export const settingsAPI = {
   getParseThreshold: (params?: any) => apiClient.get('/api/settings/parse-threshold', { params }),
   setParseThreshold: (data: any) => apiClient.post('/api/settings/parse-threshold', data),
@@ -331,6 +341,7 @@ const api = {
   backups: backupAPI,
   scan: scanAPI,
   cfo: cfoAPI,
+  loans: loansAPI,
 }
 
 export default api

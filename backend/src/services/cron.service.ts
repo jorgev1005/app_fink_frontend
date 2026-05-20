@@ -4,6 +4,7 @@ import { checkDueDocuments } from './document.service';
 import { generateAIInsights } from './ai.service';
 import { processDueRecurringRules } from './recurring.service';
 import { BackupService } from './backup.service';
+import { processLoanInterests } from './loan.service';
 
 /**
  * Inicializar tareas programadas (Cron Jobs)
@@ -83,6 +84,8 @@ export const initializeCronJobs = () => {
       timezone: 'America/Caracas'
     }
   );
+
+  cron.schedule('0 6 * * *', async () => { console.log('🔄 Running scheduled task: Process Loan Interests'); try { await processLoanInterests(); } catch (error) { console.error('❌ Error in loan cron job:', error); } }, { timezone: 'America/Caracas' });
 
   console.log('⏰ Cron jobs scheduled successfully');
 };

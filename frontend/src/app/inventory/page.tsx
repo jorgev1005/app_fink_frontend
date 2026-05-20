@@ -11,7 +11,9 @@ import {
   Filter,
   Save,
   X,
-  AlertCircle
+  AlertCircle,
+  Percent,
+  RefreshCw
 } from 'lucide-react';
 import api from '@/lib/api';
 import { toast } from 'sonner';
@@ -29,6 +31,15 @@ interface Product {
   taxRate: number;
   projectId?: string;
   isActive: boolean;
+  forSale?: boolean;
+  pesoUnitarioKg?: number;
+  empaqueCantidad?: number;
+  empaquePesoKg?: number;
+  empaqueLargoCm?: number;
+  empaqueAnchoCm?: number;
+  empaqueAltoCm?: number;
+  descuentoDivisasTipo?: string;
+  descuentoDivisasValor?: number;
 }
 
 interface Project {
@@ -92,7 +103,16 @@ export default function InventoryPage() {
     taxable: true,
     taxRate: 16,
     projectId: '',
-    isActive: true
+    isActive: true,
+    forSale: true,
+    pesoUnitarioKg: 0,
+    empaqueCantidad: 1,
+    empaquePesoKg: 0,
+    empaqueLargoCm: 0,
+    empaqueAnchoCm: 0,
+    empaqueAltoCm: 0,
+    descuentoDivisasTipo: 'dinamico',
+    descuentoDivisasValor: 0,
   });
 
   useEffect(() => {
@@ -125,6 +145,23 @@ export default function InventoryPage() {
       toast.error("Error al cargar productos");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const syncBot = async () => {
+    try {
+      const res = await fetch('http://localhost:3080/api/sync-catalog', { 
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ mode: 'merge' })
+      });
+      if(res.ok) {
+        toast.success("Catálogo sincronizado exitosamente con el Bot");
+      } else {
+        toast.error("Error al sincronizar con el Bot");
+      }
+    } catch(e) {
+      toast.error("Error de conexión con el servidor del Bot (Puerto 3080)");
     }
   };
 
@@ -177,7 +214,14 @@ export default function InventoryPage() {
         taxable: true,
         taxRate: 16,
         projectId: selectedProject || (projects[0]?.id || ''),
-        isActive: true
+        isActive: true,
+        forSale: true,
+        pesoUnitarioKg: 0,
+        empaqueCantidad: 1,
+        empaquePesoKg: 0,
+        empaqueLargoCm: 0,
+        empaqueAnchoCm: 0,
+        empaqueAltoCm: 0,
       });
     }
     setShowModal(true);
@@ -203,13 +247,22 @@ export default function InventoryPage() {
           </div>
         </div>
         
-        <button 
-          onClick={() => openModal()}
-          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm font-medium"
-        >
-          <Plus size={18} />
-          Nuevo Producto
-        </button>
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={syncBot}
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors shadow-sm font-medium"
+          >
+            <RefreshCw size={18} />
+            Sincronizar Bot
+          </button>
+          <button 
+            onClick={() => openModal()}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm font-medium"
+          >
+            <Plus size={18} />
+            Nuevo Producto
+          </button>
+        </div>
       </div>
 
       {/* Filters */}
@@ -427,6 +480,17 @@ export default function InventoryPage() {
                   <label htmlFor="taxable" className="text-sm font-medium text-slate-700">Aplica Impuesto</label>
                 </div>
                 
+                <div className="flex items-center gap-2 ml-4">
+                  <input 
+                    type="checkbox" 
+                    id="forSale"
+                    className="w-4 h-4 text-green-600 rounded focus:ring-green-500"
+                    checked={formData.forSale !== false}
+                    onChange={e => setFormData({...formData, forSale: e.target.checked})}
+                  />
+                  <label htmlFor="forSale" className="text-sm font-medium text-slate-700">Para la Venta (Bot/CRM)</label>
+                </div>
+                
                 {formData.taxable && (
                   <div className="flex items-center gap-2">
                     <input 
@@ -438,6 +502,138 @@ export default function InventoryPage() {
                     <span className="text-sm text-slate-500">%</span>
                   </div>
                 )}
+              </div>
+
+              {/* SECCIÓN COMERCIAL Y DESCUENTOS */}
+              <div className="pt-4 border-t border-slate-200 mt-4">
+                <h4 className="text-md font-bold text-slate-800 mb-4 flex items-center gap-2">
+                  <Percent size={18} className="text-blue-600"/>
+                  Comercial y Descuentos
+                </h4>
+                
+                <div className="grid grid-cols-2 gap-4 mb-2">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">
+                      Descuento Divisas Bot (Efectivo/Cripto)
+                    </label>
+                    <select 
+                      className="w-full border border-slate-200 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                      value={formData.descuentoDivisasTipo || 'dinamico'}
+                      onChange={e => setFormData({...formData, descuentoDivisasTipo: e.target.value})}
+                    >
+                      <option value="dinamico">Dinámico (Márgen de Brecha)</option>
+                      <option value="fijo">Fijo (Porcentaje Exacto)</option>
+                      <option value="desactivado">Desactivado (Sin Descuento)</option>
+                    </select>
+                  </div>
+                  
+                  {formData.descuentoDivisasTipo === 'fijo' && (
+                    <div>
+                      <label className="block text-xs font-medium text-slate-700 mb-1">Porcentaje de Descuento (%)</label>
+                      <div className="flex items-center gap-2">
+                        <input 
+                          type="number" 
+                          step="0.1"
+                          className="w-full border border-slate-200 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                          value={formData.descuentoDivisasValor || 0}
+                          onChange={e => setFormData({...formData, descuentoDivisasValor: parseFloat(e.target.value) || 0})}
+                        />
+                        <span className="text-slate-500 text-sm font-medium">%</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                {formData.descuentoDivisasTipo === 'desactivado' && (
+                  <p className="text-xs text-orange-600 font-medium mb-2">
+                    * Este producto cobrará el precio base en dólares directamente sin importar la brecha cambiaria. (Excepción de Terceros)
+                  </p>
+                )}
+              </div>
+
+              {/* SECCIÓN LÓGISTICA Y EMPAQUE */}
+              <div className="pt-4 border-t border-slate-200 mt-4">
+                <h4 className="text-md font-bold text-slate-800 mb-4 flex items-center gap-2">
+                  <Package size={18} className="text-blue-600"/>
+                  Logística y Empaque
+                </h4>
+                
+                <div className="grid grid-cols-3 gap-4 mb-4">
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">Peso Unid. (Kg)</label>
+                    <input 
+                      type="number" 
+                      className="w-full border border-slate-200 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                      value={formData.pesoUnitarioKg || 0}
+                      onChange={e => setFormData({...formData, pesoUnitarioKg: parseFloat(e.target.value) || 0})}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">Unid. x Empaque</label>
+                    <input 
+                      type="number" 
+                      className="w-full border border-slate-200 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                      value={formData.empaqueCantidad || 1}
+                      onChange={e => setFormData({...formData, empaqueCantidad: parseInt(e.target.value) || 1})}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-medium text-slate-700 mb-1">Peso Empaque (Kg)</label>
+                    <input 
+                      type="number" 
+                      className="w-full border border-slate-200 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                      value={formData.empaquePesoKg || 0}
+                      onChange={e => setFormData({...formData, empaquePesoKg: parseFloat(e.target.value) || 0})}
+                    />
+                  </div>
+                </div>
+
+                <label className="block text-sm font-medium text-slate-700 mb-2">Dimensiones del Empaque / Bulto (cm)</label>
+                <div className="grid grid-cols-3 gap-4 mb-4">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-400 w-8">Largo</span>
+                      <input 
+                        type="number" 
+                        className="w-full border border-slate-200 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                        value={formData.empaqueLargoCm || 0}
+                        onChange={e => setFormData({...formData, empaqueLargoCm: parseFloat(e.target.value) || 0})}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-400 w-8">Ancho</span>
+                      <input 
+                        type="number" 
+                        className="w-full border border-slate-200 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                        value={formData.empaqueAnchoCm || 0}
+                        onChange={e => setFormData({...formData, empaqueAnchoCm: parseFloat(e.target.value) || 0})}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-400 w-8">Alto</span>
+                      <input 
+                        type="number" 
+                        className="w-full border border-slate-200 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                        value={formData.empaqueAltoCm || 0}
+                        onChange={e => setFormData({...formData, empaqueAltoCm: parseFloat(e.target.value) || 0})}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Cálculo en tiempo real */}
+                <div className="bg-blue-50 border border-blue-100 rounded-lg p-3 flex justify-between items-center mt-2">
+                  <div className="flex items-center gap-2">
+                    <AlertCircle size={16} className="text-blue-500" />
+                    <span className="text-sm text-blue-800 font-medium">Peso Volumétrico Referencial:</span>
+                  </div>
+                  <span className="text-lg font-bold text-blue-600">
+                    {(((formData.empaqueLargoCm || 0) * (formData.empaqueAnchoCm || 0) * (formData.empaqueAltoCm || 0)) / 5000).toFixed(2)} Kg
+                  </span>
+                </div>
               </div>
 
             </div>

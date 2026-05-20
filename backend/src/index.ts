@@ -17,6 +17,7 @@ import documentRoutes from './routes/document.routes';
 import exchangeRateRoutes from './routes/exchangeRate.routes';
 import reportRoutes from './routes/report.routes';
 import dashboardRoutes from './routes/dashboard.routes';
+import loanRoutes from './routes/loan.routes';
 import adminRoutes from './routes/admin.routes';
 import aiRoutes from './routes/ai.routes';
 import cfoRoutes from './routes/cfo.routes';
@@ -32,6 +33,7 @@ import entryRoutes from './routes/entry.routes';
 import settingsRoutes from './routes/settings.routes';
 import transactionTemplateRoutes from './routes/transaction-template.routes';
 import backupRoutes from './routes/backup.routes';
+import publicRoutes from './routes/public.routes';
 
 // Middlewares
 import { errorHandler } from './middleware/errorHandler';
@@ -105,6 +107,7 @@ app.get('/health', (_req: Request, res: Response) => {
 // API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/projects', projectRoutes);
+app.use('/api/loans', loanRoutes);
 app.use('/api/accounts', accountRoutes);
 app.use('/api/transactions', transactionRoutes);
 app.use('/api/transaction-templates', transactionTemplateRoutes);
@@ -130,6 +133,7 @@ app.use('/api', auditRoutes);
 app.use('/api/entries', entryRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/backups', backupRoutes);
+app.use('/api/public', publicRoutes);
 
 // ============================================
 // MANEJO DE ERRORES

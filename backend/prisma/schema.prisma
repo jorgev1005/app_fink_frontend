@@ -15,13 +15,13 @@ datasource db {
 // ============================================
 
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
+  id        String  @id @default(uuid())
+  email     String  @unique
   password  String
   firstName String
   lastName  String
-  role      String   @default("USER") // ADMIN, MANAGER, ACCOUNTANT, USER, VIEWER
-  isActive  Boolean  @default(true)
+  role      String  @default("USER") // ADMIN, MANAGER, ACCOUNTANT, USER, VIEWER
+  isActive  Boolean @default(true)
   avatar    String?
 
   createdAt DateTime @default(now())
@@ -45,14 +45,14 @@ model User {
 // ============================================
 
 model Project {
-  id          String        @id @default(uuid())
+  id          String  @id @default(uuid())
   name        String
   description String?
-  code        String        @unique // Código único del proyecto
-  status      String        @default("ACTIVE") // ACTIVE, PAUSED, COMPLETED, ARCHIVED, PAUSED
-  color       String        @default("#3B82F6") // Para UI
+  code        String  @unique // Código único del proyecto
+  status      String  @default("ACTIVE") // ACTIVE, PAUSED, COMPLETED, ARCHIVED, PAUSED
+  color       String  @default("#3B82F6") // Para UI
   icon        String?
-  logoUrl     String?       // URL o path del logo del proyecto
+  logoUrl     String? // URL o path del logo del proyecto
 
   // Capital inicial
   initialCapitalBs  Float @default(0)
@@ -67,6 +67,7 @@ model Project {
 
   // Relaciones
   users                   ProjectUser[]
+  loans                   Loan[]
   accounts                Account[]
   transactions            Transaction[]
   templates               TransactionTemplate[]
@@ -107,13 +108,13 @@ model ProjectUser {
 // ============================================
 
 model Account {
-  id          String         @id @default(uuid())
+  id          String  @id @default(uuid())
   code        String // Código contable (ej: 1.1.01.001)
   name        String
   description String?
   type        String // ASSET, LIABILITY, EQUITY, REVENUE, EXPENSE
   subType     String // CASH, BANK, etc.
-  currency    String @default("BS") // BS, USD, EUR
+  currency    String  @default("BS") // BS, USD, EUR
 
   projectId String?
   project   Project? @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -138,11 +139,12 @@ model Account {
   consolidationGroupAccounts ConsolidationGroupAccount[]
 
   // Smart ERP Relations
-  paymentSources             Payment[]                   @relation("PaymentSourceAccount")
-  contactReceivables         ContactPerson[]             @relation("ContactReceivable")
-  contactPayables            ContactPerson[]             @relation("ContactPayable")
-  productIncomes             Product[]                   @relation("ProductIncome")
-  productExpenses            Product[]                   @relation("ProductExpense")
+  paymentSources     Payment[]       @relation("PaymentSourceAccount")
+  loansAsLiability   Loan[]          @relation("LoanLiabilityAccount")
+  contactReceivables ContactPerson[] @relation("ContactReceivable")
+  contactPayables    ContactPerson[] @relation("ContactPayable")
+  productIncomes     Product[]       @relation("ProductIncome")
+  productExpenses    Product[]       @relation("ProductExpense")
 
   @@unique([projectId, code])
   @@map("accounts")
@@ -218,9 +220,9 @@ model TransactionCodeSequence {
 // ============================================
 
 model ExchangeRate {
-  id     String             @id @default(uuid())
-  date   DateTime           @default(now())
-  source String @default("BCV") // BCV, CUSTOM, API
+  id     String   @id @default(uuid())
+  date   DateTime @default(now())
+  source String   @default("BCV") // BCV, CUSTOM, API
 
   // Tasas
   usdToBs  Float
@@ -247,20 +249,21 @@ model ExchangeRate {
 // ============================================
 
 model Transaction {
-  id     String            @id @default(uuid())
-  code   String            @unique // Código único de transacción
-  date   DateTime          @default(now())
+  id     String   @id @default(uuid())
+  code   String   @unique // Código único de transacción
+  date   DateTime @default(now())
   type   String // INCOME, EXPENSE, TRANSFER, ADJUSTMENT
   // seguir usando TransactionStatus por compatibilidad en tablas existentes
-  status String @default("COMPLETED") // DRAFT, PENDING, COMPLETED, CANCELLED, RECONCILED
+  status String   @default("COMPLETED") // DRAFT, PENDING, COMPLETED, CANCELLED, RECONCILED
 
   description String
   reference   String? // Número de factura, comprobante, etc.
   notes       String?
 
   // Proyecto
-  projectId String
-  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectId    String
+  project      Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  loanPayments LoanPayment[]
 
   // Moneda y montos
   currency String // BS, USD, EUR
@@ -297,7 +300,7 @@ model Transaction {
   attachments String // URLs de archivos (JSON)
 
   // Pago: cantidad ya asignada (sum of allocations) y estatus resumido
-  amountPaid    Float                  @default(0)
+  amountPaid    Float  @default(0)
   paymentStatus String @default("PENDING") // PENDING, PARTIAL, PAID
 
   createdAt DateTime @default(now())
@@ -313,12 +316,12 @@ model Transaction {
   lines String? // (JSON)
 
   // Smart ERP: Reversal Link
-  reversedByTransactionId String? @unique
+  reversedByTransactionId String?      @unique
   reversedByTransaction   Transaction? @relation("TransactionReversal", fields: [reversedByTransactionId], references: [id])
   reversesTransaction     Transaction? @relation("TransactionReversal")
-  
+
   // Link to a Payment record if this transaction represents a payment
-  paymentRecord    Payment? @relation("PaymentTransaction")
+  paymentRecord Payment? @relation("PaymentTransaction")
 
   @@index([projectId, date])
   @@index([type, status])
@@ -350,12 +353,12 @@ model TransactionEntry {
   // Cuenta de débito
   debitAccountId String?
   debitAccount   Account? @relation("DebitAccount", fields: [debitAccountId], references: [id])
-  debitAmount    Float  @default(0)
+  debitAmount    Float    @default(0)
 
   // Cuenta de crédito
   creditAccountId String?
   creditAccount   Account? @relation("CreditAccount", fields: [creditAccountId], references: [id])
-  creditAmount    Float  @default(0)
+  creditAmount    Float    @default(0)
 
   description String?
 
@@ -369,8 +372,8 @@ model TransactionEntry {
 // ============================================
 
 model Document {
-  id     String         @id @default(uuid())
-  code   String         @unique
+  id     String @id @default(uuid())
+  code   String @unique
   type   String // INVOICE, RECEIPT, etc.
   status String @default("PENDING") // PENDING, APPROVED, PAID, OVERDUE, CANCELLED
 
@@ -457,7 +460,7 @@ model Budget {
 // ============================================
 
 model Notification {
-  id      String              @id @default(uuid())
+  id      String @id @default(uuid())
   type    String // DOCUMENT_DUE, etc.
   channel String // IN_APP, EMAIL, WHATSAPP
 
@@ -578,7 +581,7 @@ model AnalyticsEvent {
 // ============================================
 
 model ContactPerson {
-  id   String      @id @default(uuid())
+  id   String @id @default(uuid())
   name String // Nombre o razón social
   type String @default("OTHER") // CUSTOMER, SUPPLIER, BOTH, OTHER
 
@@ -604,6 +607,7 @@ model ContactPerson {
   // Relaciones
   transactions Transaction[]
   templates    TransactionTemplate[]
+  loans        Loan[]
 
   // Smart ERP: Mapeo Contable Automático
   defaultReceivableAccountId String?
@@ -636,14 +640,42 @@ model Product {
   // Nuevos campos: unidad, si es gravable, tasa de impuesto y stock
   unit    String? // ej: 'u', 'kg', 'pcs'
   taxable Boolean @default(true)
-  taxRate Float @default(0) // porcentaje (ej: 16.00)
-  stock   Float @default(0)
+  taxRate Float   @default(0) // porcentaje (ej: 16.00)
+  stock   Float   @default(0)
 
   // Smart ERP: Mapeo Contable
   incomeAccountId  String?
   incomeAccount    Account? @relation("ProductIncome", fields: [incomeAccountId], references: [id])
   expenseAccountId String?
   expenseAccount   Account? @relation("ProductExpense", fields: [expenseAccountId], references: [id])
+
+  // ==========================================
+  // ECOSISTEMA ALUDRA - CATÁLOGO Y BOT
+  // ==========================================
+  division            String  @default("Aludra Terra (Agro)")
+  medidas             String?
+  tiempo_entrega      String? @default("24 horas")
+  unidad_empaque      String?
+  pedido_minimo       String?
+  colores_disponibles String? @default("[\"Consultar\"]")
+  descuentos_volumen  String?
+  descuentoDivisasTipo String  @default("dinamico") // dinamico, fijo, desactivado
+  descuentoDivisasValor Float? @default(0)
+  fuente_tasa         String  @default("bcv")
+  tasa_manual         Float?
+  url_catalogo        String? @default("https://catalogo.grupoaludra.com")
+  // ==========================================
+  // ECOSISTEMA ALUDRA - LOGÍSTICA Y VOLUMETRÍA
+  // ==========================================
+  pesoUnitarioKg      Float?  @default(0)
+  empaqueCantidad     Int?    @default(1)
+  empaquePesoKg       Float?  @default(0)
+  empaqueLargoCm      Float?  @default(0)
+  empaqueAnchoCm      Float?  @default(0)
+  empaqueAltoCm       Float?  @default(0)
+
+  isPublic            Boolean @default(true)
+  forSale             Boolean @default(true)
 
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
@@ -664,7 +696,7 @@ model RecurringRule {
   // entriesTemplate: JSON describing debit/credit accounts and amounts (templates)
   entriesTemplate String // (JSON)
   // scheduling
-  frequency       String @default("MONTHLY") // DAILY, WEEKLY, MONTHLY, YEARLY
+  frequency       String    @default("MONTHLY") // DAILY, WEEKLY, MONTHLY, YEARLY
   interval        Int       @default(1)
   startDate       DateTime
   endDate         DateTime?
@@ -674,10 +706,10 @@ model RecurringRule {
   isActive        Boolean   @default(true)
 
   // New fields for categorization and contact
-  contactId       String?
-  categoryId      String?
-  type            String?   @default("BILL") // BILL, INVOICE
-  autoPost        Boolean   @default(false) // If true, automatically creates the transaction
+  contactId  String?
+  categoryId String?
+  type       String? @default("BILL") // BILL, INVOICE
+  autoPost   Boolean @default(false) // If true, automatically creates the transaction
 
   createdBy String
   createdAt DateTime @default(now())
@@ -690,14 +722,14 @@ model RecurringRule {
 }
 
 model ScheduledOccurrence {
-  id              String           @id @default(uuid())
+  id              String        @id @default(uuid())
   recurringRuleId String
-  recurringRule   RecurringRule    @relation(fields: [recurringRuleId], references: [id], onDelete: Cascade)
+  recurringRule   RecurringRule @relation(fields: [recurringRuleId], references: [id], onDelete: Cascade)
   scheduledFor    DateTime
-  status          String @default("PENDING") // PENDING, POSTED, CANCELLED
+  status          String        @default("PENDING") // PENDING, POSTED, CANCELLED
   invoiceId       String?
-  invoice         Invoice?         @relation(fields: [invoiceId], references: [id])
-  createdAt       DateTime         @default(now())
+  invoice         Invoice?      @relation(fields: [invoiceId], references: [id])
+  createdAt       DateTime      @default(now())
 
   @@index([recurringRuleId, scheduledFor])
   @@map("scheduled_occurrences")
@@ -722,10 +754,11 @@ model OccurrenceBatch {
 // ============================================
 
 model Invoice {
-  id              String        @id @default(uuid())
+  id              String       @id @default(uuid())
   projectId       String
-  project         Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  code            String        @unique
+  project         Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  loanCharges     LoanCharge[]
+  code            String       @unique
   type            String // BILL, INVOICE
   vendorId        String?
   customerId      String?
@@ -734,7 +767,7 @@ model Invoice {
   currency        String // BS, USD, EUR
   total           Float
   outstanding     Float
-  status          String @default("OPEN") // DRAFT, OPEN, PARTIALLY_PAID, PAID, CANCELLED
+  status          String       @default("OPEN") // DRAFT, OPEN, PARTIALLY_PAID, PAID, CANCELLED
   lines           String? // (JSON)
   // transactionId String?
   // transaction   Transaction?  @relation(fields: [transactionId], references: [id])
@@ -752,32 +785,32 @@ model Invoice {
 }
 
 model Payment {
-  id        String        @id @default(uuid())
+  id        String   @id @default(uuid())
   projectId String
-  project   Project       @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  code      String        @unique
-  date      DateTime      @default(now())
-  
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  code      String   @unique
+  date      DateTime @default(now())
+
   // Source Currency (Moneda con la que se paga)
-  currency  String // BS, USD, EUR
-  amount    Float
-  
+  currency String // BS, USD, EUR
+  amount   Float
+
   // Smart ERP: Cross-Currency Logic
   targetCurrency String? // Moneda de la deuda (si difiere)
   exchangeRate   Float?  @default(1) // Tasa usada para la conversión
 
   method    String // CASH, BANK_TRANSFER, CARD, CHEQUE, OTHER
   reference String?
-  status    String @default("COMPLETED") // DRAFT, COMPLETED, CANCELLED
+  status    String  @default("COMPLETED") // DRAFT, COMPLETED, CANCELLED
   userId    String
-  user      User          @relation(fields: [userId], references: [id])
+  user      User    @relation(fields: [userId], references: [id])
 
   // Smart ERP: Financial Account Link
   accountId String? // Cuenta de donde sale/entra el dinero (Banco/Caja)
   account   Account? @relation("PaymentSourceAccount", fields: [accountId], references: [id])
 
   // Link to Journal Entry
-  transactionId String? @unique
+  transactionId String?      @unique
   transaction   Transaction? @relation("PaymentTransaction", fields: [transactionId], references: [id])
 
   allocations PaymentAllocation[]
@@ -811,34 +844,112 @@ model PaymentAllocation {
 }
 
 model TransactionTemplate {
-  id          String   @id @default(uuid())
-  name        String   // User defined name for the favorite
-  
-  projectId   String
-  project     Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  
-  type            String   // INCOME, EXPENSE, TRANSFER
-  description     String?
-  
-  categoryId      String?
-  categoryRef     TransactionCategory? @relation(fields: [categoryId], references: [id])
-  
+  id   String @id @default(uuid())
+  name String // User defined name for the favorite
+
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  type        String // INCOME, EXPENSE, TRANSFER
+  description String?
+
+  categoryId  String?
+  categoryRef TransactionCategory? @relation(fields: [categoryId], references: [id])
+
   contactPersonId String?
   contactPerson   ContactPerson? @relation(fields: [contactPersonId], references: [id])
-  
-  currency        String   @default("USD")
-  amount          Float?   
-  
+
+  currency String @default("USD")
+  amount   Float?
+
   debitAccountId  String?
   creditAccountId String?
-  
-  paymentMethod   String?
-  lines           String?  // JSON
-  
+
+  paymentMethod String?
+  lines         String? // JSON
+
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@map("transaction_templates")
 }
 
+// ==========================================
+// MODULO DE PRESTAMOS E INVERSIONES
+// ==========================================
 
+model Loan {
+  id        String  @id @default(uuid())
+  projectId String
+  project   Project @relation(fields: [projectId], references: [id])
+
+  contactId String?
+  contact   ContactPerson? @relation(fields: [contactId], references: [id])
+
+  name String // Ejemplo: "Préstamo rápido José"
+  type String @default("INFORMAL") // INFORMAL, BANK
+
+  // Condición financiera
+  currency         String @default("USD")
+  principalAmount  Float // Monto inicial prestado
+  remainingCapital Float // Lo que falta por pagar de capital
+
+  interestRate      Float // Ejemplo: 10.0 (para 10%)
+  interestType      String    @default("FIXED_ON_BALANCE") // FIXED_ON_BALANCE (sobre saldo deudor)
+  interestFrequency String    @default("WEEKLY") // WEEKLY, BIWEEKLY, MONTHLY
+  nextChargeDate    DateTime? // Cuándo toca calcular el próximo interés 
+
+  startDate DateTime @default(now())
+  paymentDay String?  // Lunes, Martes, ..., Viernes, Indefinido
+  exchangeRate Float? // Tasa de cambio (aplicable si currency es diferente a USD)
+  status    String   @default("ACTIVE") // ACTIVE, PAID, DEFAULTED
+
+  // Contabilidad
+  linkedAccountId String? // La cuenta de PASIVO que representa esta deuda contablemente
+  linkedAccount   Account? @relation("LoanLiabilityAccount", fields: [linkedAccountId], references: [id])
+
+  charges  LoanCharge[]
+  payments LoanPayment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model LoanCharge {
+  id     String @id @default(uuid())
+  loanId String
+  loan   Loan   @relation(fields: [loanId], references: [id], onDelete: Cascade)
+
+  date        DateTime @default(now())
+  amount      Float // Monto de interés generado
+  description String? // Ej: "Interés semanal 10% sobre capital de 300"
+  status      String   @default("UNPAID") // UNPAID, PAID, PARTIAL
+  paidAmount  Float    @default(0) // Cuánto de este cargo se ha pagado
+
+  // Opcionalmente podemos ligarlo a un gasto / cxp
+  invoiceId String?
+  invoice   Invoice? @relation(fields: [invoiceId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model LoanPayment {
+  id     String @id @default(uuid())
+  loanId String
+  loan   Loan   @relation(fields: [loanId], references: [id], onDelete: Cascade)
+
+  date DateTime @default(now())
+
+  // Desglose del pago
+  totalAmount     Float
+  principalAmount Float
+  interestAmount  Float
+
+  // Contabilidad del pago
+  transactionId String?
+  transaction   Transaction? @relation(fields: [transactionId], references: [id])
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}

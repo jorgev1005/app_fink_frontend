@@ -61,6 +61,26 @@ export const createProduct = async (req: Request, res: Response) => {
       taxable = true,
       taxRate = 0,
       stock = 0,
+      division,
+      medidas,
+      tiempo_entrega,
+      unidad_empaque,
+      pedido_minimo,
+      colores_disponibles,
+      descuentos_volumen,
+      fuente_tasa,
+      tasa_manual,
+      url_catalogo,
+      isPublic,
+      pesoUnitarioKg,
+      empaqueCantidad,
+      empaquePesoKg,
+      empaqueLargoCm,
+      empaqueAnchoCm,
+      empaqueAltoCm,
+      descuentoDivisasTipo,
+      descuentoDivisasValor,
+      forSale
     } = req.body;
 
     if (!name) {
@@ -86,6 +106,26 @@ export const createProduct = async (req: Request, res: Response) => {
         taxable,
         taxRate: taxRate || 0,
         stock: stock || 0,
+        division: division || 'Aludra Terra (Agro)',
+        medidas,
+        tiempo_entrega: tiempo_entrega || '24 horas',
+        unidad_empaque,
+        pedido_minimo,
+        colores_disponibles: colores_disponibles ? JSON.stringify(colores_disponibles) : '["Consultar"]',
+        descuentos_volumen,
+        fuente_tasa: fuente_tasa || 'bcv',
+        tasa_manual: tasa_manual ? parseFloat(tasa_manual) : null,
+        url_catalogo: url_catalogo || 'https://catalogo.grupoaludra.com',
+        isPublic: isPublic !== undefined ? isPublic : true,
+        pesoUnitarioKg: pesoUnitarioKg ? parseFloat(pesoUnitarioKg) : 0,
+        empaqueCantidad: empaqueCantidad ? parseInt(empaqueCantidad) : 1,
+        empaquePesoKg: empaquePesoKg ? parseFloat(empaquePesoKg) : 0,
+        empaqueLargoCm: empaqueLargoCm ? parseFloat(empaqueLargoCm) : 0,
+        empaqueAnchoCm: empaqueAnchoCm ? parseFloat(empaqueAnchoCm) : 0,
+        empaqueAltoCm: empaqueAltoCm ? parseFloat(empaqueAltoCm) : 0,
+        descuentoDivisasTipo: descuentoDivisasTipo || 'dinamico',
+        descuentoDivisasValor: descuentoDivisasValor ? parseFloat(descuentoDivisasValor) : 0,
+        forSale: forSale !== undefined ? forSale : true,
       },
     });
 
@@ -99,7 +139,13 @@ export const createProduct = async (req: Request, res: Response) => {
 export const updateProduct = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { name, sku, description, unitPrice, currency, isActive, unit, taxable, taxRate, stock } = req.body;
+    const { 
+      name, sku, description, unitPrice, currency, isActive, unit, taxable, taxRate, stock,
+      division, medidas, tiempo_entrega, unidad_empaque, pedido_minimo, 
+      colores_disponibles, descuentos_volumen, fuente_tasa, tasa_manual, url_catalogo, isPublic,
+      pesoUnitarioKg, empaqueCantidad, empaquePesoKg, empaqueLargoCm, empaqueAnchoCm, empaqueAltoCm,
+      descuentoDivisasTipo, descuentoDivisasValor, forSale
+    } = req.body;
 
     const existing = await prisma.product.findUnique({ where: { id } });
     if (!existing) return res.status(404).json({ success: false, error: { message: 'Producto no encontrado' } });
@@ -124,6 +170,26 @@ export const updateProduct = async (req: Request, res: Response) => {
         ...(taxable !== undefined && { taxable }),
         ...(taxRate !== undefined && { taxRate }),
         ...(stock !== undefined && { stock }),
+        ...(division !== undefined && { division }),
+        ...(medidas !== undefined && { medidas }),
+        ...(tiempo_entrega !== undefined && { tiempo_entrega }),
+        ...(unidad_empaque !== undefined && { unidad_empaque }),
+        ...(pedido_minimo !== undefined && { pedido_minimo }),
+        ...(colores_disponibles !== undefined && { colores_disponibles: JSON.stringify(colores_disponibles) }),
+        ...(descuentos_volumen !== undefined && { descuentos_volumen }),
+        ...(fuente_tasa !== undefined && { fuente_tasa }),
+        ...(tasa_manual !== undefined && { tasa_manual: tasa_manual ? parseFloat(tasa_manual) : null }),
+        ...(url_catalogo !== undefined && { url_catalogo }),
+        ...(isPublic !== undefined && { isPublic }),
+        ...(pesoUnitarioKg !== undefined && { pesoUnitarioKg: parseFloat(pesoUnitarioKg) }),
+        ...(empaqueCantidad !== undefined && { empaqueCantidad: parseInt(empaqueCantidad) }),
+        ...(empaquePesoKg !== undefined && { empaquePesoKg: parseFloat(empaquePesoKg) }),
+        ...(empaqueLargoCm !== undefined && { empaqueLargoCm: parseFloat(empaqueLargoCm) }),
+        ...(empaqueAnchoCm !== undefined && { empaqueAnchoCm: parseFloat(empaqueAnchoCm) }),
+        ...(empaqueAltoCm !== undefined && { empaqueAltoCm: parseFloat(empaqueAltoCm) }),
+        ...(descuentoDivisasTipo !== undefined && { descuentoDivisasTipo }),
+        ...(descuentoDivisasValor !== undefined && { descuentoDivisasValor: parseFloat(descuentoDivisasValor) }),
+        ...(forSale !== undefined && { forSale }),
       },
     });
 

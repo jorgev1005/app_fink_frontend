@@ -2,7 +2,7 @@
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useEffect, useState, useRef, useCallback } from "react";
-import { RefreshCw, Calculator, LogOut, Zap, Plus, FileText, Users, BarChart3, Wallet, ArrowRight, Info, ChevronDown, ChevronUp, Layers, Tag, FileClock, Eye, EyeOff, Package, ArrowRightLeft, HardDrive } from 'lucide-react';
+import { RefreshCw, Calculator, LogOut, Zap, Plus, FileText, Users, BarChart3, Wallet, ArrowRight, Info, ChevronDown, ChevronUp, Layers, Tag, FileClock, Eye, EyeOff, Package, ArrowRightLeft, HardDrive, Banknote } from 'lucide-react';
 import NotificationBell from "@/components/NotificationBell";
 import ExchangeRatesPanel from '@/components/ExchangeRatesPanel';
 import ForexImpactWidget from '@/components/ForexImpactWidget';
@@ -770,6 +770,7 @@ export default function DashboardPage() {
             <QuickAction icon={FileText} label="Transacciones" path="/transactions" color="slate" />
             <QuickAction icon={FileClock} label="Facturas Pendientes" path="/invoices" color="orange" />
             <QuickAction icon={Wallet} label="Cuentas" path="/accounts" color="emerald" />
+            <QuickAction icon={Banknote} label="Préstamos" path="/loans" color="emerald" />
             <QuickAction icon={RefreshCw} label="Reglas Periódicas" path="/recurring" color="violet" />
             <QuickAction icon={Package} label="Inventario" path="/inventory" color="amber" />
             <QuickAction icon={Tag} label="Categorías" path="/categories" color="pink" />
