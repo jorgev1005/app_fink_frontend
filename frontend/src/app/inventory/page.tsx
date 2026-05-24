@@ -150,7 +150,10 @@ export default function InventoryPage() {
 
   const syncBot = async () => {
     try {
-      const res = await fetch('http://localhost:3080/api/sync-catalog', { 
+      const botUrl = typeof window !== 'undefined' && window.location.hostname !== 'localhost'
+        ? 'https://crm.grupoaludra.com/api/sync-catalog'
+        : 'http://localhost:3080/api/sync-catalog';
+      const res = await fetch(botUrl, { 
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mode: 'merge' })
