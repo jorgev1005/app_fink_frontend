@@ -151,6 +151,18 @@ export default function LoanDetailsPage() {
           <h2 className="text-lg font-bold dark:text-white mb-4">Información Adicional</h2>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <div>
+              <p className="text-sm text-gray-500">Fecha de Inicio</p>
+              <p className="font-semibold text-gray-800 dark:text-white">
+                {loan.startDate ? new Date(loan.startDate).toLocaleDateString() : 'N/A'}
+              </p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Fecha de Registro</p>
+              <p className="font-semibold text-gray-800 dark:text-white">
+                {loan.createdAt ? new Date(loan.createdAt).toLocaleDateString() : 'N/A'}
+              </p>
+            </div>
+            <div>
               <p className="text-sm text-gray-500">Día de Pago Preferido</p>
               <p className="font-semibold text-gray-800 dark:text-white">{loan.paymentDay || 'Aleatorio / Indefinido'}</p>
             </div>
