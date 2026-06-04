@@ -88,9 +88,12 @@ export const createProduct = async (req: Request, res: Response) => {
     }
 
     if (projectId) {
-      const hasAccess = await checkProjectWriteAccess(req.user!, projectId);
-      if (!hasAccess) {
-        return res.status(403).json({ success: false, error: { message: 'No tienes permisos para crear productos en este proyecto' } });
+      const resolvedProjectId = projectId === '' ? null : projectId;
+      if (resolvedProjectId) {
+        const hasAccess = await checkProjectWriteAccess(req.user!, resolvedProjectId);
+        if (!hasAccess) {
+          return res.status(403).json({ success: false, error: { message: 'No tienes permisos para crear productos en este proyecto' } });
+        }
       }
     }
 
@@ -101,7 +104,7 @@ export const createProduct = async (req: Request, res: Response) => {
         description,
         unitPrice: unitPrice || 0,
         currency,
-        projectId,
+        projectId: projectId || null,
         unit,
         taxable,
         taxRate: taxRate || 0,
@@ -140,7 +143,7 @@ export const updateProduct = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
     const { 
-      name, sku, description, unitPrice, currency, isActive, unit, taxable, taxRate, stock,
+      name, sku, description, unitPrice, currency, isActive, unit, taxable, taxRate, stock, projectId,
       division, medidas, tiempo_entrega, unidad_empaque, pedido_minimo, 
       colores_disponibles, descuentos_volumen, fuente_tasa, tasa_manual, url_catalogo, isPublic,
       pesoUnitarioKg, empaqueCantidad, empaquePesoKg, empaqueLargoCm, empaqueAnchoCm, empaqueAltoCm,
@@ -157,6 +160,16 @@ export const updateProduct = async (req: Request, res: Response) => {
       }
     }
 
+    if (projectId !== undefined) {
+      const resolvedProjectId = projectId || null;
+      if (resolvedProjectId) {
+        const hasAccess = await checkProjectWriteAccess(req.user!, resolvedProjectId);
+        if (!hasAccess) {
+          return res.status(403).json({ success: false, error: { message: 'No tienes permisos para asignar este producto a este proyecto' } });
+        }
+      }
+    }
+
     const product = await prisma.product.update({
       where: { id },
       data: {
@@ -170,6 +183,7 @@ export const updateProduct = async (req: Request, res: Response) => {
         ...(taxable !== undefined && { taxable }),
         ...(taxRate !== undefined && { taxRate }),
         ...(stock !== undefined && { stock }),
+        ...(projectId !== undefined && { projectId: projectId || null }),
         ...(division !== undefined && { division }),
         ...(medidas !== undefined && { medidas }),
         ...(tiempo_entrega !== undefined && { tiempo_entrega }),
