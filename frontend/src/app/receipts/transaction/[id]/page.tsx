@@ -153,7 +153,7 @@ _Generado en App Fink_`;
                 {/* Logo or Placeholder */}
                 {transaction.project?.logoUrl ? (
                      <img 
-                        src={`/backend-api${transaction.project.logoUrl}`} 
+                        src={`http://localhost:4002${transaction.project.logoUrl}`} 
                         alt="Logo Empresa" 
                         className="h-16 w-auto object-contain mb-4" 
                         onError={(e) => { e.currentTarget.style.display = 'none'; }}
@@ -250,4 +250,3 @@ _Generado en App Fink_`;
     </div>
   );
 }
-

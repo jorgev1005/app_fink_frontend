@@ -1,14 +1,15 @@
 "use client";
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useEffect, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import api from '@/lib/api';
 import Link from 'next/link';
 import { ArrowLeft, Save, Building, Calendar, FileText, DollarSign, AlertCircle, User, CreditCard, Wallet, Percent, Plus, Trash2, Box, Package } from 'lucide-react';
 
-export default function NewInvoicePage() {
+function NewInvoiceContent() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [dataLoading, setDataLoading] = useState(false);
+  const searchParams = useSearchParams();
   
   // Lists
   const [projects, setProjects] = useState<any[]>([]);
@@ -50,6 +51,66 @@ export default function NewInvoicePage() {
   const [isPaid, setIsPaid] = useState(false);
   const [paymentAccountId, setPaymentAccountId] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('');
+
+  // Duplication Load Logic
+  useEffect(() => {
+    const duplicateId = searchParams.get('duplicateFrom');
+    if (!duplicateId) return;
+
+    const loadSourceInvoice = async () => {
+      try {
+        setLoading(true);
+        const res = await api.invoices.getById(duplicateId);
+        const src = res.data.data;
+        if (src) {
+          setProjectId(src.projectId || '');
+          setType(src.type || 'BILL');
+          setCurrency(src.currency || 'USD');
+          setDescription(src.description || '');
+          setHasTax(src.taxAmount > 0);
+          setTaxAmount(String(src.taxAmount || 0));
+          
+          let parsedItems = [];
+          if (src.lines) {
+             try {
+                const parsed = typeof src.lines === 'string' ? JSON.parse(src.lines) : src.lines;
+                if (Array.isArray(parsed)) {
+                   parsedItems = parsed;
+                } else if (parsed && Array.isArray(parsed.items)) {
+                   parsedItems = parsed.items;
+                }
+             } catch(e) {
+                console.error(e);
+             }
+          }
+          
+          if (parsedItems.length > 0) {
+             setLines(parsedItems.map((item: any, idx: number) => ({
+                id: Date.now() + idx,
+                productId: item.productId || '',
+                name: item.description || '',
+                quantity: Number(item.quantity || 1),
+                price: Number(item.unitPrice || 0),
+                total: Number(item.total || 0)
+             })));
+             setUseItemsMode(true);
+          } else {
+             setTotal(String(src.total || 0));
+             setUseItemsMode(false);
+          }
+          
+          if (src.customerId) setContactId(src.customerId);
+          else if (src.vendorId) setContactId(src.vendorId);
+        }
+      } catch (e) {
+        console.error('Error loading source invoice for duplication', e);
+        setError('Error cargando factura original para duplicación');
+      } finally {
+        setLoading(false);
+      }
+    };
+    loadSourceInvoice();
+  }, [searchParams]);
 
   // Initial Load
   useEffect(() => {
@@ -609,5 +670,14 @@ export default function NewInvoicePage() {
         </div>
       </form>
     </div>
+  );
+}
+
+
+export default function NewInvoicePage() {
+  return (
+    <Suspense fallback={<div className="p-8 text-center">Cargando...</div>}>
+      <NewInvoiceContent />
+    </Suspense>
   );
 }

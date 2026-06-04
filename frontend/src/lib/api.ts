@@ -275,6 +275,7 @@ export const invoicesAPI = {
   post: (id: string) => apiClient.post(`/api/invoices/${id}/post`),
   getById: (id: string) => apiClient.get(`/api/invoices/${id}`),
   delete: (id: string) => apiClient.delete(`/api/invoices/${id}`),
+  pay: (id: string, data: any) => apiClient.post(`/api/invoices/${id}/pay`, data),
 }
 
 export const paymentsAPI = {

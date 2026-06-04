@@ -44,25 +44,6 @@ export default function NotificationBell() {
     return () => clearInterval(interval);
   }, []);
 
-  useEffect(() => {
-    if (!showDropdown || unreadCount === 0 || notifications.length === 0) return;
-
-    const unreadIds = notifications.filter(n => !n.isRead).map(n => n.id);
-    if (unreadIds.length === 0) return;
-
-    const markVisibleNotifications = async () => {
-      try {
-        await api.notifications.markAllAsRead();
-        setNotifications(prev => prev.map(n => ({ ...n, isRead: true })));
-        setUnreadCount(0);
-      } catch (error) {
-        console.error('Error marcando todas las notificaciones:', error);
-      }
-    };
-
-    markVisibleNotifications();
-  }, [showDropdown, unreadCount, notifications]);
-
   const loadNotifications = async (silent = false) => {
     try {
       const response = await api.notifications.getAll(false);
