@@ -297,7 +297,7 @@ export default function InvoiceDetailsPage() {
              {/* Pay/Collect Button if pending */}
              {invoice.status === 'POSTED' && (
                 <button 
-                   onClick={openPaymentModal}
+                   onClick={() => router.push(`/invoices/${invoice.id}/pay`)}
                    className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-medium transition shadow-sm"
                 >
                    <CreditCard size={13} /> 
