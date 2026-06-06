@@ -9,7 +9,8 @@ export const createInvoice = async (req: Request, res: Response) => {
     const { 
       projectId, type, issueDate, dueDate, currency, total, code,
       vendorId, customerId, description, taxAmount,
-      isPaid, paymentAccountId, paymentMethod, paymentReference, lines 
+      isPaid, paymentAccountId, paymentMethod, paymentReference, lines,
+      status
     } = req.body;
     
     const user = (req as any).user;
@@ -63,6 +64,8 @@ export const createInvoice = async (req: Request, res: Response) => {
     // fallback for legacy structure support in case we are editing old invoices? 
     // New create always uses this structure.
 
+    const targetStatus = status || (isPaid ? 'PAID' : 'OPEN');
+
     // Transactional creation if payment is involved
     const result = await prisma.$transaction(async (tx) => {
       // 1. Create Invoice
@@ -78,14 +81,14 @@ export const createInvoice = async (req: Request, res: Response) => {
           currency,
           total: Number(total),
           outstanding: isPaid ? 0 : Number(total), // If fully paid, outstanding is 0
-          status: isPaid ? 'PAID' : 'OPEN',
+          status: targetStatus,
           lines: JSON.stringify(finalLinesData), // Store consistent object structure
           createdBy: user.id,
         }
       });
       
       // 1.5 Process Inventory Updates checks
-      if (finalLinesData.items && finalLinesData.items.length > 0) {
+      if (targetStatus !== 'DRAFT' && finalLinesData.items && finalLinesData.items.length > 0) {
           for (const line of finalLinesData.items) {
               if (line.productId && line.productId !== 'CUSTOM' && line.quantity) {
                   const qty = Number(line.quantity);
@@ -196,7 +199,7 @@ export const updateInvoice = async (req: Request, res: Response) => {
     const user = (req as any).user;
     const { 
       projectId, type, issueDate, dueDate, currency, total, code,
-      vendorId, customerId, description, taxAmount 
+      vendorId, customerId, description, taxAmount, lines, status 
     } = req.body;
     
     // Check existence and status
@@ -213,26 +216,105 @@ export const updateInvoice = async (req: Request, res: Response) => {
         return res.status(400).json({ success: false, error: { message: 'No se puede editar una factura pagada o parcialmente pagada.' } });
     }
 
-    const linesData = {
-      description: description || '',
-      taxAmount: Number(taxAmount) || 0
-    };
+    const updated = await prisma.$transaction(async (tx) => {
+      // 1. Get old items from lines
+      let oldItems: any[] = [];
+      let oldDescription = '';
+      let oldTaxAmount = 0;
+      try {
+        if (invoice.lines) {
+          const parsed = typeof invoice.lines === 'string' ? JSON.parse(invoice.lines) : invoice.lines;
+          if (parsed) {
+            if (Array.isArray(parsed)) {
+              oldItems = parsed;
+            } else if (typeof parsed === 'object') {
+              if (parsed.items && Array.isArray(parsed.items)) {
+                oldItems = parsed.items;
+              }
+              oldDescription = parsed.description || '';
+              oldTaxAmount = Number(parsed.taxAmount || 0);
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Failed to parse old lines', e);
+      }
 
-    // Update
-    const updated = await prisma.invoice.update({
+      // 2. Get new items from request if provided
+      let newItems = oldItems; // Default to old items if not provided
+      if (lines !== undefined) {
+        if (Array.isArray(lines)) {
+          newItems = lines;
+        } else if (lines && lines.items && Array.isArray(lines.items)) {
+          newItems = lines.items;
+        }
+      }
+
+      // 3. Revert old stock changes
+      if (invoice.status !== 'DRAFT' && oldItems.length > 0) {
+        for (const line of oldItems) {
+          if (line.productId && line.productId !== 'CUSTOM' && line.quantity) {
+            const qty = Number(line.quantity);
+            // Reverse of BILL (+stock) is -qty
+            // Reverse of INVOICE (-stock) is +qty
+            const operationMultiplier = (invoice.type === 'BILL') ? -1 : 1;
+            
+            await tx.product.update({
+              where: { id: line.productId },
+              data: {
+                stock: { increment: qty * operationMultiplier }
+              }
+            });
+          }
+        }
+      }
+
+      // 4. Apply new stock changes (using new type)
+      const targetStatus = status || invoice.status;
+      const targetType = type || invoice.type;
+      if (targetStatus !== 'DRAFT' && newItems.length > 0) {
+        for (const line of newItems) {
+          if (line.productId && line.productId !== 'CUSTOM' && line.quantity) {
+            const qty = Number(line.quantity);
+            // BILL (+stock)
+            // INVOICE (-stock)
+            const operationMultiplier = (targetType === 'BILL') ? 1 : -1;
+            
+            await tx.product.update({
+              where: { id: line.productId },
+              data: {
+                stock: { increment: qty * operationMultiplier }
+              }
+            });
+          }
+        }
+      }
+
+      // 5. Construct lines data to save (preserving structure)
+      const finalLinesData = {
+        items: newItems,
+        description: description !== undefined ? description : oldDescription,
+        taxAmount: taxAmount !== undefined ? Number(taxAmount) : oldTaxAmount,
+      };
+
+      // 6. Update Invoice in DB
+      return await tx.invoice.update({
         where: { id },
         data: {
-            projectId,
-            code: code || invoice.code,
-            issueDate: issueDate ? new Date(issueDate) : invoice.issueDate,
-            dueDate: dueDate ? new Date(dueDate) : invoice.dueDate,
-            currency,
-            total: Number(total),
-            outstanding: Number(total), // Reset outstanding since it's not paid
-            lines: JSON.stringify(linesData),
-            vendorId: vendorId || null,
-            customerId: customerId || null,
+          projectId: projectId || invoice.projectId,
+          code: code || invoice.code,
+          type: targetType,
+          issueDate: issueDate ? new Date(issueDate) : invoice.issueDate,
+          dueDate: dueDate ? new Date(dueDate) : invoice.dueDate,
+          currency: currency || invoice.currency,
+          total: total !== undefined ? Number(total) : invoice.total,
+          outstanding: total !== undefined ? Number(total) : invoice.outstanding,
+          status: targetStatus,
+          lines: JSON.stringify(finalLinesData),
+          vendorId: vendorId !== undefined ? (vendorId || null) : invoice.vendorId,
+          customerId: customerId !== undefined ? (customerId || null) : invoice.customerId,
         }
+      });
     });
 
     res.json({ success: true, data: updated });
@@ -254,14 +336,50 @@ export const deleteInvoice = async (req: Request, res: Response) => {
       return res.status(403).json({ success: false, error: { message: 'No tienes permisos para eliminar facturas en este proyecto' } });
     }
     
-    // Only allow deleting DRAFT or PENDING invoices (assuming PENDING is the status for drafts/unposted)
-    // Adjust status check based on your business logic. 
-    // Usually 'PENDING' means created but not paid/posted.
+    // Only allow deleting DRAFT or PENDING or OPEN invoices
     if (invoice.status === 'PAID' || invoice.status === 'POSTED') {
       return res.status(400).json({ success: false, error: { message: 'Cannot delete paid or posted invoice' } });
     }
 
-    await prisma.invoice.delete({ where: { id } });
+    await prisma.$transaction(async (tx) => {
+      // 1. Revert stock changes
+      let items: any[] = [];
+      try {
+        if (invoice.lines) {
+          const parsed = typeof invoice.lines === 'string' ? JSON.parse(invoice.lines) : invoice.lines;
+          if (parsed) {
+            if (Array.isArray(parsed)) {
+              items = parsed;
+            } else if (parsed.items && Array.isArray(parsed.items)) {
+              items = parsed.items;
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Failed to parse invoice lines on delete', e);
+      }
+
+      if (invoice.status !== 'DRAFT' && items.length > 0) {
+        for (const line of items) {
+          if (line.productId && line.productId !== 'CUSTOM' && line.quantity) {
+            const qty = Number(line.quantity);
+            // Reverse of BILL (+stock) is -qty
+            // Reverse of INVOICE (-stock) is +qty
+            const operationMultiplier = (invoice.type === 'BILL') ? -1 : 1;
+            
+            await tx.product.update({
+              where: { id: line.productId },
+              data: {
+                stock: { increment: qty * operationMultiplier }
+              }
+            });
+          }
+        }
+      }
+
+      // 2. Delete the invoice
+      await tx.invoice.delete({ where: { id } });
+    });
 
     // === LOG DE ACTIVIDAD ===
     try {
@@ -327,7 +445,8 @@ export const getInvoices = async (req: Request, res: Response) => {
     const enrichedInvoices = invoices.map((inv: any) => ({
         ...inv,
         vendor: inv.vendorId ? contactMap.get(inv.vendorId) : null,
-        customer: inv.customerId ? contactMap.get(inv.customerId) : null
+        customer: inv.customerId ? contactMap.get(inv.customerId) : null,
+        contact: inv.vendorId ? contactMap.get(inv.vendorId) : (inv.customerId ? contactMap.get(inv.customerId) : null)
     }));
 
     res.json({ success: true, data: enrichedInvoices, pagination: { page: Number(page), limit: Number(limit), total } });
@@ -355,11 +474,28 @@ export const postInvoice = async (req: Request, res: Response) => {
 export const getInvoiceById = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const invoice = await prisma.invoice.findUnique({ where: { id } });
+    const invoice = await prisma.invoice.findUnique({ 
+      where: { id },
+      include: { project: true }
+    });
     
     if (!invoice) return res.status(404).json({ success: false, error: { message: 'Invoice not found' } });
     
-    res.json({ success: true, data: invoice });
+    const contactId = invoice.vendorId || invoice.customerId;
+    let contact = null;
+    if (contactId) {
+        contact = await prisma.contactPerson.findUnique({
+            where: { id: contactId }
+        });
+    }
+    
+    res.json({ 
+      success: true, 
+      data: {
+        ...invoice,
+        contact
+      } 
+    });
   } catch (error: any) {
     console.error('[getInvoiceById] error', error);
     res.status(500).json({ success: false, error: { message: error.message } });

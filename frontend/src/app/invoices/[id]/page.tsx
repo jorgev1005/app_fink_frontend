@@ -8,8 +8,10 @@ import { Printer, ArrowLeft, Download, Edit, CreditCard, CheckCircle, FileText, 
 interface InvoiceItem {
   id: string;
   description: string;
+  name?: string; // Fallback for legacy name field
   quantity: number;
   unitPrice: number;
+  price?: number; // Fallback for legacy price field
   total: number;
   productId?: string;
 }
@@ -355,13 +357,13 @@ export default function InvoiceDetailsPage() {
                           invoice.items.map((item) => (
                               <tr key={item.id} className="border-b border-gray-50 last:border-0">
                                   <td className="py-4 text-sm text-gray-800">
-                                      <p className="font-medium">{item.description || 'Ítem sin nombre'}</p>
+                                      <p className="font-medium">{item.description || item.name || 'Ítem sin nombre'}</p>
                                   </td>
                                   <td className="py-4 text-sm text-gray-600 text-right">{item.quantity}</td>
                                   {(viewMode !== 'DELIVERY_NOTE' || showPricesInDeliveryNote) && (
                                      <>
                                         <td className="py-4 text-sm text-gray-600 text-right font-mono">
-                                            {formatCurrency(item.unitPrice, invoice.currency)}
+                                            {formatCurrency(typeof item.unitPrice === 'number' && !isNaN(item.unitPrice) ? item.unitPrice : (typeof item.price === 'number' && !isNaN(item.price) ? item.price : 0), invoice.currency)}
                                         </td>
                                         <td className="py-4 text-sm text-gray-800 text-right font-medium font-mono">
                                             {formatCurrency(item.total, invoice.currency)}

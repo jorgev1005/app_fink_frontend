@@ -88,9 +88,9 @@ function NewInvoiceContent() {
              setLines(parsedItems.map((item: any, idx: number) => ({
                 id: Date.now() + idx,
                 productId: item.productId || '',
-                name: item.description || '',
+                name: item.description || item.name || '',
                 quantity: Number(item.quantity || 1),
-                price: Number(item.unitPrice || 0),
+                price: Number(typeof item.unitPrice === 'number' && !isNaN(item.unitPrice) ? item.unitPrice : (typeof item.price === 'number' && !isNaN(item.price) ? item.price : 0)),
                 total: Number(item.total || 0)
              })));
              setUseItemsMode(true);
@@ -247,7 +247,13 @@ function NewInvoiceContent() {
           isPaid,
           paymentAccountId: isPaid ? paymentAccountId : undefined,
           paymentMethod: isPaid ? paymentMethod : undefined,
-          lines: useItemsMode ? lines : undefined // Send lines if in items mode
+          lines: useItemsMode ? lines.map(line => ({
+              productId: line.productId || undefined,
+              description: line.name || '',
+              quantity: Number(line.quantity || 1),
+              unitPrice: Number(line.price || 0),
+              total: Number(line.total || 0)
+          })) : undefined // Send lines mapped to backend structure if in items mode
       };
       
       const res = await api.invoices.create(body);
