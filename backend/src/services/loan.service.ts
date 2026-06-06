@@ -1,5 +1,7 @@
 import prisma from '../config/database';
 import { v4 as uuidv4 } from 'uuid';
+import { updateAccountBalance } from './account.service';
+import { convertCurrency, getLatestExchangeRate } from './exchangeRate.service';
 
 export const calculateNextChargeDate = (currentDate: Date, frequency: string): Date => {
   const nextDate = new Date(currentDate);
@@ -79,7 +81,7 @@ export const createLoan = async (data: any, userId: string) => {
   // 3. Optional: Create the initial Transaction to reflect the cash inflow 
   // ONLY if a destination asset account is provided.
   if (destinationAccountId) {
-    await prisma.transaction.create({
+    const tx = await prisma.transaction.create({
       data: {
         code: `TR-LOAN-${uuidv4().substring(0, 6)}`,
         projectId,
@@ -109,13 +111,30 @@ export const createLoan = async (data: any, userId: string) => {
         }
       }
     });
+
+    // Actualizar balances
+    try {
+      const destAccount = await prisma.account.findUnique({ where: { id: destinationAccountId } });
+      const destCurrency = destAccount?.currency || currency || 'USD';
+      const convertedDebit = await convertCurrency(Number(principalAmount), (currency || 'USD') as any, destCurrency as any);
+      await updateAccountBalance(destinationAccountId, destCurrency as any, convertedDebit, 'DEBIT');
+
+      const liabCurrency = liabilityAccount.currency || currency || 'USD';
+      const convertedCredit = await convertCurrency(Number(principalAmount), (currency || 'USD') as any, liabCurrency as any);
+      await updateAccountBalance(liabilityAccount.id, liabCurrency as any, convertedCredit, 'CREDIT');
+    } catch (balanceErr) {
+      console.error('[createLoan] Error updating balances:', balanceErr);
+    }
   }
 
   return loan;
 };
 
 export const deleteLoan = async (loanId: string) => {
-  const loan = await prisma.loan.findUnique({ where: { id: loanId } });
+  const loan = await prisma.loan.findUnique({ 
+    where: { id: loanId },
+    include: { payments: true }
+  });
   if (!loan) throw new Error("Préstamo no encontrado");
 
   // Buscamos si existe la transacción de desembolso creada
@@ -124,17 +143,103 @@ export const deleteLoan = async (loanId: string) => {
       projectId: loan.projectId,
       type: 'INCOME',
       description: `Desembolso de Préstamo a favor: ${loan.name}`
-    }
+    },
+    include: { entries: true }
   });
 
+  // Cargar cargos para recolectar facturas de intereses asociadas
+  const charges = await prisma.loanCharge.findMany({
+    where: { loanId }
+  });
+  const interestInvoiceIds = charges.map(c => c.invoiceId).filter(Boolean) as string[];
+
+  // Obtener tasas de cambio actuales para conversiones síncronas en la transacción
+  const exchangeRate = await getLatestExchangeRate('BCV');
+  
+  const conv = (amount: number, from: string, to: string) => {
+    if (from === to) return amount;
+    const usdToBs = exchangeRate ? Number(exchangeRate.usdToBs || 0) : 0;
+    const eurToBs = exchangeRate ? Number(exchangeRate.eurToBs || 0) : 0;
+    const eurToUsd = exchangeRate ? Number(exchangeRate.eurToUsd || 0) : 0;
+
+    if (from === 'BS' && to === 'USD' && usdToBs) return amount / usdToBs;
+    if (from === 'BS' && to === 'EUR' && eurToBs) return amount / eurToBs;
+    if (from === 'USD' && to === 'BS' && usdToBs) return amount * usdToBs;
+    if (from === 'EUR' && to === 'BS' && eurToBs) return amount * eurToBs;
+    if (from === 'USD' && to === 'EUR' && eurToUsd) return amount / eurToUsd;
+    if (from === 'EUR' && to === 'USD' && eurToUsd) return amount * eurToUsd;
+
+    return amount;
+  };
+
   await prisma.$transaction(async (tx) => {
-    // 1. Borrar la transacción
+    // Helper local transaccional
+    const updateBalanceInTx = async (accountId: string, currency: string, amount: number, operation: 'DEBIT' | 'CREDIT') => {
+      const increment = operation === 'DEBIT' ? amount : -amount;
+      const updateData: any = {};
+      if (currency === 'BS') updateData.balanceBs = { increment };
+      else if (currency === 'USD') updateData.balanceUsd = { increment };
+      else if (currency === 'EUR') updateData.balanceEur = { increment };
+
+      await tx.account.update({ where: { id: accountId }, data: updateData });
+    };
+
+    // 1. Revertir y borrar pagos del préstamo
+    for (const payment of loan.payments) {
+      if (payment.transactionId) {
+        const transaction = await tx.transaction.findUnique({
+          where: { id: payment.transactionId },
+          include: { entries: { include: { debitAccount: true, creditAccount: true } } }
+        });
+
+        if (transaction) {
+          for (const entry of transaction.entries) {
+            if (entry.debitAccountId && Number(entry.debitAmount) > 0) {
+              const acctCurrency = entry.debitAccount?.currency || transaction.currency;
+              const converted = conv(Number(entry.debitAmount), transaction.currency, acctCurrency);
+              await updateBalanceInTx(entry.debitAccountId, acctCurrency, converted, 'CREDIT');
+            }
+            if (entry.creditAccountId && Number(entry.creditAmount) > 0) {
+              const acctCurrency = entry.creditAccount?.currency || transaction.currency;
+              const converted = conv(Number(entry.creditAmount), transaction.currency, acctCurrency);
+              await updateBalanceInTx(entry.creditAccountId, acctCurrency, converted, 'DEBIT');
+            }
+          }
+          await tx.transaction.delete({ where: { id: payment.transactionId } });
+        }
+      }
+    }
+
+    // 2. Revertir y borrar la transacción de desembolso
     if (disbursementTx) {
+      for (const entry of disbursementTx.entries) {
+        if (entry.debitAccountId && Number(entry.debitAmount) > 0) {
+          const debitAcct = await tx.account.findUnique({ where: { id: entry.debitAccountId } });
+          const acctCurrency = debitAcct?.currency || disbursementTx.currency;
+          const converted = conv(Number(entry.debitAmount), disbursementTx.currency, acctCurrency);
+          await updateBalanceInTx(entry.debitAccountId, acctCurrency, converted, 'CREDIT');
+        }
+        if (entry.creditAccountId && Number(entry.creditAmount) > 0) {
+          const creditAcct = await tx.account.findUnique({ where: { id: entry.creditAccountId } });
+          const acctCurrency = creditAcct?.currency || disbursementTx.currency;
+          const converted = conv(Number(entry.creditAmount), disbursementTx.currency, acctCurrency);
+          await updateBalanceInTx(entry.creditAccountId, acctCurrency, converted, 'DEBIT');
+        }
+      }
       await tx.transaction.delete({ where: { id: disbursementTx.id } });
     }
-    // 2. Borrar el préstamo
+
+    // 3. Eliminar facturas de intereses asociadas
+    if (interestInvoiceIds.length > 0) {
+      await tx.invoice.deleteMany({
+        where: { id: { in: interestInvoiceIds } }
+      });
+    }
+
+    // 4. Borrar el préstamo (cascada LoanPayment y LoanCharge)
     await tx.loan.delete({ where: { id: loanId } });
-    // 3. Borrar la cuenta pasivo "CXP Préstamo" (cascada inversa para mantener consistencia)
+
+    // 5. Borrar la cuenta pasivo "CXP Préstamo"
     if (loan.linkedAccountId) {
       await tx.account.delete({ where: { id: loan.linkedAccountId } });
     }
@@ -171,6 +276,10 @@ export const addLoanPayment = async (data: any) => {
 
   const loan = await prisma.loan.findUnique({ where: { id: loanId }, include: { project: true } });
   if (!loan) throw new Error('Loan not found');
+
+  if (!loan.linkedAccountId) {
+    throw new Error('El préstamo no cuenta con una cuenta de pasivo vinculada.');
+  }
 
   // Validate that principal + interest matches total
   if (Math.abs((Number(principalAmount) + Number(interestAmount)) - Number(totalAmount)) > 0.01) {
@@ -209,19 +318,42 @@ export const addLoanPayment = async (data: any) => {
     for (const charge of unpaidCharges) {
       if (interestLeftToApply <= 0) break;
       const chargeBalance = charge.amount - charge.paidAmount;
+      let appliedPaid = 0;
       
       if (interestLeftToApply >= chargeBalance) {
         await prisma.loanCharge.update({
           where: { id: charge.id },
           data: { paidAmount: charge.amount, status: 'PAID' }
         });
+        appliedPaid = chargeBalance;
         interestLeftToApply -= chargeBalance;
       } else {
         await prisma.loanCharge.update({
           where: { id: charge.id },
           data: { paidAmount: charge.paidAmount + interestLeftToApply, status: 'PARTIAL' }
         });
+        appliedPaid = interestLeftToApply;
         interestLeftToApply = 0;
+      }
+
+      // Sincronizar estado de factura vinculada
+      if (charge.invoiceId && appliedPaid > 0) {
+        try {
+          const inv = await prisma.invoice.findUnique({ where: { id: charge.invoiceId } });
+          if (inv) {
+            const newOutstanding = Math.max(0, Number(inv.outstanding ?? inv.total) - appliedPaid);
+            const newStatus = newOutstanding < 0.01 ? 'PAID' : 'PARTIALLY_PAID';
+            await prisma.invoice.update({
+              where: { id: inv.id },
+              data: {
+                outstanding: newOutstanding,
+                status: newStatus
+              }
+            });
+          }
+        } catch (invErr) {
+          console.error('[addLoanPayment] Error updating invoice status:', invErr);
+        }
       }
     }
   }
@@ -252,6 +384,27 @@ export const addLoanPayment = async (data: any) => {
       creditAmount: Number(totalAmount),
     });
 
+    // Realizar conversión dinámica de moneda en base a tasa actual
+    let amountBs = 0;
+    let amountUsd = 0;
+    let amountEur = 0;
+
+    const rate = await getLatestExchangeRate('BCV');
+    const usdToBs = rate ? Number(rate.usdToBs) : 40;
+    const eurToBs = rate ? Number(rate.eurToBs) : 45;
+
+    if (loan.currency === 'USD') {
+      amountUsd = Number(totalAmount);
+      amountBs = Number(totalAmount) * usdToBs;
+    } else if (loan.currency === 'BS') {
+      amountBs = Number(totalAmount);
+      amountUsd = usdToBs > 0 ? Number(totalAmount) / usdToBs : 0;
+    } else if (loan.currency === 'EUR') {
+      amountEur = Number(totalAmount);
+      amountBs = Number(totalAmount) * eurToBs;
+      amountUsd = eurToBs > 0 && usdToBs > 0 ? (Number(totalAmount) * eurToBs) / usdToBs : 0;
+    }
+
     const tx = await prisma.transaction.create({
        data: {
          code: `TR-PAY-${uuidv4().substring(0, 6)}`,
@@ -262,21 +415,47 @@ export const addLoanPayment = async (data: any) => {
          description: `Abono a Préstamo: ${loan.name}`,
          amount: Number(totalAmount),
          currency: loan.currency,
-         amountBs: Number(totalAmount) * 40,
-         amountUsd: loan.currency === 'USD' ? Number(totalAmount) : 0, 
-         amountEur: loan.currency === 'EUR' ? Number(totalAmount) : 0,
+         amountBs,
+         amountUsd,
+         amountEur,
          status: 'COMPLETED',
          attachments: '[]',
          tags: '["loan_payment"]',
          entries: { create: entries }
        }
-    });
+     });
 
-    // Attach tx to payment
-    await prisma.loanPayment.update({
-      where: { id: payment.id },
-      data: { transactionId: tx.id }
-    });
+     // Attach tx to payment
+     await prisma.loanPayment.update({
+       where: { id: payment.id },
+       data: { transactionId: tx.id }
+     });
+
+     // Actualizar balances de cuentas
+     try {
+       // 1. Debit entries (Liability account)
+       if (loan.linkedAccountId) {
+         const liabAccount = await prisma.account.findUnique({ where: { id: loan.linkedAccountId } });
+         const liabCurrency = liabAccount?.currency || loan.currency || 'USD';
+         
+         if (Number(principalAmount) > 0) {
+           const convertedPrincipal = await convertCurrency(Number(principalAmount), loan.currency as any, liabCurrency as any);
+           await updateAccountBalance(loan.linkedAccountId, liabCurrency as any, convertedPrincipal, 'DEBIT');
+         }
+         if (Number(interestAmount) > 0) {
+           const convertedInterest = await convertCurrency(Number(interestAmount), loan.currency as any, liabCurrency as any);
+           await updateAccountBalance(loan.linkedAccountId, liabCurrency as any, convertedInterest, 'DEBIT');
+         }
+       }
+
+       // 2. Credit entry (Bank account)
+       const bankAccount = await prisma.account.findUnique({ where: { id: bankAccountId } });
+       const bankCurrency = bankAccount?.currency || loan.currency || 'USD';
+       const convertedTotal = await convertCurrency(Number(totalAmount), loan.currency as any, bankCurrency as any);
+       await updateAccountBalance(bankAccountId, bankCurrency as any, convertedTotal, 'CREDIT');
+     } catch (balanceErr) {
+       console.error('[addLoanPayment] Error updating balances:', balanceErr);
+     }
   }
 
   return payment;

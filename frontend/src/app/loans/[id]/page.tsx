@@ -273,7 +273,7 @@ export default function LoanDetailsPage() {
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Capital Abonado</label>
                     <input
-                      type="number" step="0.01" name="principalAmount" required
+                      type="number" step="0.01" name="principalAmount"
                       value={paymentForm.principalAmount} onChange={handlePaymentChange}
                       className="w-full border p-2 rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                     />
@@ -281,7 +281,7 @@ export default function LoanDetailsPage() {
                   <div>
                     <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Interés Abonado</label>
                     <input
-                      type="number" step="0.01" name="interestAmount" required
+                      type="number" step="0.01" name="interestAmount"
                       value={paymentForm.interestAmount} onChange={handlePaymentChange}
                       className="w-full border p-2 rounded dark:bg-gray-700 dark:border-gray-600 dark:text-white"
                     />
