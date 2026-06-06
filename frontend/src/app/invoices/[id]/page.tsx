@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import api from '@/lib/api';
-import { Printer, ArrowLeft, Download, Edit, CreditCard, CheckCircle, FileText, Copy } from 'lucide-react';
+import { Printer, ArrowLeft, Download, Edit, CreditCard, CheckCircle, FileText, Copy, Play } from 'lucide-react';
 
 interface InvoiceItem {
   id: string;
@@ -157,6 +157,21 @@ export default function InvoiceDetailsPage() {
      router.push(`/invoices/new?duplicateFrom=${invoice.id}`);
   };
 
+  const handlePost = async () => {
+     if (!invoice) return;
+     if (!confirm('¿Estás seguro de que deseas publicar este documento? Esto registrará los asientos contables en el libro diario.')) return;
+     try {
+        setLoading(true);
+        await api.invoices.post(invoice.id);
+        await loadInvoice(); // reload invoice to get updated status POSTED
+     } catch (err: any) {
+        console.error(err);
+        alert(err.response?.data?.error?.message || err.message || 'Error al publicar la factura');
+     } finally {
+        setLoading(false);
+     }
+  };
+
   const formatCurrency = (amount: number, currency: string) => {
     return new Intl.NumberFormat('es-VE', { 
       style: 'currency', 
@@ -184,8 +199,9 @@ export default function InvoiceDetailsPage() {
     } else if (status === 'PAID') {
        label = 'PAGADA';
        color = 'bg-green-100 text-green-800';
-    } else if (status === 'DRAFT') {
+    } else if (status === 'DRAFT' || status === 'OPEN') {
        label = 'BORRADOR';
+       color = 'bg-gray-100 text-gray-800';
     } else if (status === 'CANCELLED') {
        label = 'ANULADA';
        color = 'bg-red-100 text-red-800';
@@ -267,6 +283,16 @@ export default function InvoiceDetailsPage() {
              >
                 <Copy size={13} /> Duplicar
              </button>
+
+              {/* Publish Button if open or draft */}
+              {(invoice.status === 'OPEN' || invoice.status === 'DRAFT') && (
+                 <button 
+                    onClick={handlePost}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium transition shadow-sm"
+                 >
+                    <Play size={13} /> Publicar (Postear)
+                 </button>
+              )}
 
              {/* Pay/Collect Button if pending */}
              {invoice.status === 'POSTED' && (
