@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import api from '@/lib/api';
 import Link from 'next/link';
-import { ArrowLeft, Save, Building, Calendar, FileText, DollarSign, AlertCircle, User, Percent } from 'lucide-react';
+import { ArrowLeft, Save, Building, Calendar, FileText, DollarSign, AlertCircle, User, Percent, Plus, Trash2, Box, Package } from 'lucide-react';
 
 export default function EditInvoicePage() {
   const router = useRouter();
@@ -12,12 +12,17 @@ export default function EditInvoicePage() {
 
   const [loading, setLoading] = useState(false);
   const [dataLoading, setDataLoading] = useState(true);
-  
   // Lists
   const [projects, setProjects] = useState<any[]>([]);
   const [contacts, setContacts] = useState<any[]>([]);
-  
+  const [products, setProducts] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
+
+  // Items Mode
+  const [useItemsMode, setUseItemsMode] = useState(false);
+  const [lines, setLines] = useState<any[]>([
+      { id: Date.now(), productId: '', name: '', quantity: 1, price: 0, total: 0 }
+  ]);
 
   // Form State
   const [projectId, setProjectId] = useState('');
@@ -67,23 +72,43 @@ export default function EditInvoicePage() {
             // Reconstruct Base Amount from Total and Tax
             // Inv.Total in DB is Final Amount. We want Base for the input.
             let taxVal = 0;
+            let parsedItems = [];
             // Parse lines for description/tax
             if (inv.lines) {
                 try {
-                    const lines = JSON.parse(inv.lines);
-                    setDescription(lines.description || '');
-                    if (lines.taxAmount) {
-                        taxVal = Number(lines.taxAmount);
+                    const linesObj = typeof inv.lines === 'string' ? JSON.parse(inv.lines) : inv.lines;
+                    setDescription(linesObj.description || '');
+                    if (linesObj.taxAmount) {
+                        taxVal = Number(linesObj.taxAmount);
                         setHasTax(true);
                         setTaxAmount(String(taxVal));
+                    }
+                    if (Array.isArray(linesObj)) {
+                        parsedItems = linesObj;
+                    } else if (linesObj && Array.isArray(linesObj.items)) {
+                        parsedItems = linesObj.items;
                     }
                 } catch(e) {}
             }
 
-            const baseVal = inv.total - taxVal;
-            setTotal(String(baseVal));
+            if (parsedItems.length > 0) {
+                setLines(parsedItems.map((item: any, idx: number) => ({
+                   id: Date.now() + idx,
+                   productId: item.productId || '',
+                   name: item.description || item.name || '',
+                   quantity: Number(item.quantity || 1),
+                   price: Number(typeof item.unitPrice === 'number' && !isNaN(item.unitPrice) ? item.unitPrice : (typeof item.price === 'number' && !isNaN(item.price) ? item.price : 0)),
+                   total: Number(item.total || 0)
+                })));
+                setUseItemsMode(true);
+            } else {
+                const baseVal = inv.total - taxVal;
+                setTotal(String(baseVal));
+                setUseItemsMode(false);
+            }
             
             // Try to infer taxRate if possible (Tax / Base * 100)
+            const baseVal = inv.total - taxVal;
             if (taxVal > 0 && baseVal > 0) {
                  const inferredRate = Math.round((taxVal / baseVal) * 100);
                  setTaxRate(inferredRate);
@@ -103,22 +128,65 @@ export default function EditInvoicePage() {
     init();
   }, [id]);
 
-  // Load Contacts when Project Changes (after initial load)
+  // Load Contacts and Products when Project Changes (after initial load)
   useEffect(() => {
     if (!projectId) {
         setContacts([]);
+        setProducts([]);
         return;
     }
-    const loadContacts = async () => {
+    const loadDependencies = async () => {
         try {
-            const res = await api.contacts.getAll({ projectId });
-            setContacts(res.data.data || []);
+            const [resContacts, resProducts] = await Promise.all([
+                api.contacts.getAll({ projectId }),
+                api.products.getAll({ projectId, limit: 100 })
+            ]);
+            setContacts(resContacts.data.data || []);
+            setProducts(resProducts.data.data || []);
         } catch(e) {
-            console.error('Error loading contacts', e);
+            console.error('Error loading contacts or products', e);
         }
     };
-    loadContacts();
+    loadDependencies();
   }, [projectId]);
+
+  // Items Mode Logic
+  useEffect(() => {
+     if (useItemsMode) {
+         // Calculate total from lines
+         const sum = lines.reduce((acc, line) => acc + (line.quantity * line.price), 0);
+         setTotal(sum.toFixed(2));
+     }
+  }, [lines, useItemsMode]);
+
+  const addLine = () => {
+    setLines([...lines, { id: Date.now(), productId: '', name: '', quantity: 1, price: 0, total: 0 }]);
+  };
+
+  const removeLine = (id: number) => {
+      if (lines.length === 1) return;
+      setLines(lines.filter(l => l.id !== id));
+  };
+
+  const updateLine = (id: number, field: string, value: any) => {
+      setLines(lines.map(line => {
+          if (line.id === id) {
+              const updated = { ...line, [field]: value };
+              // Auto-fill from product if productId changes
+              if (field === 'productId') {
+                  const prod = products.find(p => p.id === value);
+                  if (prod) {
+                      updated.name = prod.name;
+                      updated.price = prod.unitPrice || 0;
+                  }
+              }
+              // Recalculate line total based on new quant/price
+              updated.total = updated.quantity * updated.price;
+              return updated;
+          }
+          return line;
+      }));
+  };
 
   // Tax Calculator logic
   useEffect(() => {
@@ -150,7 +218,6 @@ export default function EditInvoicePage() {
       if (hasTax) {
           finalTotal += Number(taxAmount);
       }
-
       const body = { 
           projectId, 
           type,
@@ -163,8 +230,14 @@ export default function EditInvoicePage() {
           customerId: type === 'INVOICE' ? contactId : undefined,
           description,
           taxAmount: hasTax ? Number(taxAmount) : 0,
-      };
-      
+          lines: useItemsMode ? lines.map(line => ({
+              productId: line.productId || undefined,
+              description: line.name || '',
+              quantity: Number(line.quantity || 1),
+              unitPrice: Number(line.price || 0),
+              total: Number(line.total || 0)
+          })) : []
+      };      
       await api.invoices.update(id, body);
       router.push('/invoices');
       
@@ -366,19 +439,90 @@ export default function EditInvoicePage() {
                     </div>
                     
                     <div className="md:col-span-5">
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Monto (Base Imponible)</label>
+                        <div className="flex justify-between items-center mb-1">
+                             <label className="block text-sm font-medium text-slate-700 font-semibold">Monto {useItemsMode ? '(Calculado)' : '(Base Imponible)'}</label>
+                             <button
+                                type="button"
+                                onClick={() => setUseItemsMode(!useItemsMode)}
+                                className="text-[10px] font-bold uppercase tracking-wide text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full hover:bg-blue-100 transition-colors"
+                             >
+                                {useItemsMode ? 'Modo Simple' : 'Detallar Items'}
+                             </button>
+                        </div>
                         <div className="relative">
                             <span className="absolute left-3 top-2.5 text-slate-400 font-bold">$</span>
                             <input 
                                 type="number"
                                 step="any"
-                                className="w-full pl-8 p-2.5 bg-white border border-slate-200 rounded-xl text-lg font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-100"
+                                className={`w-full pl-8 p-2.5 border border-slate-200 rounded-xl text-lg font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-100 ${useItemsMode ? 'bg-slate-100 text-slate-500' : 'bg-white'}`}
                                 placeholder="0.00"
                                 value={total}
                                 onChange={(e) => setTotal(e.target.value)}
+                                readOnly={useItemsMode}
                             />
                         </div>
                     </div>
+
+                    {/* ITEMS TABLE (Full Width) */}
+                    {useItemsMode && (
+                        <div className="md:col-span-12 bg-white rounded-xl border border-slate-200 p-4 animate-in fade-in zoom-in-95 duration-200">
+                            <h4 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
+                                <Package size={16} className="text-blue-500" /> Items del Documento
+                            </h4>
+                            <div className="space-y-3">
+                                <div className="grid grid-cols-12 gap-2 text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1 px-1">
+                                    <div className="col-span-5">Producto / Servicio</div>
+                                    <div className="col-span-2 text-center">Cant.</div>
+                                    <div className="col-span-3 text-right">Precio Unit.</div>
+                                    <div className="col-span-2 text-right">Total</div>
+                                </div>
+                                {lines.map((line) => (
+                                    <div key={line.id} className="grid grid-cols-12 gap-2 items-start group">
+                                        <div className="col-span-5">
+                                            <select 
+                                                className="w-full p-2 text-sm bg-slate-50 border border-slate-200 rounded-lg outline-none focus:bg-white focus:ring-2 focus:ring-blue-100 transition-all"
+                                                value={line.productId}
+                                                onChange={(e) => updateLine(line.id, 'productId', e.target.value)}
+                                            >
+                                                <option value="">-- Seleccionar --</option>
+                                                {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
+                                                <option value="CUSTOM">Otro / Personalizado</option>
+                                            </select>
+                                            {(!line.productId || line.productId === 'CUSTOM') && (
+                                                <input 
+                                                    className="w-full mt-1 p-1 text-xs border-b border-slate-200 focus:border-blue-500 outline-none bg-transparent placeholder:text-slate-300"
+                                                    placeholder="Descripción..."
+                                                    value={line.name}
+                                                    onChange={(e) => updateLine(line.id, 'name', e.target.value)}
+                                                />
+                                            )}
+                                        </div>
+                                        <div className="col-span-2">
+                                            <input 
+                                                type="number" className="w-full p-2 text-sm text-center bg-white border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-100"
+                                                min="1" value={line.quantity} onChange={(e) => updateLine(line.id, 'quantity', Number(e.target.value))}
+                                            />
+                                        </div>
+                                        <div className="col-span-3">
+                                            <input 
+                                                type="number" className="w-full p-2 text-sm text-right bg-white border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-100"
+                                                min="0" step="0.01" value={line.price} onChange={(e) => updateLine(line.id, 'price', Number(e.target.value))}
+                                            />
+                                        </div>
+                                        <div className="col-span-2 flex items-center justify-end gap-1">
+                                            <span className="text-sm font-bold text-slate-700">{Number(line.total).toFixed(2)}</span>
+                                            <button type="button" onClick={() => removeLine(line.id)} className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100">
+                                                <Trash2 size={14} />
+                                            </button>
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                            <button type="button" onClick={addLine} className="mt-4 text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 bg-blue-50 hover:bg-blue-100 px-3 py-2 rounded-lg transition-colors">
+                                <Plus size={14} /> AGREGAR ITEM
+                            </button>
+                        </div>
+                    )}
 
                     <div className="md:col-span-4 flex flex-col justify-center">
                         <label className="flex items-center gap-2 cursor-pointer mb-2">

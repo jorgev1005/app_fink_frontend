@@ -155,21 +155,45 @@ export const PaymentService = {
       // C. Update Account Balances
       for (const entry of entries) {
          if (entry.debitAccountId) {
-             const updateData: any = {};
-             if (currency === 'BS') updateData.balanceBs = { increment: amount };
-             else if (currency === 'USD') updateData.balanceUsd = { increment: amount };
-             else if (currency === 'EUR') updateData.balanceEur = { increment: amount };
-             
-             await tx.account.update({ where: { id: entry.debitAccountId }, data: updateData });
+             const acc = await tx.account.findUnique({ where: { id: entry.debitAccountId } });
+             if (acc) {
+                 const accCurrency = acc.currency || 'USD';
+                 let convertedAmount = amount;
+                 if (currency !== accCurrency) {
+                     if (currency === 'USD' && accCurrency === 'BS') {
+                         convertedAmount = amount * effectiveRate;
+                     } else if (currency === 'BS' && accCurrency === 'USD') {
+                         convertedAmount = effectiveRate > 0 ? amount / effectiveRate : 0;
+                     }
+                 }
+                 const updateData: any = {};
+                 if (accCurrency === 'BS') updateData.balanceBs = { increment: convertedAmount };
+                 else if (accCurrency === 'USD') updateData.balanceUsd = { increment: convertedAmount };
+                 else if (accCurrency === 'EUR') updateData.balanceEur = { increment: convertedAmount };
+                 
+                 await tx.account.update({ where: { id: entry.debitAccountId }, data: updateData });
+             }
          }
          
          if (entry.creditAccountId) {
-             const updateData: any = {};
-             if (currency === 'BS') updateData.balanceBs = { increment: -amount };
-             else if (currency === 'USD') updateData.balanceUsd = { increment: -amount };
-             else if (currency === 'EUR') updateData.balanceEur = { increment: -amount };
-             
-             await tx.account.update({ where: { id: entry.creditAccountId }, data: updateData });
+             const acc = await tx.account.findUnique({ where: { id: entry.creditAccountId } });
+             if (acc) {
+                 const accCurrency = acc.currency || 'USD';
+                 let convertedAmount = amount;
+                 if (currency !== accCurrency) {
+                     if (currency === 'USD' && accCurrency === 'BS') {
+                         convertedAmount = amount * effectiveRate;
+                     } else if (currency === 'BS' && accCurrency === 'USD') {
+                         convertedAmount = effectiveRate > 0 ? amount / effectiveRate : 0;
+                     }
+                 }
+                 const updateData: any = {};
+                 if (accCurrency === 'BS') updateData.balanceBs = { increment: -convertedAmount };
+                 else if (accCurrency === 'USD') updateData.balanceUsd = { increment: -convertedAmount };
+                 else if (accCurrency === 'EUR') updateData.balanceEur = { increment: -convertedAmount };
+                 
+                 await tx.account.update({ where: { id: entry.creditAccountId }, data: updateData });
+             }
          }
       }
 

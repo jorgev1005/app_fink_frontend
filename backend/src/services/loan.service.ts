@@ -419,6 +419,8 @@ export const addLoanPayment = async (data: any) => {
          amountUsd,
          amountEur,
          status: 'COMPLETED',
+         paymentStatus: 'PAID',
+         amountPaid: Number(totalAmount),
          attachments: '[]',
          tags: '["loan_payment"]',
          entries: { create: entries }
