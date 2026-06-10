@@ -10,11 +10,13 @@ export default function PayInvoicePage({ params }: { params: { id: string } }) {
   const { id } = params;
   
   // Form State
-  const [amount, setAmount] = useState('');
+  const [amount, setAmount] = useState(''); // Amount in payment currency (e.g. BS)
+  const [invoiceAmount, setInvoiceAmount] = useState(''); // Amount in invoice currency (e.g. USD)
   const [paymentCurrency, setPaymentCurrency] = useState('BS');
   const [method, setMethod] = useState('BANK_TRANSFER');
   const [accountId, setAccountId] = useState('');
   const [exchangeRate, setExchangeRate] = useState('');
+  const [reference, setReference] = useState(''); // Reference code/note from user
   
   // Rate Selection State
   const [rateOptions, setRateOptions] = useState<any>(null); // { BCV: ..., BINANCE: ..., CUSTOM: ... }
@@ -30,6 +32,74 @@ export default function PayInvoicePage({ params }: { params: { id: string } }) {
   
   // Derived
   const isMultiCurrency = invoice && paymentCurrency !== invoice.currency;
+  const isBill = invoice?.type === 'BILL';
+
+  // Helper to convert amounts
+  const convertAmount = (val: number, fromCurr: string, toCurr: string, rateVal: number) => {
+    if (fromCurr === toCurr) return val;
+    if (fromCurr === 'USD' && toCurr === 'BS') {
+      return val * rateVal;
+    }
+    if (fromCurr === 'BS' && toCurr === 'USD') {
+      return rateVal > 0 ? val / rateVal : 0;
+    }
+    return val;
+  };
+
+  // Safe Two-way Synchronized Inputs
+  const syncAmounts = (
+    newPaymentCurrency: string,
+    newRateStr: string,
+    changedField: 'paymentAmount' | 'invoiceAmount' | 'rate',
+    currentVal: string
+  ) => {
+    const rateNum = parseFloat(newRateStr);
+    const hasRate = !isNaN(rateNum) && rateNum > 0;
+    
+    if (!invoice) return;
+
+    if (newPaymentCurrency === invoice.currency) {
+      if (changedField === 'paymentAmount') {
+        setAmount(currentVal);
+        setInvoiceAmount(currentVal);
+      } else {
+        setAmount(currentVal);
+        setInvoiceAmount(currentVal);
+      }
+      return;
+    }
+
+    // Multi-currency conversion active
+    if (changedField === 'paymentAmount') {
+      setAmount(currentVal);
+      const valNum = parseFloat(currentVal);
+      if (isNaN(valNum) || !hasRate) {
+        setInvoiceAmount('');
+      } else {
+        const converted = convertAmount(valNum, newPaymentCurrency, invoice.currency, rateNum);
+        setInvoiceAmount(converted.toFixed(2));
+      }
+    } else if (changedField === 'invoiceAmount') {
+      setInvoiceAmount(currentVal);
+      const valNum = parseFloat(currentVal);
+      if (isNaN(valNum) || !hasRate) {
+        setAmount('');
+      } else {
+        const converted = convertAmount(valNum, invoice.currency, newPaymentCurrency, rateNum);
+        setAmount(converted.toFixed(2));
+      }
+    } else if (changedField === 'rate') {
+      setExchangeRate(currentVal);
+      // If rate changed, we keep the invoice amount (outstanding USD) constant and recalculate payment amount (BS)
+      const invAmtNum = parseFloat(invoiceAmount);
+      if (isNaN(invAmtNum) || !hasRate) {
+        setAmount('');
+      } else {
+        const converted = convertAmount(invAmtNum, invoice.currency, newPaymentCurrency, rateNum);
+        setAmount(converted.toFixed(2));
+      }
+    }
+  };
 
   useEffect(() => {
     const load = async () => {
@@ -39,10 +109,14 @@ export default function PayInvoicePage({ params }: { params: { id: string } }) {
         setInvoice(inv);
         
         // Default payment currency to invoice currency initially
-        if (inv.currency) setPaymentCurrency(inv.currency);
+        const initialCurrency = inv.currency || 'USD';
+        setPaymentCurrency(initialCurrency);
         
         // Load default amount (outstanding)
-        if (inv.outstanding) setAmount(inv.outstanding.toString());
+        if (inv.outstanding) {
+          setInvoiceAmount(inv.outstanding.toString());
+          setAmount(inv.outstanding.toString());
+        }
 
         // Fetch accounts
         if (inv.projectId) {
@@ -56,15 +130,18 @@ export default function PayInvoicePage({ params }: { params: { id: string } }) {
             setAccounts(financialAccounts);
             
             // Try to set default account if one matches currency
-            const matchCurrency = financialAccounts.find((a: any) => a.currency === inv.currency);
+            const matchCurrency = financialAccounts.find((a: any) => a.currency === initialCurrency);
             if (matchCurrency) {
                  setAccountId(matchCurrency.id);
-                 // No need to setPaymentCurrency as it matches invoice currency already set above
-            }
-            else if (financialAccounts.length > 0) {
+            } else if (financialAccounts.length > 0) {
                  const fallback = financialAccounts[0];
                  setAccountId(fallback.id);
-                 setPaymentCurrency(fallback.currency); // Correctly update currency
+                 setPaymentCurrency(fallback.currency);
+                 if (inv.outstanding) {
+                   // Calculate payment amount in the fallback currency
+                   // If rate is not loaded yet, just set amount to outstanding (handles no-rate initially)
+                   setAmount(inv.outstanding.toString());
+                 }
             }
           } catch (e) {
             console.error('Error loading accounts', e);
@@ -106,10 +183,9 @@ export default function PayInvoicePage({ params }: { params: { id: string } }) {
     if (selectedRateSource !== 'CUSTOM') {
         const option = rateOptions[selectedRateSource];
         if (option && option.usdToBs) {
-             // Logic: If paying USD invoice with BS, we need Bs/USD rate (e.g. 50).
-             // If paying BS invoice with USD, we also need Bs/USD rate usually provided by API.
-             // Our API provides "usdToBs". 
-             setExchangeRate(option.usdToBs.toString());
+             const rateVal = option.usdToBs.toString();
+             setExchangeRate(rateVal);
+             syncAmounts(paymentCurrency, rateVal, 'invoiceAmount', invoiceAmount);
         }
     }
   }, [selectedRateSource, rateOptions, isMultiCurrency]);
@@ -125,7 +201,7 @@ export default function PayInvoicePage({ params }: { params: { id: string } }) {
     }
     
     if (!accountId) {
-      setError('Seleccione la cuenta de origen del dinero');
+      setError(isBill ? 'Seleccione la cuenta de origen del dinero' : 'Seleccione la cuenta de destino del dinero');
       return;
     }
 
@@ -148,7 +224,7 @@ export default function PayInvoicePage({ params }: { params: { id: string } }) {
           currency: paymentCurrency,
           method,
           accountId,
-          reference: '', // Allow user to add reference? UI doesn't seem to have input for it currently, or I missed it.
+          reference: reference || '',
           allocations: [{ invoiceId: invoice.id, amount: value }],
           // Cross-Currency Fields
           targetCurrency: invoice.currency,
@@ -159,36 +235,14 @@ export default function PayInvoicePage({ params }: { params: { id: string } }) {
       // This maps to POST /api/payments (Smart Payment Service)
       await api.payments.create(payload);
       
-      setSuccess('Pago registrado correctamente');
+      setSuccess(isBill ? 'Pago registrado correctamente' : 'Cobro registrado correctamente');
       setTimeout(() => router.push('/invoices'), 1500);
     } catch (err: any) {
       console.error(err);
-      const msg = err.response?.data?.error?.message || err.message || 'Error al procesar el pago';
+      const msg = err.response?.data?.error?.message || err.message || 'Error al procesar la operación';
       setError(msg);
       setLoading(false);
     }
-  };
-
-  const getConvertedAmount = () => {
-      const amt = Number(amount);
-      const rate = Number(exchangeRate);
-      if (!amt || !rate) return '--';
-      
-      // Assuming rate is USD to BS (e.g. 50.00)
-      
-      // Case 1: Source BS, Target USD.  (Paying USD voice with BS)
-      // Amount (BS) / Rate = USD
-      if (paymentCurrency === 'BS' && invoice?.currency === 'USD') {
-          return (amt / rate).toFixed(2);
-      }
-      
-      // Case 2: Source USD, Target BS. (Paying BS invoice with USD)
-      // Amount (USD) * Rate = Bs
-      if (paymentCurrency === 'USD' && invoice?.currency === 'BS') {
-          return (amt * rate).toFixed(2);
-      }
-      
-      return '??';
   };
 
   return (
@@ -198,8 +252,8 @@ export default function PayInvoicePage({ params }: { params: { id: string } }) {
           <ArrowLeft className="w-4 h-4" />
           Volver a Facturas
         </Link>
-        <h2 className="text-2xl font-bold">Registrar Pago</h2>
-        <p className="text-muted-foreground">Smart Payment para {invoice?.code}</p>
+        <h2 className="text-2xl font-bold">{isBill ? 'Registrar Pago' : 'Registrar Cobro'}</h2>
+        <p className="text-muted-foreground">Smart ERP para {invoice?.code}</p>
       </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
@@ -211,28 +265,34 @@ export default function PayInvoicePage({ params }: { params: { id: string } }) {
                 <div className="font-bold text-xl text-gray-900">{invoice.currency} {Number(invoice.total).toLocaleString()}</div>
               </div>
               <div className="text-right">
-                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Por Pagar</span>
+                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{isBill ? 'Por Pagar' : 'Por Cobrar'}</span>
                 <div className="font-bold text-xl text-blue-600">{invoice.currency} {Number(invoice.outstanding).toLocaleString()}</div>
               </div>
             </div>
         )}
 
-        <form onSubmit={submit} className="p-6 space-y-8">
+        <form onSubmit={submit} className="p-6 space-y-6">
           
           {/* 1. Account Selection */}
           <section>
-            <label className="block text-sm font-medium text-gray-700 mb-2">1. ¿Desde dónde sale el dinero?</label>
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              {isBill ? '1. ¿Desde dónde sale el dinero?' : '1. ¿A qué cuenta entra el dinero?'}
+            </label>
             <div className="grid gap-3">
                 <select 
-                  className="input w-full p-3 text-lg bg-gray-50 border-gray-200 focus:bg-white transition-colors"
+                  className="w-full p-3 bg-gray-50 border border-gray-200 focus:bg-white focus:ring-2 focus:ring-blue-100 rounded-xl transition-all outline-none text-base"
                   value={accountId} 
                   onChange={(e) => {
                       setAccountId(e.target.value);
                       const acc = accounts.find(a => a.id === e.target.value);
-                      if (acc) setPaymentCurrency(acc.currency);
+                      if (acc) {
+                          const newCurr = acc.currency;
+                          setPaymentCurrency(newCurr);
+                          syncAmounts(newCurr, exchangeRate, 'invoiceAmount', invoiceAmount);
+                      }
                   }}
                 >
-                  <option value="">-- Seleccionar Banco / Caja --</option>
+                  <option value="">{isBill ? '-- Seleccionar Banco / Caja de salida --' : '-- Seleccionar Banco / Caja de entrada --'}</option>
                   {accounts.map(acc => (
                     <option key={acc.id} value={acc.id}>
                       {acc.name} ({acc.currency}) - {acc.bankName || acc.subType}
@@ -249,17 +309,17 @@ export default function PayInvoicePage({ params }: { params: { id: string } }) {
 
           {/* 2. Amount & Conversion Logic */}
           <section className="space-y-4">
-            <label className="block text-sm font-medium text-gray-700">2. ¿Cuánto pagaste?</label>
+            <label className="block text-sm font-medium text-gray-700">2. Monto de la operación</label>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
-                    <label className="text-xs text-gray-500 mb-1 block">Monto ({paymentCurrency})</label>
+                    <label className="text-xs text-gray-500 mb-1 block">Monto a {isBill ? 'pagar' : 'cobrar'} ({paymentCurrency})</label>
                     <div className="relative">
                         <input 
-                            className="input w-full pl-3 text-lg font-mono" 
+                            className="w-full p-2.5 bg-gray-50 border border-gray-200 focus:bg-white focus:ring-2 focus:ring-blue-100 rounded-xl transition-all outline-none font-mono text-lg" 
                             inputMode="decimal" 
                             value={amount} 
-                            onChange={(e) => setAmount(e.target.value)} 
+                            onChange={(e) => syncAmounts(paymentCurrency, exchangeRate, 'paymentAmount', e.target.value)} 
                             placeholder="0.00"
                         />
                     </div>
@@ -285,7 +345,7 @@ export default function PayInvoicePage({ params }: { params: { id: string } }) {
                                         key={source}
                                         type="button"
                                         onClick={() => setSelectedRateSource(source)}
-                                        className={`flex-1 py-1.5 px-2 text-xs font-medium rounded-md transition-all text-center ${
+                                        className={`flex-1 py-1 px-2 text-xs font-medium rounded-md transition-all text-center ${
                                             selectedRateSource === source 
                                             ? 'bg-blue-600 text-white shadow-sm' 
                                             : 'text-gray-600 hover:bg-gray-50'
@@ -300,12 +360,14 @@ export default function PayInvoicePage({ params }: { params: { id: string } }) {
                         {/* Rate Value Input */}
                         <div>
                              <input 
-                                className="input w-full text-lg font-mono text-center bg-white border-yellow-200 focus:border-yellow-400" 
+                                className="w-full p-2 bg-white border border-yellow-200 focus:border-yellow-400 focus:ring-2 focus:ring-yellow-100 rounded-xl transition-all outline-none text-center font-mono text-lg" 
                                 inputMode="decimal" 
                                 value={exchangeRate} 
                                 onChange={(e) => {
-                                    setExchangeRate(e.target.value);
+                                    const val = e.target.value;
+                                    setExchangeRate(val);
                                     if(selectedRateSource !== 'CUSTOM') setSelectedRateSource('CUSTOM');
+                                    syncAmounts(paymentCurrency, val, 'rate', val);
                                 }} 
                                 placeholder="0.00"
                              />
@@ -315,47 +377,25 @@ export default function PayInvoicePage({ params }: { params: { id: string } }) {
                 )}
             </div>
 
-            {isMultiCurrency && amount && exchangeRate ? (
+            {isMultiCurrency && invoice ? (
                 <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 flex flex-col gap-2 animate-in fade-in slide-in-from-top-2">
                     <div className="flex justify-between items-center border-b border-blue-200 pb-2">
-                         <span className="text-sm text-blue-800">Esto equivale a:</span>
-                         <span className="text-xs text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full">Editable</span>
+                         <span className="text-sm text-blue-800">Equivale a:</span>
+                         <span className="text-xs text-blue-600 bg-blue-100 px-2 py-0.5 rounded-full">Abonado a la factura ({invoice.currency})</span>
                     </div>
                     
                     <div className="relative">
                         <span className="absolute left-3 top-2.5 text-blue-700 font-bold">$</span>
                         <input
-                             className="w-full bg-blue-50/50 text-right text-2xl font-bold text-blue-700 border-none focus:ring-0 p-0 pr-1 cursor-text hover:bg-white/50 transition-colors rounded-md"
-                             value={(Number(amount) / Number(exchangeRate)).toFixed(2)}
-                             onChange={(e) => {
-                                 // Reverse Calculation Logic
-                                 // Logic: User wants specific USD amount -> Recalculate Rate
-                                 // Rate = SourceAmount / TargetAmount
-                                 
-                                 // We don't change state immediately to text field because 'value' prop is derived
-                                 // Instead we update 'exchangeRate' which implicitly updates the derived value.
-                                 // But to avoid cursor jumping and weird math loops while typing, 
-                                 // this kind of derived-input is tricky.
-                                 // A safer approach for this UX is having a separate 'Calculate Reverse' button or
-                                 // simply asking the user "Total" button.
-                                 
-                                 // Let's implement the 'Target Amount' as a controlled input State if being edited,
-                                 // but for now, let's keep it simple. If we want to allow typing "100", 
-                                 // we calculate rate 35000/100 = 350.
-                                 
-                                 const targetVal = parseFloat(e.target.value);
-                                 if (!isNaN(targetVal) && targetVal > 0) {
-                                     const srcVal = parseFloat(amount);
-                                     const newRate = srcVal / targetVal;
-                                     setExchangeRate(newRate.toFixed(4));
-                                     if(selectedRateSource !== 'CUSTOM') setSelectedRateSource('CUSTOM');
-                                 }
-                             }}
-                            inputMode="decimal"
+                             className="w-full p-2 bg-white border border-blue-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 rounded-xl transition-all outline-none font-bold text-lg text-blue-700 pl-8"
+                             value={invoiceAmount}
+                             onChange={(e) => syncAmounts(paymentCurrency, exchangeRate, 'invoiceAmount', e.target.value)}
+                             inputMode="decimal"
+                             placeholder="0.00"
                         />
                     </div>
                     <div className="text-right text-xs text-blue-500">
-                        Se abonará a la factura ({invoice.currency})
+                        Este es el monto real en {invoice.currency} que se descontará de la factura. Puedes editar cualquiera de los dos montos para ajustarlos.
                     </div>
                 </div>
             ) : null}
@@ -364,8 +404,8 @@ export default function PayInvoicePage({ params }: { params: { id: string } }) {
 
           {/* 3. Method */}
           <section>
-             <label className="block text-sm font-medium text-gray-700 mb-2">3. Método de Pago</label>
-             <div className="grid grid-cols-3 gap-3">
+             <label className="block text-sm font-medium text-gray-700 mb-2">3. Método de operación</label>
+             <div className="grid grid-cols-4 gap-3">
               {[
                   { id: 'BANK_TRANSFER', label: 'Transferencia', icon: Building2 },
                   { id: 'MOBILE_PAYMENT', label: 'Pago Móvil', icon: Smartphone },
@@ -376,10 +416,10 @@ export default function PayInvoicePage({ params }: { params: { id: string } }) {
                     key={m.id}
                     type="button"
                     onClick={() => setMethod(m.id)}
-                    className={`p-3 rounded-lg border-2 flex flex-col items-center justify-center gap-2 transition-all ${
+                    className={`p-3 rounded-lg border flex flex-col items-center justify-center gap-2 transition-all ${
                         method === m.id 
-                        ? 'bg-blue-50 border-blue-600 text-blue-700' 
-                        : 'border-transparent bg-gray-100 text-gray-600 hover:bg-gray-200'
+                        ? 'bg-blue-50 border-blue-600 text-blue-700 shadow-sm' 
+                        : 'border-gray-200 bg-gray-50 text-gray-600 hover:bg-gray-100'
                     }`}
                   >
                     <m.icon className="w-5 h-5" />
@@ -387,6 +427,18 @@ export default function PayInvoicePage({ params }: { params: { id: string } }) {
                   </button>
               ))}
             </div>
+          </section>
+
+          {/* 4. Reference or Note */}
+          <section>
+             <label className="block text-sm font-medium text-gray-700 mb-2">4. Referencia o Nota (Opcional)</label>
+             <input
+                type="text"
+                placeholder="Ej. Transferencia #12345, Pago móvil BNC, Efectivo caja"
+                className="w-full p-2.5 bg-gray-50 border border-gray-200 focus:bg-white focus:ring-2 focus:ring-blue-100 rounded-xl transition-all outline-none"
+                value={reference}
+                onChange={(e) => setReference(e.target.value)}
+             />
           </section>
 
           {/* Feedback & Actions */}
@@ -404,11 +456,11 @@ export default function PayInvoicePage({ params }: { params: { id: string } }) {
           )}
 
           <button 
-            className="btn btn-primary w-full py-4 text-lg font-semibold shadow-lg hover:shadow-xl transition-all disabled:opacity-70 disabled:cursor-not-allowed" 
+            className="w-full py-4 bg-blue-600 text-white rounded-xl text-lg font-semibold shadow-lg hover:bg-blue-700 transition-all disabled:opacity-70 disabled:cursor-not-allowed" 
             type="submit" 
             disabled={loading || !amount || !accountId}
           >
-            {loading ? 'Procesando...' : `Registrar Pago`}
+            {loading ? 'Procesando...' : (isBill ? 'Registrar Pago' : 'Registrar Cobro')}
           </button>
           
           <p className="text-center text-xs text-gray-400">
