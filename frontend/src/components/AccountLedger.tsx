@@ -6,9 +6,11 @@ interface AccountLedgerProps {
   accountId: string;
   accountType: string; // ASSET, LIABILITY, etc.
   currency: string;
+  accountName?: string;
+  accountCode?: string;
 }
 
-export default function AccountLedger({ accountId, accountType, currency }: AccountLedgerProps) {
+export default function AccountLedger({ accountId, accountType, currency, accountName = '', accountCode = '' }: AccountLedgerProps) {
   const [data, setData] = useState<any[]>([]);
   const [openingBalance, setOpeningBalance] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -26,6 +28,19 @@ export default function AccountLedger({ accountId, accountType, currency }: Acco
           start: `${year}-${month}-01`,
           end: `${year}-${month}-${lastDay}`
       };
+  };
+
+  const formatDateSafe = (dateStr: string) => {
+    if (!dateStr) return '';
+    try {
+      const parts = dateStr.split('-');
+      if (parts.length === 3) {
+        return `${parts[2]}/${parts[1]}/${parts[0]}`;
+      }
+      return format(new Date(dateStr + 'T00:00:00'), 'dd/MM/yyyy');
+    } catch (e) {
+      return dateStr;
+    }
   };
 
   const defaults = getDefaultDates();
@@ -230,6 +245,102 @@ export default function AccountLedger({ accountId, accountType, currency }: Acco
 
   return (
     <div className="space-y-4">
+        {/* Cabecera para Impresión */}
+        <div className="hidden print:block mb-6 border-b-2 border-gray-800 pb-4">
+            <div className="flex justify-between items-start">
+                <div>
+                    <h1 className="text-2xl font-bold text-gray-900">Reporte de Movimientos</h1>
+                    <p className="text-lg font-semibold text-gray-700 mt-1">{accountCode} — {accountName}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">Tipo de Cuenta: {accountType} | Moneda: {currency}</p>
+                </div>
+                <div className="text-right text-xs text-gray-600">
+                    <p className="font-medium">Período: {formatDateSafe(startDate)} al {formatDateSafe(endDate)}</p>
+                    <p className="mt-1 text-gray-400">Generado: {new Date().toLocaleDateString('es-VE')} {new Date().toLocaleTimeString('es-VE')}</p>
+                </div>
+            </div>
+        </div>
+
+        {/* Estilos para impresión */}
+        <style dangerouslySetInnerHTML={{ __html: `
+          @media print {
+            header, 
+            button, 
+            form, 
+            nav, 
+            .no-print,
+            .print\\:hidden,
+            [class*="print:hidden"],
+            aside,
+            [class*="QuickActionButton"],
+            [class*="CalculatorWidget"],
+            [class*="AuditLogPreviewButton"] {
+              display: none !important;
+            }
+            
+            body, .min-h-screen, .max-w-4xl, .bg-white, .bg-gray-50, .shadow-md, .rounded-lg, .border {
+              background: white !important;
+              color: black !important;
+              padding: 0 !important;
+              margin: 0 !important;
+              width: 100% !important;
+              max-width: 100% !important;
+              box-shadow: none !important;
+              border: none !important;
+            }
+            
+            .overflow-x-auto {
+              overflow: visible !important;
+              border: none !important;
+              box-shadow: none !important;
+            }
+            
+            table {
+              width: 100% !important;
+              table-layout: auto !important;
+              border-collapse: collapse !important;
+            }
+            
+            thead {
+              display: table-header-group !important;
+            }
+            
+            tr {
+              page-break-inside: avoid !important;
+            }
+            
+            th, td {
+              border: 1px solid #cbd5e1 !important;
+              padding: 8px 12px !important;
+              word-break: break-word !important;
+              white-space: normal !important;
+              max-width: none !important;
+              overflow: visible !important;
+              text-overflow: clip !important;
+            }
+            
+            .truncate, [class*="truncate"] {
+              overflow: visible !important;
+              text-overflow: clip !important;
+              white-space: normal !important;
+              max-width: none !important;
+            }
+
+            .grid {
+              display: grid !important;
+              grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+              gap: 16px !important;
+            }
+            
+            .grid > div {
+              border: 1px solid #cbd5e1 !important;
+              padding: 8px 12px !important;
+              background: #f8fafc !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+            }
+          }
+        `}} />
+
         {/* Filters */}
         <form onSubmit={handleSearch} className="flex flex-wrap items-end gap-4 bg-gray-50 p-4 rounded-lg border border-gray-200">
             <div>
@@ -256,6 +367,16 @@ export default function AccountLedger({ accountId, accountType, currency }: Acco
                 className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm font-medium disabled:opacity-50"
             >
                 {loading ? 'Cargando...' : 'Actualizar'}
+            </button>
+            <button 
+                type="button"
+                onClick={() => window.print()}
+                className="px-4 py-2 bg-white text-gray-700 border border-gray-300 rounded hover:bg-gray-50 text-sm font-medium transition flex items-center gap-1.5 print:hidden"
+            >
+                <svg className="w-4 h-4 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+                </svg>
+                Imprimir Reporte (PDF)
             </button>
         </form>
 
@@ -301,7 +422,7 @@ export default function AccountLedger({ accountId, accountType, currency }: Acco
                 <tbody className="divide-y divide-gray-100">
                     {/* Opening Balance Row */}
                     <tr className="bg-gray-50 italic text-gray-500">
-                        <td className="px-4 py-2">{format(new Date(startDate), 'dd/MM/yyyy')}</td>
+                        <td className="px-4 py-2">{formatDateSafe(startDate)}</td>
                         <td className="px-4 py-2">-</td>
                         <td className="px-4 py-2">Saldo Inicial</td>
                         <td className="px-4 py-2 text-right">-</td>
@@ -320,7 +441,7 @@ export default function AccountLedger({ accountId, accountType, currency }: Acco
                     {sortedRows.map((row) => (
                         <tr key={row.id} className="hover:bg-gray-50">
                             <td className="px-4 py-2 text-gray-900 whitespace-nowrap">
-                                {row.transaction?.date ? format(new Date(row.transaction.date), 'dd/MM/yyyy') : '-'}
+                                {row.transaction?.date ? formatDateSafe(row.transaction.date.split('T')[0]) : '-'}
                             </td>
                             <td className="px-4 py-2 text-gray-600 whitespace-nowrap">
                                 {row.transaction?.reference || row.transaction?.code || '-'}

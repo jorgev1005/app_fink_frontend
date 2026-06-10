@@ -185,6 +185,22 @@ export const processInvoicePosting = async (invoiceId: string, userId: string) =
 
     const txn = await tx.transaction.create({ data: createData, include: { entries: { include: { debitAccount: true, creditAccount: true } } } });
 
+    // If invoice was in DRAFT status, we must apply stock changes now!
+    if (invoice.status === 'DRAFT' && items.length > 0) {
+      for (const line of items) {
+        if (line.productId && line.productId !== 'CUSTOM' && line.quantity) {
+          const qty = Number(line.quantity);
+          const operationMultiplier = (invoice.type === 'BILL') ? 1 : -1;
+          await tx.product.update({
+            where: { id: line.productId },
+            data: {
+              stock: { increment: qty * operationMultiplier }
+            }
+          });
+        }
+      }
+    }
+
     // Update invoice status to POSTED, but keep outstanding amount (it is now an Account Payable/Receivable)
     // This allows the invoice to remain in "Pending Invoices" until it is fully paid via the Payment module.
     await tx.invoice.update({ where: { id: invoice.id }, data: { status: 'POSTED' } });

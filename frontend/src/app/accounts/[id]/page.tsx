@@ -171,7 +171,7 @@ export default function EditAccountPage({ params }: { params: { id: string } }) 
     <div className="min-h-screen bg-gray-50 p-4 md:p-8 relative">
       <div className="max-w-4xl mx-auto">
         {/* Header */}
-        <div className="mb-6 md:mb-8 flex items-center justify-between">
+        <div className="mb-6 md:mb-8 flex items-center justify-between print:hidden">
           <div>
             <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Editar Cuenta</h1>
             <p className="text-gray-600 mt-2 text-sm md:text-base">
@@ -187,7 +187,7 @@ export default function EditAccountPage({ params }: { params: { id: string } }) 
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-gray-200 mb-6 space-x-4">
+        <div className="flex border-b border-gray-200 mb-6 space-x-4 print:hidden">
             <button
                 type="button"
                 className={`py-2 px-4 text-sm font-medium border-b-2 transition-colors ${activeTab === 'details' ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-500 hover:text-gray-700'}`}
@@ -205,8 +205,14 @@ export default function EditAccountPage({ params }: { params: { id: string } }) 
         </div>
 
         {activeTab === 'movements' && (
-            <div className="bg-white rounded-lg shadow-md p-4 md:p-8">
-                <AccountLedger accountId={id} accountType={type} currency={currency} />
+            <div className="bg-white rounded-lg shadow-md p-4 md:p-8 print:shadow-none print:border-none print:p-0 print:m-0">
+                <AccountLedger 
+                  accountId={id} 
+                  accountType={type} 
+                  currency={currency} 
+                  accountName={name} 
+                  accountCode={account?.code || ''} 
+                />
             </div>
         )}
 

@@ -1,5 +1,15 @@
 import { Router } from 'express';
-import { getPublicCatalog, createPublicProduct, generateAiDescription, getPublicProjects, ensurePublicProject, assignProjectToProduct } from '../controllers/public.controller';
+import { 
+  getPublicCatalog, 
+  createPublicProduct, 
+  generateAiDescription, 
+  getPublicProjects, 
+  ensurePublicProject, 
+  assignProjectToProduct,
+  createPublicContact,
+  createPublicInvoice,
+  getPublicDraftInvoices
+} from '../controllers/public.controller';
 
 const router = Router();
 
@@ -11,6 +21,11 @@ router.post('/products', createPublicProduct);
 
 // Endpoint público para generar descripciones con IA
 router.post('/ai/description', generateAiDescription);
+
+// Endpoints públicos para el Bot de WhatsApp (CRM)
+router.post('/contacts', createPublicContact);
+router.post('/invoices', createPublicInvoice);
+router.get('/invoices/drafts', getPublicDraftInvoices);
 
 // ==========================================
 // ENDPOINTS PARA n8n (ORQUESTACIÓN)

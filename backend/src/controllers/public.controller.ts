@@ -238,3 +238,179 @@ export const assignProjectToProduct = async (req: Request, res: Response) => {
     res.status(500).json({ success: false, error: { message: error.message } });
   }
 };
+
+// POST /api/public/contacts  — busca o crea un contacto cliente por teléfono/RIF
+export const createPublicContact = async (req: Request, res: Response) => {
+  try {
+    const { name, phone, email, taxId, projectCode = 'LUC' } = req.body;
+    if (!name && !phone) {
+      return res.status(400).json({ success: false, error: { message: 'name or phone are required' } });
+    }
+
+    // Buscar el proyecto (por defecto LUC / Inversiones Lucem)
+    const project = await prisma.project.findUnique({ where: { code: projectCode } });
+    if (!project) {
+      return res.status(404).json({ success: false, error: { message: `Project code ${projectCode} not found` } });
+    }
+
+    // Buscar contacto existente
+    let contact = null;
+    if (phone) {
+      contact = await prisma.contactPerson.findFirst({
+        where: {
+          projectId: project.id,
+          phone: phone
+        }
+      });
+    }
+    if (!contact && taxId) {
+      contact = await prisma.contactPerson.findFirst({
+        where: {
+          projectId: project.id,
+          taxId: taxId
+        }
+      });
+    }
+
+    let created = false;
+    if (!contact) {
+      contact = await prisma.contactPerson.create({
+        data: {
+          name: name || `Contacto ${phone || taxId}`,
+          phone: phone || null,
+          email: email || null,
+          taxId: taxId || null,
+          type: 'CUSTOMER',
+          projectId: project.id
+        }
+      });
+      created = true;
+      console.log(`[Bot] Contacto creado: ${contact.name} (${phone || ''})`);
+    } else {
+      // Opcional: Actualizar el nombre o datos si venían vacíos y ahora vienen con valor
+      const updateData: any = {};
+      if (!contact.taxId && taxId) updateData.taxId = taxId;
+      if (!contact.email && email) updateData.email = email;
+      if (name && contact.name.startsWith('Contacto ') && contact.name !== name) updateData.name = name;
+
+      if (Object.keys(updateData).length > 0) {
+        contact = await prisma.contactPerson.update({
+          where: { id: contact.id },
+          data: updateData
+        });
+      }
+    }
+
+    res.status(created ? 201 : 200).json({ success: true, created, data: contact });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
+// POST /api/public/invoices  — crea una factura en borrador (DRAFT)
+export const createPublicInvoice = async (req: Request, res: Response) => {
+  try {
+    const { 
+      customerId, phone, currency = 'USD', total, items, description = 'Cotización desde WhatsApp', projectCode = 'LUC' 
+    } = req.body;
+
+    if (!total || Number(total) <= 0) {
+      return res.status(400).json({ success: false, error: { message: 'total must be > 0' } });
+    }
+
+    const project = await prisma.project.findUnique({ where: { code: projectCode } });
+    if (!project) {
+      return res.status(404).json({ success: false, error: { message: `Project code ${projectCode} not found` } });
+    }
+
+    let resolvedCustomerId = customerId;
+    if (!resolvedCustomerId && phone) {
+      const contact = await prisma.contactPerson.findFirst({
+        where: { projectId: project.id, phone }
+      });
+      if (contact) {
+        resolvedCustomerId = contact.id;
+      }
+    }
+
+    if (!resolvedCustomerId) {
+      return res.status(400).json({ success: false, error: { message: 'customerId or phone is required to link a contact' } });
+    }
+
+    const invoiceCode = `INV-BOT-${Date.now()}`;
+
+    // Estructurar líneas
+    const formattedItems = Array.isArray(items) ? items.map((it: any) => ({
+      productId: it.productId || 'CUSTOM',
+      name: it.name || it.nombre_producto || 'Artículo',
+      quantity: Number(it.quantity || 1),
+      price: Number(it.price || it.precio_usd || 0),
+      total: Number((it.quantity || 1) * (it.price || it.precio_usd || 0))
+    })) : [];
+
+    const finalLinesData = {
+      items: formattedItems,
+      taxAmount: 0, // Por ahora 0 en borrador, o se puede calcular si es taxable
+      description: description
+    };
+
+    // Crear factura en DRAFT
+    const result = await prisma.invoice.create({
+      data: {
+        project: { connect: { id: project.id } },
+        code: invoiceCode,
+        type: 'INVOICE', // Venta
+        customerId: resolvedCustomerId,
+        issueDate: new Date(),
+        currency,
+        total: Number(total),
+        outstanding: Number(total),
+        status: 'DRAFT',
+        lines: JSON.stringify(finalLinesData),
+        createdBy: 'whatsapp-bot'
+      }
+    });
+
+    console.log(`[Bot] Factura DRAFT creada: ${result.code} por ${result.total} ${result.currency}`);
+    res.status(201).json({ success: true, data: result });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
+export const getPublicDraftInvoices = async (req: Request, res: Response) => {
+  try {
+    const drafts = await prisma.invoice.findMany({
+      where: {
+        status: 'DRAFT',
+        createdBy: 'whatsapp-bot',
+      },
+      orderBy: {
+        issueDate: 'desc',
+      },
+    });
+
+    // Obtener los IDs de clientes únicos de forma segura
+    const customerIds = Array.from(new Set(drafts.map(d => d.customerId).filter(Boolean))) as string[];
+
+    // Buscar los contactos correspondientes
+    const customers = await prisma.contactPerson.findMany({
+      where: {
+        id: { in: customerIds }
+      }
+    });
+
+    // Mapear los contactos a cada factura
+    const data = drafts.map(invoice => {
+      const customer = customers.find(c => c.id === invoice.customerId) || null;
+      return {
+        ...invoice,
+        customer
+      };
+    });
+
+    res.json({ success: true, data });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
