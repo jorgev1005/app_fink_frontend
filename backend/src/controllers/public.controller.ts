@@ -62,6 +62,8 @@ export const createPublicProduct = async (req: Request, res: Response) => {
       fuente_tasa = 'bcv',
       projectCode,
       description,
+      costPrice,
+      packagingCost,
     } = req.body;
 
     if (!name) {
@@ -90,6 +92,8 @@ export const createPublicProduct = async (req: Request, res: Response) => {
           descuentos_volumen,
           fuente_tasa,
           description,
+          ...(costPrice !== undefined && { costPrice: parseFloat(costPrice) }),
+          ...(packagingCost !== undefined && { packagingCost: parseFloat(packagingCost) }),
         },
         create: {
           name,
@@ -104,6 +108,8 @@ export const createPublicProduct = async (req: Request, res: Response) => {
           isActive: true,
           forSale: true,
           description,
+          costPrice: costPrice !== undefined ? parseFloat(costPrice) : 0,
+          packagingCost: packagingCost !== undefined ? parseFloat(packagingCost) : 0,
         },
       });
     } else {

@@ -193,6 +193,7 @@ export const productsAPI = {
   update: (id: string, data: any) => apiClient.put(`/api/products/${id}`, data),
   delete: (id: string) => apiClient.delete(`/api/products/${id}`),
   search: (projectId: string, search: string, limit = 20) => apiClient.get('/api/products', { params: { projectId, search, limit } }),
+  bulkSyncCosts: (data: any) => apiClient.post('/api/products/bulk-sync-costs', data),
 }
 
 export const reportsAPI = {

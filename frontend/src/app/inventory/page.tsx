@@ -13,7 +13,8 @@ import {
   X,
   AlertCircle,
   Percent,
-  RefreshCw
+  RefreshCw,
+  Upload
 } from 'lucide-react';
 import api from '@/lib/api';
 import { toast } from 'sonner';
@@ -172,6 +173,36 @@ export default function InventoryPage() {
     }
   };
 
+  const handleJsonUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Reset input value so same file can be uploaded again
+    event.target.value = '';
+
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const json = JSON.parse(e.target?.result as string);
+        if (!Array.isArray(json)) {
+          toast.error("El archivo JSON debe contener un arreglo de productos");
+          return;
+        }
+
+        const res = await api.products.bulkSyncCosts(json);
+        if (res.data.success) {
+          toast.success(`Sincronización completada: ${res.data.updatedCount} productos actualizados`);
+          loadProducts();
+        } else {
+          toast.error("Error al sincronizar los costos");
+        }
+      } catch (err: any) {
+        toast.error("Error al procesar el archivo JSON: " + err.message);
+      }
+    };
+    reader.readAsText(file);
+  };
+
   const handleSave = async () => {
     if (!formData.name) {
       toast.error("El nombre es requerido");
@@ -264,6 +295,18 @@ export default function InventoryPage() {
             <RefreshCw size={18} />
             Sincronizar Bot
           </button>
+          <label 
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm font-medium cursor-pointer"
+          >
+            <Upload size={18} />
+            Importar Costos
+            <input 
+              type="file" 
+              accept=".json" 
+              className="hidden" 
+              onChange={handleJsonUpload}
+            />
+          </label>
           <button 
             onClick={() => openModal()}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm font-medium"

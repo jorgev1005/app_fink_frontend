@@ -242,10 +242,52 @@ export const deleteProduct = async (req: Request, res: Response) => {
   }
 };
 
+// POST /api/products/bulk-sync-costs
+export const bulkSyncCosts = async (req: Request, res: Response) => {
+  try {
+    const items = req.body;
+    if (!Array.isArray(items)) {
+      return res.status(400).json({ success: false, error: { message: 'El cuerpo de la solicitud debe ser un arreglo de productos' } });
+    }
+
+    let updatedCount = 0;
+
+    for (const item of items) {
+      const { sku, costPrice, packagingCost, unitPrice } = item;
+      if (!sku) continue;
+
+      const product = await prisma.product.findUnique({ where: { sku } });
+      if (product) {
+        if (product.projectId) {
+          const hasAccess = await checkProjectWriteAccess(req.user!, product.projectId);
+          if (!hasAccess) {
+            continue; // Saltar si no tiene acceso
+          }
+        }
+
+        await prisma.product.update({
+          where: { sku },
+          data: {
+            costPrice: costPrice !== undefined && costPrice !== null ? parseFloat(costPrice) : undefined,
+            packagingCost: packagingCost !== undefined && packagingCost !== null ? parseFloat(packagingCost) : undefined,
+            unitPrice: unitPrice !== undefined && unitPrice !== null ? parseFloat(unitPrice) : undefined,
+          }
+        });
+        updatedCount++;
+      }
+    }
+
+    res.json({ success: true, updatedCount });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
 export default {
   getProducts,
   getProductById,
   createProduct,
   updateProduct,
   deleteProduct,
+  bulkSyncCosts,
 };
