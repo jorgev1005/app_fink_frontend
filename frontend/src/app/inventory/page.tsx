@@ -40,6 +40,8 @@ interface Product {
   empaqueAltoCm?: number;
   descuentoDivisasTipo?: string;
   descuentoDivisasValor?: number;
+  costPrice?: number;
+  packagingCost?: number;
 }
 
 interface Project {
@@ -113,6 +115,8 @@ export default function InventoryPage() {
     empaqueAltoCm: 0,
     descuentoDivisasTipo: 'dinamico',
     descuentoDivisasValor: 0,
+    costPrice: 0,
+    packagingCost: 0,
   });
 
   useEffect(() => {
@@ -225,6 +229,8 @@ export default function InventoryPage() {
         empaqueLargoCm: 0,
         empaqueAnchoCm: 0,
         empaqueAltoCm: 0,
+        costPrice: 0,
+        packagingCost: 0,
       });
     }
     setShowModal(true);
@@ -445,6 +451,39 @@ export default function InventoryPage() {
                     >
                       BS
                     </button>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Costo Unitario (Compra/Prod.)</label>
+                  <div className="relative">
+                    <input 
+                      type="number" 
+                      step="0.01"
+                      className="w-full border border-slate-200 rounded-lg p-2 pl-8 focus:ring-2 focus:ring-blue-500 outline-none"
+                      value={formData.costPrice || 0}
+                      onChange={e => setFormData({...formData, costPrice: parseFloat(e.target.value) || 0})}
+                    />
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+                      {formData.currency === 'BS' ? 'Bs' : '$'}
+                    </span>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-slate-700 mb-1">Costo Embalaje/Mano Obra</label>
+                  <div className="relative">
+                    <input 
+                      type="number" 
+                      step="0.01"
+                      className="w-full border border-slate-200 rounded-lg p-2 pl-8 focus:ring-2 focus:ring-blue-500 outline-none"
+                      value={formData.packagingCost || 0}
+                      onChange={e => setFormData({...formData, packagingCost: parseFloat(e.target.value) || 0})}
+                    />
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+                      {formData.currency === 'BS' ? 'Bs' : '$'}
+                    </span>
                   </div>
                 </div>
               </div>

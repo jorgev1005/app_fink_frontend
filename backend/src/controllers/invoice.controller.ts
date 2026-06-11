@@ -3,6 +3,7 @@ import prisma from '../config/database';
 import { updateAccountBalance } from '../services/account.service';
 import { getLatestExchangeRate } from '../services/exchangeRate.service';
 import { checkProjectWriteAccess, getProjectAccessFilter } from '../utils/projectAccess';
+import { calculateInvoiceProfitability } from '../services/profitability.service';
 
 export const createInvoice = async (req: Request, res: Response) => {
   try {
@@ -144,8 +145,13 @@ export const createInvoice = async (req: Request, res: Response) => {
         // Since `updateAccountBalance` is imported at top file, I can use it AFTER transaction or inside?
         // `updateAccountBalance` uses prisma internally. It might not be transaction-aware if it uses global prisma.
         // So I will just let the user know balance might update async or handle it simply.
-        // Ideally: await updateAccountBalance(paymentAccountId);
+        // Directly call: await updateAccountBalance(paymentAccountId);
       }
+
+      if (targetStatus === 'PAID') {
+        await calculateInvoiceProfitability(createdInvoice.id, tx);
+      }
+
       return createdInvoice;
     });
     
@@ -298,7 +304,7 @@ export const updateInvoice = async (req: Request, res: Response) => {
       };
 
       // 6. Update Invoice in DB
-      return await tx.invoice.update({
+      const updatedInvoice = await tx.invoice.update({
         where: { id },
         data: {
           projectId: projectId || invoice.projectId,
@@ -315,6 +321,12 @@ export const updateInvoice = async (req: Request, res: Response) => {
           customerId: customerId !== undefined ? (customerId || null) : invoice.customerId,
         }
       });
+
+      if (targetStatus === 'PAID') {
+        await calculateInvoiceProfitability(updatedInvoice.id, tx);
+      }
+
+      return updatedInvoice;
     });
 
     res.json({ success: true, data: updated });

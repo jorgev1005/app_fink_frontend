@@ -45,6 +45,8 @@ interface Invoice {
   vendorName?: string; // Fallback
   items: InvoiceItem[];
   outstanding: number;
+  totalCost?: number;
+  netProfit?: number;
 }
 
 export default function InvoiceDetailsPage() {
@@ -83,6 +85,7 @@ export default function InvoiceDetailsPage() {
       
       // Parse items from lines if they are stored as JSON string in lines field
       let parsedItems = [];
+      let taxAmount = 0;
       if (invData.lines) {
          try {
             const parsedLines = typeof invData.lines === 'string' ? JSON.parse(invData.lines) : invData.lines;
@@ -90,6 +93,7 @@ export default function InvoiceDetailsPage() {
                parsedItems = parsedLines;
             } else if (parsedLines && Array.isArray(parsedLines.items)) {
                parsedItems = parsedLines.items;
+               taxAmount = Number(parsedLines.taxAmount) || 0;
             }
          } catch(e) {
             console.error('Error parsing lines in detail view', e);
@@ -98,7 +102,8 @@ export default function InvoiceDetailsPage() {
       
       setInvoice({
          ...invData,
-         items: parsedItems
+         items: parsedItems,
+         taxAmount
       });
       setPaymentAmount(String(invData.outstanding || 0));
     } catch (e) {
@@ -447,6 +452,38 @@ export default function InvoiceDetailsPage() {
                                  <span className="font-mono">{formatCurrency(invoice.outstanding, invoice.currency)}</span>
                              </div>
                          )}
+                     </div>
+                 </div>
+              )}
+
+              {/* Internal Profitability Details (print:hidden) */}
+              {invoice.type === 'INVOICE' && invoice.status === 'PAID' && (invoice.totalCost !== undefined) && (
+                 <div className="mt-8 pt-6 border-t border-dashed border-gray-200 print:hidden">
+                     <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Información de Rentabilidad (Interno)</h4>
+                     <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+                         <div>
+                             <span className="text-xs text-gray-500 block mb-1">Costo Total del Pedido</span>
+                             <span className="font-mono text-gray-800 font-semibold">
+                                 {formatCurrency(invoice.totalCost || 0, invoice.currency)}
+                             </span>
+                         </div>
+                         <div>
+                             <span className="text-xs text-gray-500 block mb-1">Utilidad Neta</span>
+                             <span className={`font-mono font-semibold ${(invoice.netProfit || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                 {formatCurrency(invoice.netProfit || 0, invoice.currency)}
+                             </span>
+                         </div>
+                         <div>
+                             <span className="text-xs text-gray-500 block mb-1">Margen de Ganancia</span>
+                             <span className={`font-semibold ${(invoice.netProfit || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                                 {(() => {
+                                     const tax = invoice.taxAmount || 0;
+                                     const netSales = Math.max(0.01, invoice.total - tax);
+                                     const margin = ((invoice.netProfit || 0) / netSales) * 100;
+                                     return `${margin.toFixed(1)}%`;
+                                 })()}
+                             </span>
+                         </div>
                      </div>
                  </div>
               )}

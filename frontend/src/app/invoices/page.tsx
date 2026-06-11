@@ -104,6 +104,7 @@ export default function InvoicesPage() {
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Cliente</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</th>
                                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Total</th>
+                                <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Utilidad (Margen)</th>
                                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Estado</th>
                                 <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Acciones</th>
                             </tr>
@@ -120,6 +121,33 @@ export default function InvoicesPage() {
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap text-right font-mono text-gray-900">
                                         {Number(inv.total || 0).toLocaleString('es-VE', { minimumFractionDigits: 2 })} {inv.currency}
+                                    </td>
+                                    <td className="px-6 py-4 whitespace-nowrap text-right">
+                                        {inv.type === 'INVOICE' && inv.status === 'PAID' ? (() => {
+                                            let taxAmount = 0;
+                                            try {
+                                                if (inv.lines) {
+                                                    const parsed = typeof inv.lines === 'string' ? JSON.parse(inv.lines) : inv.lines;
+                                                    if (parsed && typeof parsed === 'object') {
+                                                        taxAmount = Number(parsed.taxAmount) || 0;
+                                                    }
+                                                }
+                                            } catch(e) {}
+                                            const netSales = Math.max(0.01, Number(inv.total || 0) - taxAmount);
+                                            const marginPercent = ((inv.netProfit || 0) / netSales) * 100;
+                                            return (
+                                                <div>
+                                                    <span className="font-mono text-green-600 font-semibold">
+                                                        +{Number(inv.netProfit || 0).toLocaleString('es-VE', { minimumFractionDigits: 2 })} {inv.currency}
+                                                    </span>
+                                                    <div className="text-xs text-gray-500">
+                                                        Margen: {marginPercent.toFixed(1)}%
+                                                    </div>
+                                                </div>
+                                            );
+                                        })() : (
+                                            <span className="text-gray-400">-</span>
+                                        )}
                                     </td>
                                     <td className="px-6 py-4 whitespace-nowrap">
                                         <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full items-center

@@ -2,6 +2,7 @@ import prisma from '../config/database';
 import { updateAccountBalance } from './account.service';
 import { getLatestExchangeRate } from './exchangeRate.service';
 import { logActivity } from './activityLog.service';
+import { calculateInvoiceProfitability } from './profitability.service';
 
 interface PaymentInput {
   projectId: string;
@@ -219,6 +220,10 @@ export const PaymentService = {
                     outstanding: newOutstanding
                 }
             });
+
+            if (newStatus === 'PAID') {
+                await calculateInvoiceProfitability(inv.id, tx);
+            }
         } else if (a.transactionId) {
             const txn = await tx.transaction.findUnique({ where: { id: a.transactionId } });
             if (!txn) continue;

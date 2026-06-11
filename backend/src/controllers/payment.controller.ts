@@ -6,6 +6,7 @@ import { logActivity } from '../services/activityLog.service';
 import { updateAccountBalance } from '../services/account.service';
 import { getLatestExchangeRate } from '../services/exchangeRate.service';
 import { checkProjectWriteAccess, getProjectAccessFilter } from '../utils/projectAccess';
+import { calculateInvoiceProfitability } from '../services/profitability.service';
 
 /**
  * Create a payment with full automation (Smart ERP)
@@ -147,7 +148,12 @@ export const importBankItems = async (req: Request, res: Response) => {
       if (invoice) {
         const allocAmount = Math.min(Number(it.amount), Number(invoice.outstanding));
         await prisma.paymentAllocation.create({ data: { payment: { connect: { id: createdPayment.id } }, invoice: { connect: { id: invoice.id } }, allocatedAmount: allocAmount } });
-        await prisma.invoice.update({ where: { id: invoice.id }, data: { outstanding: Number(invoice.outstanding) - allocAmount, status: Number(invoice.outstanding) - allocAmount <= 0 ? 'PAID' : 'PARTIALLY_PAID' } });
+        const nextOutstanding = Number(invoice.outstanding) - allocAmount;
+        const nextStatus = nextOutstanding <= 0 ? 'PAID' : 'PARTIALLY_PAID';
+        await prisma.invoice.update({ where: { id: invoice.id }, data: { outstanding: nextOutstanding <= 0 ? 0 : nextOutstanding, status: nextStatus } });
+        if (nextStatus === 'PAID') {
+          await calculateInvoiceProfitability(invoice.id);
+        }
       }
 
       results.push({ item: it, payment: createdPayment, matchedInvoice: invoice ? { id: invoice.id, code: invoice.code } : null });
@@ -225,7 +231,11 @@ export const payInvoice = async (req: Request, res: Response) => {
       const alloc = await (tx as any).paymentAllocation.create({ data: { payment: { connect: { id: payment.id } }, invoice: { connect: { id: invoice.id } }, allocatedAmount: payAmount } });
 
       const newOutstanding = Number(invoice.outstanding) - payAmount;
-      await tx.invoice.update({ where: { id: invoice.id }, data: { outstanding: newOutstanding <= 0 ? 0 : newOutstanding, status: newOutstanding <= 0 ? 'PAID' : 'PARTIALLY_PAID' } });
+      const nextStatus = newOutstanding <= 0 ? 'PAID' : 'PARTIALLY_PAID';
+      await tx.invoice.update({ where: { id: invoice.id }, data: { outstanding: newOutstanding <= 0 ? 0 : newOutstanding, status: nextStatus } });
+      if (nextStatus === 'PAID') {
+        await calculateInvoiceProfitability(invoice.id, tx);
+      }
 
       let createdTxn: any = null;
       if (autoPost) {

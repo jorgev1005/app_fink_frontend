@@ -642,6 +642,8 @@ model Product {
   taxable Boolean @default(true)
   taxRate Float   @default(0) // porcentaje (ej: 16.00)
   stock   Float   @default(0)
+  costPrice     Float   @default(0)
+  packagingCost Float   @default(0)
 
   // Smart ERP: Mapeo Contable
   incomeAccountId  String?
@@ -769,6 +771,8 @@ model Invoice {
   outstanding     Float
   status          String       @default("OPEN") // DRAFT, OPEN, PARTIALLY_PAID, PAID, CANCELLED
   lines           String? // (JSON)
+  totalCost       Float        @default(0)
+  netProfit       Float        @default(0)
   // transactionId String?
   // transaction   Transaction?  @relation(fields: [transactionId], references: [id])
   recurringRuleId String?

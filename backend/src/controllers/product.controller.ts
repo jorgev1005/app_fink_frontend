@@ -80,7 +80,9 @@ export const createProduct = async (req: Request, res: Response) => {
       empaqueAltoCm,
       descuentoDivisasTipo,
       descuentoDivisasValor,
-      forSale
+      forSale,
+      costPrice,
+      packagingCost
     } = req.body;
 
     if (!name) {
@@ -129,6 +131,8 @@ export const createProduct = async (req: Request, res: Response) => {
         descuentoDivisasTipo: descuentoDivisasTipo || 'dinamico',
         descuentoDivisasValor: descuentoDivisasValor ? parseFloat(descuentoDivisasValor) : 0,
         forSale: forSale !== undefined ? forSale : true,
+        costPrice: costPrice ? parseFloat(costPrice) : 0,
+        packagingCost: packagingCost ? parseFloat(packagingCost) : 0,
       },
     });
 
@@ -147,7 +151,8 @@ export const updateProduct = async (req: Request, res: Response) => {
       division, medidas, tiempo_entrega, unidad_empaque, pedido_minimo, 
       colores_disponibles, descuentos_volumen, fuente_tasa, tasa_manual, url_catalogo, isPublic,
       pesoUnitarioKg, empaqueCantidad, empaquePesoKg, empaqueLargoCm, empaqueAnchoCm, empaqueAltoCm,
-      descuentoDivisasTipo, descuentoDivisasValor, forSale
+      descuentoDivisasTipo, descuentoDivisasValor, forSale,
+      costPrice, packagingCost
     } = req.body;
 
     const existing = await prisma.product.findUnique({ where: { id } });
@@ -204,6 +209,8 @@ export const updateProduct = async (req: Request, res: Response) => {
         ...(descuentoDivisasTipo !== undefined && { descuentoDivisasTipo }),
         ...(descuentoDivisasValor !== undefined && { descuentoDivisasValor: parseFloat(descuentoDivisasValor) }),
         ...(forSale !== undefined && { forSale }),
+        ...(costPrice !== undefined && { costPrice: costPrice !== null ? parseFloat(costPrice) : 0 }),
+        ...(packagingCost !== undefined && { packagingCost: packagingCost !== null ? parseFloat(packagingCost) : 0 }),
       },
     });
 
