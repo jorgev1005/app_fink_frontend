@@ -58,6 +58,12 @@ export default function InvoiceDetailsPage() {
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Currency Conversion States
+  const [rates, setRates] = useState<any>(null);
+  const [displayCurrency, setDisplayCurrency] = useState<string>('');
+  const [rateSource, setRateSource] = useState<'BCV' | 'BINANCE' | 'CUSTOM' | 'MANUAL'>('BCV');
+  const [manualRate, setManualRate] = useState<string>('');
+
   // New state variables for Delivery Note, Duplication & Payment
   const [viewMode, setViewMode] = useState<'INVOICE' | 'DELIVERY_NOTE'>('INVOICE');
   const [showPricesInDeliveryNote, setShowPricesInDeliveryNote] = useState(true);
@@ -72,11 +78,55 @@ export default function InvoiceDetailsPage() {
   const [submittingPayment, setSubmittingPayment] = useState(false);
   const [paymentError, setPaymentError] = useState<string | null>(null);
 
+  const getActiveRate = () => {
+    if (rateSource === 'MANUAL') return parseFloat(manualRate) || 1;
+    if (rateSource === 'BCV') return rates?.BCV?.usdToBs || 1;
+    if (rateSource === 'BINANCE') return rates?.BINANCE?.usdToBs || 1;
+    if (rateSource === 'CUSTOM') return rates?.CUSTOM?.usdToBs || 1;
+    return 1;
+  };
+
+  const getConversionFactor = () => {
+    if (!invoice) return 1;
+    const invCurr = invoice.currency === 'VES' ? 'BS' : invoice.currency;
+    const dispCurr = displayCurrency === 'VES' ? 'BS' : displayCurrency;
+    
+    if (invCurr === dispCurr) return 1;
+    
+    const rate = getActiveRate();
+    if (invCurr === 'USD' && dispCurr === 'BS') {
+      return rate;
+    }
+    if (invCurr === 'BS' && dispCurr === 'USD') {
+      return 1 / rate;
+    }
+    return 1;
+  };
+
+  const conversionFactor = getConversionFactor();
+
   useEffect(() => {
     if (id) {
       loadInvoice();
     }
   }, [id]);
+
+  useEffect(() => {
+    const fetchRates = async () => {
+      try {
+        const resp = await api.exchangeRates.getLatestBySource();
+        if (resp.data.success) {
+          setRates(resp.data.data);
+          if (resp.data.data?.BCV?.usdToBs) {
+            setManualRate(String(resp.data.data.BCV.usdToBs));
+          }
+        }
+      } catch (e) {
+        console.error("Error loading rates in invoice details", e);
+      }
+    };
+    fetchRates();
+  }, []);
 
   const loadInvoice = async () => {
     try {
@@ -106,6 +156,7 @@ export default function InvoiceDetailsPage() {
          items: parsedItems,
          taxAmount
       });
+      setDisplayCurrency(invData.currency || 'USD');
       setPaymentAmount(String(invData.outstanding || 0));
     } catch (e) {
       console.error(e);
@@ -282,6 +333,49 @@ export default function InvoiceDetailsPage() {
                 </label>
              )}
 
+             {/* Currency Toggle & Rate Selector */}
+             <div className="flex items-center gap-1 border-r border-gray-200 pr-2 mr-2">
+                <div className="flex gap-1">
+                   <button 
+                      onClick={() => setDisplayCurrency(invoice.currency)}
+                      className={`px-3 py-1.5 rounded text-xs font-medium transition ${displayCurrency === invoice.currency ? 'bg-blue-50 text-blue-600 font-semibold' : 'text-gray-600 hover:bg-gray-50'}`}
+                   >
+                      {invoice.currency === 'VES' ? 'BS' : invoice.currency}
+                   </button>
+                   <button 
+                      onClick={() => setDisplayCurrency(invoice.currency === 'USD' ? 'BS' : 'USD')}
+                      className={`px-3 py-1.5 rounded text-xs font-medium transition ${displayCurrency !== invoice.currency ? 'bg-blue-50 text-blue-600 font-semibold' : 'text-gray-600 hover:bg-gray-50'}`}
+                   >
+                      {invoice.currency === 'USD' ? 'BS' : 'USD'}
+                   </button>
+                </div>
+                
+                {displayCurrency !== invoice.currency && (
+                   <div className="flex items-center gap-1.5 pl-2 ml-2 border-l border-gray-150">
+                      <select
+                         value={rateSource}
+                         onChange={(e: any) => setRateSource(e.target.value)}
+                         className="text-xs border border-gray-200 rounded px-2 py-1 bg-white outline-none focus:ring-1 focus:ring-blue-500 font-medium text-gray-700"
+                      >
+                         <option value="BCV">BCV ({rates?.BCV?.usdToBs || '...' })</option>
+                         <option value="BINANCE">Paralelo ({rates?.BINANCE?.usdToBs || '...' })</option>
+                         <option value="CUSTOM">Personalizada ({rates?.CUSTOM?.usdToBs || '...' })</option>
+                         <option value="MANUAL">Manual</option>
+                      </select>
+                      {rateSource === 'MANUAL' && (
+                         <input
+                            type="number"
+                            step="0.01"
+                            value={manualRate}
+                            onChange={(e) => setManualRate(e.target.value)}
+                            placeholder="Tasa"
+                            className="w-16 text-xs border border-gray-350 rounded px-1.5 py-1 text-center font-mono outline-none focus:ring-1 focus:ring-blue-500"
+                         />
+                      )}
+                   </div>
+                )}
+             </div>
+
              {/* Duplicate Button */}
              <button 
                 onClick={handleDuplicate}
@@ -364,6 +458,11 @@ export default function InvoiceDetailsPage() {
                       <div className="text-sm text-gray-500 space-y-1">
                           <p>Fecha de Emisión: {formatDate(invoice.issueDate)}</p>
                           <p>Fecha de Vencimiento: {formatDate(invoice.dueDate)}</p>
+                          {displayCurrency !== invoice.currency && (
+                              <p className="text-xs text-blue-600 font-semibold mt-1">
+                                  Tasa Ref: {getActiveRate().toLocaleString('es-VE', { minimumFractionDigits: 2 })} BS/USD
+                              </p>
+                          )}
                       </div>
                   </div>
                   <div className="text-right">
@@ -426,10 +525,10 @@ export default function InvoiceDetailsPage() {
                                   {(viewMode !== 'DELIVERY_NOTE' || showPricesInDeliveryNote) && (
                                      <>
                                         <td className="py-4 text-sm text-gray-600 text-right font-mono">
-                                            {formatCurrency(typeof item.unitPrice === 'number' && !isNaN(item.unitPrice) ? item.unitPrice : (typeof item.price === 'number' && !isNaN(item.price) ? item.price : 0), invoice.currency)}
+                                            {formatCurrency((typeof item.unitPrice === 'number' && !isNaN(item.unitPrice) ? item.unitPrice : (typeof item.price === 'number' && !isNaN(item.price) ? item.price : 0)) * conversionFactor, displayCurrency)}
                                         </td>
                                         <td className="py-4 text-sm text-gray-800 text-right font-medium font-mono">
-                                            {formatCurrency(item.total, invoice.currency)}
+                                            {formatCurrency(item.total * conversionFactor, displayCurrency)}
                                         </td>
                                      </>
                                   )}
@@ -442,7 +541,7 @@ export default function InvoiceDetailsPage() {
                              </td>
                              {(viewMode !== 'DELIVERY_NOTE' || showPricesInDeliveryNote) && (
                                 <td className="py-4 text-sm text-gray-800 text-right font-medium font-mono">
-                                    {formatCurrency(invoice.total - (invoice.taxAmount || 0), invoice.currency)}
+                                    {formatCurrency((invoice.total - (invoice.taxAmount || 0)) * conversionFactor, displayCurrency)}
                                 </td>
                              )}
                           </tr>
@@ -455,22 +554,22 @@ export default function InvoiceDetailsPage() {
                      <div className="w-full md:w-1/3 space-y-3">
                          <div className="flex justify-between text-sm text-gray-600">
                              <span>Subtotal</span>
-                             <span className="font-mono">{formatCurrency(invoice.total - (invoice.taxAmount || 0), invoice.currency)}</span>
+                             <span className="font-mono">{formatCurrency((invoice.total - (invoice.taxAmount || 0)) * conversionFactor, displayCurrency)}</span>
                          </div>
                          {invoice.taxAmount > 0 && (
                              <div className="flex justify-between text-sm text-gray-600">
                                  <span>Impuestos</span>
-                                 <span className="font-mono">{formatCurrency(invoice.taxAmount, invoice.currency)}</span>
+                                 <span className="font-mono">{formatCurrency(invoice.taxAmount * conversionFactor, displayCurrency)}</span>
                              </div>
                          )}
                          <div className="border-t border-gray-200 pt-3 flex justify-between text-lg font-bold text-gray-900">
                              <span>Total</span>
-                             <span className="font-mono">{formatCurrency(invoice.total, invoice.currency)}</span>
+                             <span className="font-mono">{formatCurrency(invoice.total * conversionFactor, displayCurrency)}</span>
                          </div>
                          {invoice.outstanding < invoice.total && invoice.outstanding > 0 && (
                              <div className="flex justify-between text-sm font-semibold text-orange-600">
                                  <span>Pendiente</span>
-                                 <span className="font-mono">{formatCurrency(invoice.outstanding, invoice.currency)}</span>
+                                 <span className="font-mono">{formatCurrency(invoice.outstanding * conversionFactor, displayCurrency)}</span>
                              </div>
                          )}
                      </div>
@@ -485,13 +584,13 @@ export default function InvoiceDetailsPage() {
                          <div>
                              <span className="text-xs text-gray-500 block mb-1">Costo Total del Pedido</span>
                              <span className="font-mono text-gray-800 font-semibold">
-                                 {formatCurrency(invoice.totalCost || 0, invoice.currency)}
+                                 {formatCurrency((invoice.totalCost || 0) * conversionFactor, displayCurrency)}
                              </span>
                          </div>
                          <div>
                              <span className="text-xs text-gray-500 block mb-1">Utilidad Neta</span>
                              <span className={`font-mono font-semibold ${(invoice.netProfit || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                 {formatCurrency(invoice.netProfit || 0, invoice.currency)}
+                                 {formatCurrency((invoice.netProfit || 0) * conversionFactor, displayCurrency)}
                              </span>
                          </div>
                          <div>
