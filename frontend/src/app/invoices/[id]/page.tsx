@@ -333,10 +333,10 @@ export default function InvoiceDetailsPage() {
       </div>
 
       {/* Invoice Paper */}
-      <div className="max-w-4xl mx-auto bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden print:shadow-none print:border-none print:rounded-none">
+      <div className="max-w-4xl mx-auto bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden print:shadow-none print:border-none print:rounded-none print:max-w-full print:my-0">
           
           {/* Header */}
-          <div className="p-8 md:p-12 border-b border-gray-100">
+          <div className="p-8 md:p-12 border-b border-gray-100 print:p-4">
               <div className="flex justify-between items-start mb-10">
                   <div>
                       {invoice.project?.logoUrl ? (
@@ -401,7 +401,7 @@ export default function InvoiceDetailsPage() {
           </div>
 
           {/* Items Table */}
-          <div className="p-8 md:p-12">
+          <div className="p-8 md:p-12 print:px-4 print:py-2">
               <table className="w-full text-left">
                   <thead>
                       <tr className="border-b border-gray-200">

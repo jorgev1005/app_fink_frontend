@@ -28,15 +28,17 @@ export default function RootLayout({
         <Providers>
           <KeyboardShortcuts />
           <div className="min-h-screen">
-            <header className="fixed top-4 right-4 z-50">
+            <header className="fixed top-4 right-4 z-50 print:hidden">
                <DashboardButton />
             </header>
             <CommandPalette />
             <main className="pt-6">
               {children}
             </main>
-            <QuickActionButton />
-            <CalculatorWidget />
+            <div className="print:hidden">
+              <QuickActionButton />
+              <CalculatorWidget />
+            </div>
           </div>
         </Providers>
       </body>
