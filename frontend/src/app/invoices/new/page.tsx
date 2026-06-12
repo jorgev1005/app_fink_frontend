@@ -23,6 +23,7 @@ function NewInvoiceContent() {
   const [projectId, setProjectId] = useState('');
   const [type, setType] = useState('BILL'); // BILL (Gasto/Compra) or INVOICE (Venta)
   const [code, setCode] = useState('');
+  const [isDeliveryNote, setIsDeliveryNote] = useState(false);
   
   // Items Mode
   const [useItemsMode, setUseItemsMode] = useState(false);
@@ -126,6 +127,16 @@ function NewInvoiceContent() {
     };
     loadProjects();
   }, []);
+
+  // Update taxRate with project default tax rate when project changes
+  useEffect(() => {
+    if (projectId && projects.length > 0) {
+      const selectedProj = projects.find(p => p.id === projectId);
+      if (selectedProj && selectedProj.defaultTaxRate !== undefined) {
+        setTaxRate(selectedProj.defaultTaxRate);
+      }
+    }
+  }, [projectId, projects]);
 
   // Load Dependencies (Contacts, Accounts) when Project Changes
   useEffect(() => {
@@ -253,7 +264,8 @@ function NewInvoiceContent() {
               quantity: Number(line.quantity || 1),
               unitPrice: Number(line.price || 0),
               total: Number(line.total || 0)
-          })) : undefined // Send lines mapped to backend structure if in items mode
+          })) : undefined, // Send lines mapped to backend structure if in items mode
+          isDeliveryNote: type === 'INVOICE' ? isDeliveryNote : false
       };
       
       const res = await api.invoices.create(body);
@@ -311,7 +323,7 @@ function NewInvoiceContent() {
                     <Building className="w-4 h-4" /> Configuración Inicial
                 </h3>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className={`grid grid-cols-1 gap-6 ${type === 'INVOICE' ? 'md:grid-cols-3' : 'md:grid-cols-2'}`}>
                     {/* Project Selector */}
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Proyecto</label>
@@ -355,6 +367,37 @@ function NewInvoiceContent() {
                             </button>
                         </div>
                     </div>
+
+                    {/* Subtype Selector (Invoice vs Delivery Note) */}
+                    {type === 'INVOICE' && (
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Subtipo de Venta</label>
+                            <div className="flex bg-gray-50 p-1 rounded-xl border border-gray-200">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsDeliveryNote(false)}
+                                    className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all ${
+                                        !isDeliveryNote 
+                                        ? 'bg-white text-blue-600 shadow-sm border border-blue-100' 
+                                        : 'text-gray-500 hover:text-gray-700'
+                                    }`}
+                                >
+                                    Factura
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsDeliveryNote(true)}
+                                    className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all ${
+                                        isDeliveryNote 
+                                        ? 'bg-white text-indigo-600 shadow-sm border border-indigo-100' 
+                                        : 'text-gray-500 hover:text-gray-700'
+                                    }`}
+                                >
+                                    Nota de Entrega
+                                </button>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </section>
 

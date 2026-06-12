@@ -33,6 +33,9 @@ interface Invoice {
     description?: string;
     logoUrl?: string;
     id?: string;
+    defaultTaxRate?: number;
+    lastInvoiceNumber?: string;
+    lastDeliveryNoteNumber?: string;
   };
   contact?: {
     id: string;
@@ -132,9 +135,10 @@ export default function InvoiceDetailsPage() {
         outstanding: invoice.outstanding
       };
     } else {
-      // Calculate 16% IVA dynamically
-      // TODO: Read default IVA rate from general settings module once created
-      const defaultIvaRate = 0.16; 
+      // Calculate IVA dynamically based on project settings or fallback to 16%
+      const defaultIvaRate = (invoice.project?.defaultTaxRate !== undefined)
+        ? (invoice.project.defaultTaxRate / 100)
+        : 0.16; 
       const subtotal = invoice.total;
       const calculatedTax = subtotal * defaultIvaRate;
       const total = subtotal + calculatedTax;
@@ -216,6 +220,11 @@ export default function InvoiceDetailsPage() {
       setCalculateIVA(taxAmount > 0);
       setDisplayCurrency(invData.currency || 'USD');
       setPaymentAmount(String(invData.outstanding || 0));
+
+      // Auto-default to DELIVERY_NOTE mode if invoice code starts with 'NE'
+      if (invData.code?.toUpperCase().startsWith('NE')) {
+        setViewMode('DELIVERY_NOTE');
+      }
     } catch (e) {
       console.error(e);
     } finally {

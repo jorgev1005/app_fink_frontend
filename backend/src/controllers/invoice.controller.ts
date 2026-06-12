@@ -5,11 +5,36 @@ import { getLatestExchangeRate } from '../services/exchangeRate.service';
 import { checkProjectWriteAccess, getProjectAccessFilter } from '../utils/projectAccess';
 import { calculateInvoiceProfitability } from '../services/profitability.service';
 
-async function getNextInvoiceCode(projectId: string): Promise<string> {
+async function getNextInvoiceCode(projectId: string, isDeliveryNote: boolean = false): Promise<string> {
+  // 1. Fetch project to see if general settings has a value
+  const project = await prisma.project.findUnique({
+    where: { id: projectId },
+    select: { lastInvoiceNumber: true, lastDeliveryNoteNumber: true }
+  });
+
+  const lastSavedCode = isDeliveryNote 
+    ? project?.lastDeliveryNoteNumber 
+    : project?.lastInvoiceNumber;
+
+  if (lastSavedCode) {
+    const cleanCode = lastSavedCode.trim();
+    const match = cleanCode.match(/(\d+)$/);
+    if (match) {
+      const numStr = match[1];
+      const numVal = parseInt(numStr, 10);
+      const nextVal = numVal + 1;
+      const paddedNumStr = String(nextVal).padStart(numStr.length, '0');
+      const prefix = cleanCode.substring(0, cleanCode.length - numStr.length);
+      return `${prefix}${paddedNumStr}`;
+    }
+  }
+
+  // 2. Fallback to querying recent invoices in DB if no setting exists
   const lastInvoices = await prisma.invoice.findMany({
     where: {
       projectId,
-      type: 'INVOICE'
+      type: 'INVOICE',
+      code: isDeliveryNote ? { startsWith: 'NE' } : { not: { startsWith: 'NE' } }
     },
     orderBy: {
       createdAt: 'desc'
@@ -30,7 +55,7 @@ async function getNextInvoiceCode(projectId: string): Promise<string> {
     }
   }
 
-  return '0001';
+  return isDeliveryNote ? 'NE-0001' : '0001';
 }
 
 export const createInvoice = async (req: Request, res: Response) => {
@@ -39,7 +64,7 @@ export const createInvoice = async (req: Request, res: Response) => {
       projectId, type, issueDate, dueDate, currency, total, code,
       vendorId, customerId, description, taxAmount,
       isPaid, paymentAccountId, paymentMethod, paymentReference, lines,
-      status
+      status, isDeliveryNote
     } = req.body;
     
     const user = (req as any).user;
@@ -62,7 +87,7 @@ export const createInvoice = async (req: Request, res: Response) => {
     let invoiceCode = code;
     if (!invoiceCode) {
       if (type === 'INVOICE') {
-        invoiceCode = await getNextInvoiceCode(projectId);
+        invoiceCode = await getNextInvoiceCode(projectId, !!isDeliveryNote);
       } else {
         invoiceCode = `INV-${projectId}-${Date.now()}`;
       }
@@ -122,6 +147,21 @@ export const createInvoice = async (req: Request, res: Response) => {
           createdBy: user.id,
         }
       });
+
+      // Update Project general settings sequence numbers
+      if (type === 'INVOICE') {
+        if (isDeliveryNote) {
+          await tx.project.update({
+            where: { id: projectId },
+            data: { lastDeliveryNoteNumber: invoiceCode }
+          });
+        } else {
+          await tx.project.update({
+            where: { id: projectId },
+            data: { lastInvoiceNumber: invoiceCode }
+          });
+        }
+      }
       
       // 1.5 Process Inventory Updates checks
       if (targetStatus !== 'DRAFT' && finalLinesData.items && finalLinesData.items.length > 0) {

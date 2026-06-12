@@ -2,7 +2,7 @@
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useEffect, useState, useRef, useCallback } from "react";
-import { RefreshCw, Calculator, LogOut, Zap, Plus, FileText, Users, BarChart3, Wallet, ArrowRight, Info, ChevronDown, ChevronUp, Layers, Tag, FileClock, Eye, EyeOff, Package, ArrowRightLeft, HardDrive, Banknote } from 'lucide-react';
+import { RefreshCw, Calculator, LogOut, Zap, Plus, FileText, Users, BarChart3, Wallet, ArrowRight, Info, ChevronDown, ChevronUp, Layers, Tag, FileClock, Eye, EyeOff, Package, ArrowRightLeft, HardDrive, Banknote, Settings } from 'lucide-react';
 import NotificationBell from "@/components/NotificationBell";
 import ExchangeRatesPanel from '@/components/ExchangeRatesPanel';
 import ForexImpactWidget from '@/components/ForexImpactWidget';
@@ -778,6 +778,7 @@ export default function DashboardPage() {
             <QuickAction icon={ArrowRightLeft} label="Transferencias entre proyectos" action={() => setShowTransferModal(true)} color="teal" />
             <QuickAction icon={Wallet} label="Transferencias internas" action={() => setShowIntraTransferModal(true)} color="purple" />
             <QuickAction icon={HardDrive} label="Respaldos" path="/settings/backups" color="rose" />
+            <QuickAction icon={Settings} label="Configuración General" path="/settings" color="blue" />
           </div>
         </div>
       </div>

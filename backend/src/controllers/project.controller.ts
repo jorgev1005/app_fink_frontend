@@ -234,7 +234,7 @@ import { checkProjectWriteAccess } from '../utils/projectAccess';
 export const updateProject = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { name, description, code, status, color, startDate, initialCapitalBs, initialCapitalUsd, initialCapitalEur } = req.body;
+    const { name, description, code, status, color, startDate, initialCapitalBs, initialCapitalUsd, initialCapitalEur, defaultTaxRate, lastInvoiceNumber, lastDeliveryNoteNumber } = req.body;
 
     const hasAccess = await checkProjectWriteAccess(req.user!, id);
     if (!hasAccess) {
@@ -258,6 +258,9 @@ export const updateProject = async (req: Request, res: Response) => {
     if (initialCapitalBs !== undefined) updateData.initialCapitalBs = initialCapitalBs;
     if (initialCapitalUsd !== undefined) updateData.initialCapitalUsd = initialCapitalUsd;
     if (initialCapitalEur !== undefined) updateData.initialCapitalEur = initialCapitalEur;
+    if (defaultTaxRate !== undefined) updateData.defaultTaxRate = defaultTaxRate !== null ? Number(defaultTaxRate) : 16;
+    if (lastInvoiceNumber !== undefined) updateData.lastInvoiceNumber = lastInvoiceNumber;
+    if (lastDeliveryNoteNumber !== undefined) updateData.lastDeliveryNoteNumber = lastDeliveryNoteNumber;
     
     // Explicitly DO NOT update logoUrl here. It is handled by uploadProjectLogo only.
 
