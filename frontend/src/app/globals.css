@@ -166,17 +166,24 @@
     display: none !important;
   }
   
-  /* Ajustar fondos y colores para ahorrar tinta y mejorar legibilidad */
-  body {
+  /* Reset completo de alturas mínimas, márgenes y rellenos globales */
+  html, body, .min-h-screen, main, div[class*="min-h-"], #__next {
+    min-height: auto !important;
+    height: auto !important;
     background: white !important;
     color: black !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  body {
     font-size: 11pt !important;
     line-height: 1.4 !important;
   }
 
   @page {
     size: letter;
-    margin: 12mm 10mm 12mm 10mm !important;
+    margin: 10mm 10mm 10mm 10mm !important;
   }
 
   /* Evitar que se dividan filas de tablas entre páginas */
