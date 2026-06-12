@@ -382,9 +382,10 @@ export default function InvoiceDetailsPage() {
                       </h3>
                       <div className="text-gray-800">
                           <p className="font-bold text-lg mb-1">{contactName}</p>
-                          {contact?.taxId && <p className="text-sm text-gray-600">RIF/CI: {contact.taxId}</p>}
-                          {contact?.address && <p className="text-sm text-gray-600 mt-1 max-w-xs">{contact.address}</p>}
-                          {contact?.phone && <p className="text-sm text-gray-600 mt-1">{contact.phone}</p>}
+                          {contact?.taxId && <p className="text-sm text-gray-600">RIF/NIT: {contact.taxId}</p>}
+                          {contact?.phone && <p className="text-sm text-gray-600">Teléfono: {contact.phone}</p>}
+                          {contact?.email && <p className="text-sm text-gray-600">Email: {contact.email}</p>}
+                          {contact?.address && <p className="text-sm text-gray-600 mt-1 max-w-xs">Dirección: {contact.address}</p>}
                       </div>
                   </div>
                   {/* Details */}
