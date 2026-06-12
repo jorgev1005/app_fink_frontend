@@ -61,7 +61,7 @@ export default function InvoiceDetailsPage() {
   // Currency Conversion States
   const [rates, setRates] = useState<any>(null);
   const [displayCurrency, setDisplayCurrency] = useState<string>('');
-  const [rateSource, setRateSource] = useState<'BCV' | 'BINANCE' | 'CUSTOM' | 'MANUAL'>('BCV');
+  const [rateSource, setRateSource] = useState<'BCV' | 'BCV_EUR' | 'BINANCE' | 'CUSTOM' | 'MANUAL'>('BCV');
   const [manualRate, setManualRate] = useState<string>('');
 
   // New state variables for Delivery Note, Duplication & Payment
@@ -81,6 +81,7 @@ export default function InvoiceDetailsPage() {
   const getActiveRate = () => {
     if (rateSource === 'MANUAL') return parseFloat(manualRate) || 1;
     if (rateSource === 'BCV') return rates?.BCV?.usdToBs || 1;
+    if (rateSource === 'BCV_EUR') return rates?.BCV?.eurToBs || 1;
     if (rateSource === 'BINANCE') return rates?.BINANCE?.usdToBs || 1;
     if (rateSource === 'CUSTOM') return rates?.CUSTOM?.usdToBs || 1;
     return 1;
@@ -357,7 +358,8 @@ export default function InvoiceDetailsPage() {
                          onChange={(e: any) => setRateSource(e.target.value)}
                          className="text-xs border border-gray-200 rounded px-2 py-1 bg-white outline-none focus:ring-1 focus:ring-blue-500 font-medium text-gray-700"
                       >
-                         <option value="BCV">BCV ({rates?.BCV?.usdToBs || '...' })</option>
+                         <option value="BCV">BCV USD ({rates?.BCV?.usdToBs || '...' })</option>
+                         <option value="BCV_EUR">BCV EUR ({rates?.BCV?.eurToBs || '...' })</option>
                          <option value="BINANCE">Paralelo ({rates?.BINANCE?.usdToBs || '...' })</option>
                          <option value="CUSTOM">Personalizada ({rates?.CUSTOM?.usdToBs || '...' })</option>
                          <option value="MANUAL">Manual</option>
@@ -460,7 +462,7 @@ export default function InvoiceDetailsPage() {
                           <p>Fecha de Vencimiento: {formatDate(invoice.dueDate)}</p>
                           {displayCurrency !== invoice.currency && (
                               <p className="text-xs text-blue-600 font-semibold mt-1">
-                                  Tasa Ref: {getActiveRate().toLocaleString('es-VE', { minimumFractionDigits: 2 })} BS/USD
+                                  Tasa Ref: {getActiveRate().toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 4 })} {rateSource === 'BCV_EUR' ? 'BS/EUR' : 'BS/USD'}
                               </p>
                           )}
                       </div>
