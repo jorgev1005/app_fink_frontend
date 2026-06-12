@@ -338,6 +338,19 @@ export default function InvoiceDetailsPage() {
           <div className="p-8 md:p-12 border-b border-gray-100">
               <div className="flex justify-between items-start mb-10">
                   <div>
+                      {invoice.project?.logoUrl ? (
+                          <div className="mb-4">
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              <img 
+                                  src={`/backend-api${invoice.project.logoUrl}`} 
+                                  alt={invoice.project.name} 
+                                  className="max-h-16 max-w-[200px] object-contain"
+                                  onError={(e) => {
+                                      e.currentTarget.style.display = 'none';
+                                  }}
+                              />
+                          </div>
+                      ) : null}
                       {invoice.project?.name && (
                           <h1 className="text-xl font-bold text-gray-800 mb-1">{invoice.project.name}</h1>
                       )}
