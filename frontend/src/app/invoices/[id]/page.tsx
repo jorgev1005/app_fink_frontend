@@ -57,6 +57,7 @@ export default function InvoiceDetailsPage() {
   
   const [invoice, setInvoice] = useState<Invoice | null>(null);
   const [loading, setLoading] = useState(true);
+  const [products, setProducts] = useState<any[]>([]);
 
   // Currency Conversion States
   const [rates, setRates] = useState<any>(null);
@@ -134,6 +135,16 @@ export default function InvoiceDetailsPage() {
       setLoading(true);
       const res = await api.invoices.getById(id);
       const invData = res.data.data;
+      
+      // Load products for the project to match packaging units (bultos)
+      if (invData.projectId) {
+        try {
+          const prodRes = await api.products.getAll({ projectId: invData.projectId, limit: 100 });
+          setProducts(prodRes.data.data || []);
+        } catch (pe) {
+          console.error("Error loading products for packaging calculation", pe);
+        }
+      }
       
       // Parse items from lines if they are stored as JSON string in lines field
       let parsedItems = [];
@@ -523,7 +534,24 @@ export default function InvoiceDetailsPage() {
                                   <td className="py-4 text-sm text-gray-800">
                                       <p className="font-medium">{item.description || item.name || 'Ítem sin nombre'}</p>
                                   </td>
-                                  <td className="py-4 text-sm text-gray-600 text-right">{item.quantity}</td>
+                                  <td className="py-4 text-sm text-gray-600 text-right">
+                                      <div>{item.quantity}</div>
+                                      {(() => {
+                                         const prod = products.find(p => p.id === item.productId);
+                                         if (prod && prod.empaqueCantidad && prod.empaqueCantidad > 1) {
+                                            const bultos = item.quantity / prod.empaqueCantidad;
+                                            const bultosStr = Number(bultos.toFixed(2)).toLocaleString('es-VE');
+                                            const unit = (prod.unidad_empaque || 'bulto').trim();
+                                            const finalUnit = bultos === 1 ? unit : (unit.endsWith('s') ? unit : `${unit}s`);
+                                            return (
+                                               <div className="text-[10px] text-gray-400 mt-0.5 font-normal">
+                                                  ({bultosStr} {finalUnit})
+                                               </div>
+                                            );
+                                         }
+                                         return null;
+                                      })()}
+                                  </td>
                                   {(viewMode !== 'DELIVERY_NOTE' || showPricesInDeliveryNote) && (
                                      <>
                                         <td className="py-4 text-sm text-gray-600 text-right font-mono">
