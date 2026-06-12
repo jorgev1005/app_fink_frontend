@@ -68,6 +68,7 @@ export default function InvoiceDetailsPage() {
   // New state variables for Delivery Note, Duplication & Payment
   const [viewMode, setViewMode] = useState<'INVOICE' | 'DELIVERY_NOTE'>('INVOICE');
   const [showPricesInDeliveryNote, setShowPricesInDeliveryNote] = useState(true);
+  const [calculateIVA, setCalculateIVA] = useState<boolean>(false);
   
   // Payment Modal States
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -106,6 +107,50 @@ export default function InvoiceDetailsPage() {
   };
 
   const conversionFactor = getConversionFactor();
+
+  const getInvoiceTotals = () => {
+    if (!invoice) return { subtotal: 0, taxAmount: 0, total: 0, outstanding: 0 };
+    
+    // Default values if calculateIVA is false
+    if (!calculateIVA) {
+      const subtotal = invoice.total - (invoice.taxAmount || 0);
+      return {
+        subtotal,
+        taxAmount: 0,
+        total: subtotal,
+        outstanding: invoice.outstanding - (invoice.taxAmount || 0)
+      };
+    }
+    
+    // If calculateIVA is true
+    if (invoice.taxAmount > 0) {
+      // Use existing DB tax values
+      return {
+        subtotal: invoice.total - invoice.taxAmount,
+        taxAmount: invoice.taxAmount,
+        total: invoice.total,
+        outstanding: invoice.outstanding
+      };
+    } else {
+      // Calculate 16% IVA dynamically
+      // TODO: Read default IVA rate from general settings module once created
+      const defaultIvaRate = 0.16; 
+      const subtotal = invoice.total;
+      const calculatedTax = subtotal * defaultIvaRate;
+      const total = subtotal + calculatedTax;
+      
+      const outstanding = invoice.total > 0 ? (invoice.outstanding / invoice.total) * total : 0;
+      
+      return {
+        subtotal,
+        taxAmount: calculatedTax,
+        total,
+        outstanding
+      };
+    }
+  };
+
+  const totals = getInvoiceTotals();
 
   useEffect(() => {
     if (id) {
@@ -168,6 +213,7 @@ export default function InvoiceDetailsPage() {
          items: parsedItems,
          taxAmount
       });
+      setCalculateIVA(taxAmount > 0);
       setDisplayCurrency(invData.currency || 'USD');
       setPaymentAmount(String(invData.outstanding || 0));
     } catch (e) {
@@ -342,6 +388,19 @@ export default function InvoiceDetailsPage() {
                       className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-3.5 h-3.5"
                    />
                    <span>Mostrar montos</span>
+                </label>
+             )}
+
+             {/* Invoice IVA Option */}
+             {viewMode === 'INVOICE' && (
+                <label className="flex items-center gap-1.5 text-xs text-gray-600 border-r border-gray-200 pr-3 mr-2 cursor-pointer select-none">
+                   <input 
+                      type="checkbox" 
+                      checked={calculateIVA}
+                      onChange={(e) => setCalculateIVA(e.target.checked)}
+                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-3.5 h-3.5"
+                   />
+                   <span>Calcular IVA (16%)</span>
                 </label>
              )}
 
@@ -571,7 +630,7 @@ export default function InvoiceDetailsPage() {
                              </td>
                              {(viewMode !== 'DELIVERY_NOTE' || showPricesInDeliveryNote) && (
                                 <td className="py-4 text-sm text-gray-800 text-right font-medium font-mono">
-                                    {formatCurrency((invoice.total - (invoice.taxAmount || 0)) * conversionFactor, displayCurrency)}
+                                    {formatCurrency(totals.subtotal * conversionFactor, displayCurrency)}
                                 </td>
                              )}
                           </tr>
@@ -584,22 +643,22 @@ export default function InvoiceDetailsPage() {
                      <div className="w-full md:w-1/3 space-y-3">
                          <div className="flex justify-between text-sm text-gray-600">
                              <span>Subtotal</span>
-                             <span className="font-mono">{formatCurrency((invoice.total - (invoice.taxAmount || 0)) * conversionFactor, displayCurrency)}</span>
+                             <span className="font-mono">{formatCurrency(totals.subtotal * conversionFactor, displayCurrency)}</span>
                          </div>
-                         {invoice.taxAmount > 0 && (
+                         {totals.taxAmount > 0 && (
                              <div className="flex justify-between text-sm text-gray-600">
-                                 <span>Impuestos</span>
-                                 <span className="font-mono">{formatCurrency(invoice.taxAmount * conversionFactor, displayCurrency)}</span>
+                                 <span>IVA ({invoice.taxAmount > 0 && invoice.total > 0 ? `${Math.round((invoice.taxAmount / (invoice.total - invoice.taxAmount)) * 100)}%` : '16%'})</span>
+                                 <span className="font-mono">{formatCurrency(totals.taxAmount * conversionFactor, displayCurrency)}</span>
                              </div>
                          )}
                          <div className="border-t border-gray-200 pt-3 flex justify-between text-lg font-bold text-gray-900">
                              <span>Total</span>
-                             <span className="font-mono">{formatCurrency(invoice.total * conversionFactor, displayCurrency)}</span>
+                             <span className="font-mono">{formatCurrency(totals.total * conversionFactor, displayCurrency)}</span>
                          </div>
-                         {invoice.outstanding < invoice.total && invoice.outstanding > 0 && (
+                         {totals.outstanding < totals.total && totals.outstanding > 0 && (
                              <div className="flex justify-between text-sm font-semibold text-orange-600">
                                  <span>Pendiente</span>
-                                 <span className="font-mono">{formatCurrency(invoice.outstanding * conversionFactor, displayCurrency)}</span>
+                                 <span className="font-mono">{formatCurrency(totals.outstanding * conversionFactor, displayCurrency)}</span>
                              </div>
                          )}
                      </div>
@@ -627,8 +686,8 @@ export default function InvoiceDetailsPage() {
                              <span className="text-xs text-gray-500 block mb-1">Margen de Ganancia</span>
                              <span className={`font-semibold ${(invoice.netProfit || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                                  {(() => {
-                                     const tax = invoice.taxAmount || 0;
-                                     const netSales = Math.max(0.01, invoice.total - tax);
+                                     const tax = totals.taxAmount;
+                                     const netSales = Math.max(0.01, totals.total - tax);
                                      const margin = ((invoice.netProfit || 0) / netSales) * 100;
                                      return `${margin.toFixed(1)}%`;
                                  })()}
