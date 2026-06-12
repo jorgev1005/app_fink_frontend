@@ -30,6 +30,7 @@ interface Invoice {
   projectId: string;
   project?: {
     name: string;
+    description?: string;
     logoUrl?: string;
     id?: string;
   };
@@ -351,8 +352,14 @@ export default function InvoiceDetailsPage() {
                               />
                           </div>
                       ) : null}
-                      {invoice.project?.name && (
-                          <h1 className="text-xl font-bold text-gray-800 mb-1">{invoice.project.name}</h1>
+                      {invoice.project?.description ? (
+                          <div className="text-sm text-gray-600 mb-2 whitespace-pre-wrap leading-relaxed max-w-md">
+                              {invoice.project.description}
+                          </div>
+                      ) : (
+                          invoice.project?.name && (
+                              <h1 className="text-xl font-bold text-gray-800 mb-1">{invoice.project.name}</h1>
+                          )
                       )}
                       <div className="text-sm text-gray-500 space-y-1">
                           <p>Fecha de Emisión: {formatDate(invoice.issueDate)}</p>
