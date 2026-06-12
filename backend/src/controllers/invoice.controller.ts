@@ -5,6 +5,34 @@ import { getLatestExchangeRate } from '../services/exchangeRate.service';
 import { checkProjectWriteAccess, getProjectAccessFilter } from '../utils/projectAccess';
 import { calculateInvoiceProfitability } from '../services/profitability.service';
 
+async function getNextInvoiceCode(projectId: string): Promise<string> {
+  const lastInvoices = await prisma.invoice.findMany({
+    where: {
+      projectId,
+      type: 'INVOICE'
+    },
+    orderBy: {
+      createdAt: 'desc'
+    },
+    take: 50
+  });
+
+  for (const inv of lastInvoices) {
+    const cleanCode = inv.code.trim();
+    const match = cleanCode.match(/(\d+)$/);
+    if (match) {
+      const numStr = match[1];
+      const numVal = parseInt(numStr, 10);
+      const nextVal = numVal + 1;
+      const paddedNumStr = String(nextVal).padStart(numStr.length, '0');
+      const prefix = cleanCode.substring(0, cleanCode.length - numStr.length);
+      return `${prefix}${paddedNumStr}`;
+    }
+  }
+
+  return '0001';
+}
+
 export const createInvoice = async (req: Request, res: Response) => {
   try {
     const { 
@@ -31,7 +59,14 @@ export const createInvoice = async (req: Request, res: Response) => {
         return res.status(400).json({ success: false, error: { message: 'El cliente es obligatorio para facturas de venta' } });
     }
 
-    const invoiceCode = code || `INV-${projectId}-${Date.now()}`;
+    let invoiceCode = code;
+    if (!invoiceCode) {
+      if (type === 'INVOICE') {
+        invoiceCode = await getNextInvoiceCode(projectId);
+      } else {
+        invoiceCode = `INV-${projectId}-${Date.now()}`;
+      }
+    }
 
     // Anchor dueDate to noon if it's a date-only string
     let dueDateToStore = dueDate;
