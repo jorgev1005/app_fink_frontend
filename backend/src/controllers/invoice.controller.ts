@@ -428,12 +428,58 @@ export const deleteInvoice = async (req: Request, res: Response) => {
       return res.status(403).json({ success: false, error: { message: 'No tienes permisos para eliminar facturas en este proyecto' } });
     }
     
-    // Only allow deleting DRAFT or PENDING or OPEN invoices
-    if (invoice.status === 'PAID' || invoice.status === 'POSTED') {
-      return res.status(400).json({ success: false, error: { message: 'Cannot delete paid or posted invoice' } });
+    // Only allow deleting DRAFT, PENDING, OPEN, or POSTED invoices (if unpaid)
+    if (invoice.status === 'PAID') {
+      return res.status(400).json({ success: false, error: { message: 'Cannot delete paid invoice' } });
+    }
+
+    // Check if there are any payment allocations linked to this invoice
+    const allocationsCount = await prisma.paymentAllocation.count({
+      where: { invoiceId: id }
+    });
+    if (allocationsCount > 0) {
+      return res.status(400).json({ success: false, error: { message: 'No se puede eliminar una factura con pagos registrados. Elimina los pagos primero.' } });
     }
 
     await prisma.$transaction(async (tx) => {
+      // If invoice was POSTED, find and delete the associated transaction
+      if (invoice.status === 'POSTED') {
+        const assocTxns = await tx.transaction.findMany({
+          where: {
+            projectId: invoice.projectId,
+            reference: invoice.code
+          }
+        });
+        
+        for (const txn of assocTxns) {
+          // Revert account balances if the transaction entries changed them
+          const entries = await tx.transactionEntry.findMany({
+            where: { transactionId: txn.id },
+            include: { debitAccount: true, creditAccount: true }
+          });
+          
+          for (const entry of entries) {
+            // Revert debit account balance
+            if (entry.debitAccountId && Number(entry.debitAmount) > 0) {
+              const acct = entry.debitAccount as any;
+              const acctCurrency = acct?.currency || txn.currency;
+              let amt = Number(entry.debitAmount);
+              await updateAccountBalance(entry.debitAccountId, acctCurrency as any, Number(amt), 'CREDIT');
+            }
+            // Revert credit account balance
+            if (entry.creditAccountId && Number(entry.creditAmount) > 0) {
+              const acct = entry.creditAccount as any;
+              const acctCurrency = acct?.currency || txn.currency;
+              let amt = Number(entry.creditAmount);
+              await updateAccountBalance(entry.creditAccountId, acctCurrency as any, Number(amt), 'DEBIT');
+            }
+          }
+          
+          // Delete transaction (which cascades to entries)
+          await tx.transaction.delete({ where: { id: txn.id } });
+        }
+      }
+
       // 1. Revert stock changes
       let items: any[] = [];
       try {
