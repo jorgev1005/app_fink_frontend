@@ -75,6 +75,7 @@ export default function InvoiceDetailsPage() {
   const [viewMode, setViewMode] = useState<'INVOICE' | 'DELIVERY_NOTE'>('INVOICE');
   const [showPricesInDeliveryNote, setShowPricesInDeliveryNote] = useState(true);
   const [calculateIVA, setCalculateIVA] = useState<boolean>(false);
+  const [printLayout, setPrintLayout] = useState<'STANDARD' | 'FREE_FORM'>('STANDARD');
   
   // Payment Modal States
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -360,6 +361,27 @@ export default function InvoiceDetailsPage() {
 
   return (
     <div className="min-h-screen bg-gray-100 p-4 md:p-8 print:bg-white print:p-0">
+      {printLayout === 'FREE_FORM' && (
+        <style dangerouslySetInnerHTML={{__html: `
+          @media print {
+            @page {
+              margin-left: 0.5cm !important;
+              margin-right: 0.5cm !important;
+              margin-top: 4.5cm !important;
+              margin-bottom: 4cm !important;
+            }
+            body {
+              margin: 0 !important;
+              padding: 0 !important;
+            }
+            .print-no-shadow {
+              box-shadow: none !important;
+              border: none !important;
+              padding: 0 !important;
+            }
+          }
+        `}} />
+      )}
       
       {/* Action Bar */}
       <div className="max-w-4xl mx-auto mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 print:hidden">
@@ -405,15 +427,26 @@ export default function InvoiceDetailsPage() {
 
              {/* Invoice IVA Option */}
              {viewMode === 'INVOICE' && (
-                <label className="flex items-center gap-1.5 text-xs text-gray-600 border-r border-gray-200 pr-3 mr-2 cursor-pointer select-none">
-                   <input 
-                      type="checkbox" 
-                      checked={calculateIVA}
-                      onChange={(e) => setCalculateIVA(e.target.checked)}
-                      className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-3.5 h-3.5"
-                   />
-                   <span>Calcular IVA (16%)</span>
-                </label>
+                <>
+                   <label className="flex items-center gap-1.5 text-xs text-gray-600 border-r border-gray-200 pr-3 mr-2 cursor-pointer select-none">
+                      <input 
+                         type="checkbox" 
+                         checked={calculateIVA}
+                         onChange={(e) => setCalculateIVA(e.target.checked)}
+                         className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-3.5 h-3.5"
+                      />
+                      <span>Calcular IVA (16%)</span>
+                   </label>
+                   <label className="flex items-center gap-1.5 text-xs text-gray-600 border-r border-gray-200 pr-3 mr-2 cursor-pointer select-none">
+                      <input 
+                         type="checkbox" 
+                         checked={printLayout === 'FREE_FORM'}
+                         onChange={(e) => setPrintLayout(e.target.checked ? 'FREE_FORM' : 'STANDARD')}
+                         className="rounded border-gray-300 text-blue-600 focus:ring-blue-500 w-3.5 h-3.5"
+                      />
+                      <span className="font-semibold text-blue-600">Forma Libre</span>
+                   </label>
+                </>
              )}
 
              {/* Currency Toggle & Rate Selector */}
@@ -511,165 +544,174 @@ export default function InvoiceDetailsPage() {
       </div>
 
       {/* Invoice Paper */}
-      <div className="max-w-4xl mx-auto bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden print:shadow-none print:border-none print:rounded-none print:max-w-full print:my-0">
-          
-          {/* Header */}
-          <div className="p-8 md:p-12 border-b border-gray-100 print:p-4">
-              <div className="flex flex-col md:flex-row justify-between items-start gap-8 mb-10">
-                  {/* Left Column: Logo + Project Name & Client Details */}
-                  <div className="flex-1">
-                      {/* Logo and Project Name Row */}
-                      <div className="flex items-center gap-4 mb-6">
-                          {invoice.project?.logoUrl ? (
-                              <div className="shrink-0">
-                                  {/* eslint-disable-next-line @next/next/no-img-element */}
-                                  <img 
-                                      src={`/backend-api${invoice.project.logoUrl}`} 
-                                      alt={invoice.project.name} 
-                                      className="max-h-16 max-w-[200px] object-contain"
-                                      onError={(e) => {
-                                          e.currentTarget.style.display = 'none';
-                                      }}
-                                  />
-                              </div>
-                          ) : null}
-                          <div>
-                              {invoice.project?.description ? (
-                                  <div className="text-sm text-gray-700 font-bold leading-relaxed whitespace-pre-wrap">
-                                      {invoice.project.description}
-                                  </div>
-                              ) : (
-                                  invoice.project?.name && (
-                                      <h1 className="text-xl font-bold text-gray-800">{invoice.project.name}</h1>
-                                  )
+      <div className={`max-w-4xl mx-auto bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden print:shadow-none print:border-none print:rounded-none print:max-w-full print:my-0 print-no-shadow`}>
+           
+           {/* Header */}
+           <div className={`${printLayout === 'FREE_FORM' ? 'p-4 print:p-0 print:pb-2' : 'p-8 md:p-12 print:p-4'} border-b border-gray-100`}>
+               <div className={`flex flex-col md:flex-row justify-between items-start gap-8 ${printLayout === 'FREE_FORM' ? 'mb-2' : 'mb-10'}`}>
+                   {/* Left Column: Logo + Project Name & Client Details */}
+                   <div className="flex-1">
+                       {/* Logo and Project Name Row */}
+                       {printLayout !== 'FREE_FORM' && (
+                           <div className="flex items-center gap-4 mb-6">
+                               {invoice.project?.logoUrl ? (
+                                   <div className="shrink-0">
+                                       {/* eslint-disable-next-line @next/next/no-img-element */}
+                                       <img 
+                                           src={`/backend-api${invoice.project.logoUrl}`} 
+                                           alt={invoice.project.name} 
+                                           className="max-h-16 max-w-[200px] object-contain"
+                                           onError={(e) => {
+                                               e.currentTarget.style.display = 'none';
+                                           }}
+                                       />
+                                   </div>
+                               ) : null}
+                               <div>
+                                   {invoice.project?.description ? (
+                                       <div className="text-sm text-gray-700 font-bold leading-relaxed whitespace-pre-wrap">
+                                           {invoice.project.description}
+                                       </div>
+                                   ) : (
+                                       invoice.project?.name && (
+                                           <h1 className="text-xl font-bold text-gray-800">{invoice.project.name}</h1>
+                                       )
+                                   )}
+                               </div>
+                           </div>
+                       )}
+ 
+                       {/* Client / Provider Details */}
+                       <div className={printLayout === 'FREE_FORM' ? 'mt-1' : 'mt-4'}>
+                           <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 print:mb-0.5">
+                              {invoice.type === 'INVOICE' ? 'Cliente' : 'Proveedor'}
+                           </h3>
+                           <div className={`text-gray-800 text-sm ${printLayout === 'FREE_FORM' ? 'space-y-0.5 text-xs' : 'space-y-1'}`}>
+                               <p className={`font-bold ${printLayout === 'FREE_FORM' ? 'text-sm mb-0.5' : 'text-lg mb-1'}`}>{contactName}</p>
+                               {contact?.taxId && <p>RIF/NIT: {contact.taxId}</p>}
+                               {contact?.address && <p className="max-w-md">Dirección: {contact.address}</p>}
+                               {contact?.phone && <p>Teléfono: {contact.phone}</p>}
+                               {contact?.email && <p>Email: {contact.email}</p>}
+                           </div>
+                       </div>
+                   </div>
+ 
+                   {/* Right Column: Invoice Type, Code, Status & Dates/OC */}
+                   <div className="text-right flex flex-col items-end">
+                       <h2 className={`font-light text-gray-800 ${printLayout === 'FREE_FORM' ? 'text-lg mb-0.5' : 'text-3xl mb-2'}`}>
+                          {viewMode === 'DELIVERY_NOTE' ? 'Nota de Entrega' : getTypeLabel(invoice.type)}
+                       </h2>
+                       <p className={`font-mono text-gray-600 ${printLayout === 'FREE_FORM' ? 'text-sm mb-0.5' : 'text-lg mb-2'}`}>#{invoice.code}</p>
+                       <div className={printLayout === 'FREE_FORM' ? 'mb-1 print:hidden' : 'mb-4'}>
+                           {getStatusBadge(invoice.status, invoice.type)}
+                       </div>
+                       
+                       {/* Dates and Purchase Order Info */}
+                       <div className={`${printLayout === 'FREE_FORM' ? 'text-xs space-y-0.5' : 'text-sm space-y-1'} text-gray-500 text-right`}>
+                           <p>Fecha de Emisión: {formatDate(invoice.issueDate)}</p>
+                           <p>Fecha de Vencimiento: {formatDate(invoice.dueDate)}</p>
+                           {invoice.purchaseOrder && (
+                               <p>Orden de Compra: {invoice.purchaseOrder}</p>
+                           )}
+                           {invoice.purchaseOrderDate && (
+                               <p>Fecha de O.C.: {invoice.purchaseOrderDate}</p>
+                           )}
+                           {displayCurrency !== invoice.currency && (
+                               <p className="text-xs text-blue-600 font-semibold mt-1">
+                                   Tasa Ref: {getActiveRate().toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 4 })} {rateSource === 'BCV_EUR' ? 'BS/EUR' : 'BS/USD'}
+                               </p>
+                           )}
+                       </div>
+                   </div>
+               </div>
+ 
+               {/* Concept/Details (Only rendered if description is present) */}
+               {invoice.description && (
+                   <div className={`${printLayout === 'FREE_FORM' ? 'mt-2 pt-2' : 'mt-8 pt-6'} border-t border-gray-150`}>
+                       <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Concepto</h3>
+                       <p className="text-gray-700 text-sm whitespace-pre-wrap">{invoice.description}</p>
+                   </div>
+               )}
+           </div>
+
+           {/* Items Table */}
+           <div className={printLayout === 'FREE_FORM' ? 'p-4 print:px-1 print:py-1' : 'p-8 md:p-12 print:px-4 print:py-2'}>
+               <table className="w-full text-left">
+                   <thead>
+                       <tr className="border-b border-gray-200">
+                           <th className={`${printLayout === 'FREE_FORM' ? 'py-1 text-xs' : 'py-3 text-xs'} font-bold text-gray-400 uppercase tracking-wider w-1/2`}>Descripción</th>
+                           <th className={`${printLayout === 'FREE_FORM' ? 'py-1 text-xs' : 'py-3 text-xs'} font-bold text-gray-400 uppercase tracking-wider text-right`}>Cant.</th>
+                           {(viewMode !== 'DELIVERY_NOTE' || showPricesInDeliveryNote) && (
+                              <>
+                                 <th className={`${printLayout === 'FREE_FORM' ? 'py-1 text-xs' : 'py-3 text-xs'} font-bold text-gray-400 uppercase tracking-wider text-right`}>Precio</th>
+                                 <th className={`${printLayout === 'FREE_FORM' ? 'py-1 text-xs' : 'py-3 text-xs'} font-bold text-gray-400 uppercase tracking-wider text-right`}>Total</th>
+                              </>
+                           )}
+                       </tr>
+                   </thead>
+                   <tbody>
+                       {invoice.items && invoice.items.length > 0 ? (() => {
+                           const filteredItems = printLayout === 'FREE_FORM'
+                               ? invoice.items.filter((item) => {
+                                   const price = typeof item.unitPrice === 'number' ? item.unitPrice : (typeof item.price === 'number' ? item.price : 0);
+                                   const total = typeof item.total === 'number' ? item.total : 0;
+                                   return total !== 0 || price !== 0;
+                                 })
+                               : invoice.items;
+                           return filteredItems.map((item) => (
+                               <tr key={item.id} className="border-b border-gray-50 last:border-0">
+                                   <td className={`${printLayout === 'FREE_FORM' ? 'py-1.5' : 'py-4'} text-sm text-gray-800`}>
+                                       <p className="font-medium">{item.description || item.name || 'Ítem sin nombre'}</p>
+                                       {item.notes && (
+                                          <p className="text-[10px] text-gray-400 mt-0.5 font-normal whitespace-pre-wrap leading-tight">
+                                             {item.notes}
+                                          </p>
+                                       )}
+                                   </td>
+                                   <td className={`${printLayout === 'FREE_FORM' ? 'py-1.5' : 'py-4'} text-sm text-gray-600 text-right`}>
+                                       <div>{item.quantity}</div>
+                                       {(() => {
+                                          const prod = products.find(p => p.id === item.productId);
+                                          if (prod && prod.empaqueCantidad && prod.empaqueCantidad > 1) {
+                                             const bultos = item.quantity / prod.empaqueCantidad;
+                                             const bultosStr = Number(bultos.toFixed(2)).toLocaleString('es-VE');
+                                             const unit = (prod.unidad_empaque || 'bulto').trim();
+                                             const finalUnit = bultos === 1 ? unit : (unit.endsWith('s') ? unit : `${unit}s`);
+                                             return (
+                                                <div className="text-[10px] text-gray-400 mt-0.5 font-normal">
+                                                   ({bultosStr} {finalUnit})
+                                                </div>
+                                             );
+                                          }
+                                          return null;
+                                       })()}
+                                   </td>
+                                   {(viewMode !== 'DELIVERY_NOTE' || showPricesInDeliveryNote) && (
+                                      <>
+                                         <td className={`${printLayout === 'FREE_FORM' ? 'py-1.5' : 'py-4'} text-sm text-gray-600 text-right font-mono`}>
+                                             {formatCurrency((typeof item.unitPrice === 'number' && !isNaN(item.unitPrice) ? item.unitPrice : (typeof item.price === 'number' && !isNaN(item.price) ? item.price : 0)) * conversionFactor, displayCurrency)}
+                                         </td>
+                                         <td className={`${printLayout === 'FREE_FORM' ? 'py-1.5' : 'py-4'} text-sm text-gray-800 text-right font-medium font-mono`}>
+                                             {formatCurrency(item.total * conversionFactor, displayCurrency)}
+                                         </td>
+                                      </>
+                                   )}
+                               </tr>
+                           ));
+                       })() : (
+                           <tr>
+                              <td className="py-4 text-sm text-gray-800" colSpan={viewMode === 'DELIVERY_NOTE' && !showPricesInDeliveryNote ? 2 : 3}>
+                                  <p className="font-medium">{invoice.description || 'Servicios Profesionales'}</p>
+                              </td>
+                              {(viewMode !== 'DELIVERY_NOTE' || showPricesInDeliveryNote) && (
+                                 <td className="py-4 text-sm text-gray-800 text-right font-medium font-mono">
+                                     {formatCurrency(totals.subtotal * conversionFactor, displayCurrency)}
+                                 </td>
                               )}
-                          </div>
-                      </div>
-
-                      {/* Client / Provider Details */}
-                      <div className="mt-4">
-                          <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
-                             {invoice.type === 'INVOICE' ? 'Cliente' : 'Proveedor'}
-                          </h3>
-                          <div className="text-gray-800 text-sm space-y-1">
-                              <p className="font-bold text-lg mb-1">{contactName}</p>
-                              {contact?.taxId && <p>RIF/NIT: {contact.taxId}</p>}
-                              {contact?.address && <p className="max-w-md">Dirección: {contact.address}</p>}
-                              {contact?.phone && <p>Teléfono: {contact.phone}</p>}
-                              {contact?.email && <p>Email: {contact.email}</p>}
-                          </div>
-                      </div>
-                  </div>
-
-                  {/* Right Column: Invoice Type, Code, Status & Dates/OC */}
-                  <div className="text-right flex flex-col items-end">
-                      <h2 className="text-3xl font-light text-gray-800 mb-2">
-                         {viewMode === 'DELIVERY_NOTE' ? 'Nota de Entrega' : getTypeLabel(invoice.type)}
-                      </h2>
-                      <p className="font-mono text-lg font-medium text-gray-600 mb-2">#{invoice.code}</p>
-                      <div className="mb-4">
-                          {getStatusBadge(invoice.status, invoice.type)}
-                      </div>
-                      
-                      {/* Dates and Purchase Order Info */}
-                      <div className="text-sm text-gray-500 space-y-1 text-right">
-                          <p>Fecha de Emisión: {formatDate(invoice.issueDate)}</p>
-                          <p>Fecha de Vencimiento: {formatDate(invoice.dueDate)}</p>
-                          {invoice.purchaseOrder && (
-                              <p>Orden de Compra: {invoice.purchaseOrder}</p>
-                          )}
-                          {invoice.purchaseOrderDate && (
-                              <p>Fecha de O.C.: {invoice.purchaseOrderDate}</p>
-                          )}
-                          {displayCurrency !== invoice.currency && (
-                              <p className="text-xs text-blue-600 font-semibold mt-1">
-                                  Tasa Ref: {getActiveRate().toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 4 })} {rateSource === 'BCV_EUR' ? 'BS/EUR' : 'BS/USD'}
-                              </p>
-                          )}
-                      </div>
-                  </div>
-              </div>
-
-              {/* Concept/Details (Only rendered if description is present) */}
-              {invoice.description && (
-                  <div className="mt-8 pt-6 border-t border-gray-150">
-                      <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Concepto</h3>
-                      <p className="text-gray-700 text-sm whitespace-pre-wrap">{invoice.description}</p>
-                  </div>
-              )}
-          </div>
-
-          {/* Items Table */}
-          <div className="p-8 md:p-12 print:px-4 print:py-2">
-              <table className="w-full text-left">
-                  <thead>
-                      <tr className="border-b border-gray-200">
-                          <th className="py-3 text-xs font-bold text-gray-400 uppercase tracking-wider w-1/2">Descripción</th>
-                          <th className="py-3 text-xs font-bold text-gray-400 uppercase tracking-wider text-right">Cant.</th>
-                          {(viewMode !== 'DELIVERY_NOTE' || showPricesInDeliveryNote) && (
-                             <>
-                                <th className="py-3 text-xs font-bold text-gray-400 uppercase tracking-wider text-right">Precio</th>
-                                <th className="py-3 text-xs font-bold text-gray-400 uppercase tracking-wider text-right">Total</th>
-                             </>
-                          )}
-                      </tr>
-                  </thead>
-                  <tbody>
-                      {invoice.items && invoice.items.length > 0 ? (
-                          invoice.items.map((item) => (
-                              <tr key={item.id} className="border-b border-gray-50 last:border-0">
-                                  <td className="py-4 text-sm text-gray-800">
-                                      <p className="font-medium">{item.description || item.name || 'Ítem sin nombre'}</p>
-                                      {item.notes && (
-                                         <p className="text-[10px] text-gray-400 mt-0.5 font-normal whitespace-pre-wrap leading-tight">
-                                            {item.notes}
-                                         </p>
-                                      )}
-                                  </td>
-                                  <td className="py-4 text-sm text-gray-600 text-right">
-                                      <div>{item.quantity}</div>
-                                      {(() => {
-                                         const prod = products.find(p => p.id === item.productId);
-                                         if (prod && prod.empaqueCantidad && prod.empaqueCantidad > 1) {
-                                            const bultos = item.quantity / prod.empaqueCantidad;
-                                            const bultosStr = Number(bultos.toFixed(2)).toLocaleString('es-VE');
-                                            const unit = (prod.unidad_empaque || 'bulto').trim();
-                                            const finalUnit = bultos === 1 ? unit : (unit.endsWith('s') ? unit : `${unit}s`);
-                                            return (
-                                               <div className="text-[10px] text-gray-400 mt-0.5 font-normal">
-                                                  ({bultosStr} {finalUnit})
-                                               </div>
-                                            );
-                                         }
-                                         return null;
-                                      })()}
-                                  </td>
-                                  {(viewMode !== 'DELIVERY_NOTE' || showPricesInDeliveryNote) && (
-                                     <>
-                                        <td className="py-4 text-sm text-gray-600 text-right font-mono">
-                                            {formatCurrency((typeof item.unitPrice === 'number' && !isNaN(item.unitPrice) ? item.unitPrice : (typeof item.price === 'number' && !isNaN(item.price) ? item.price : 0)) * conversionFactor, displayCurrency)}
-                                        </td>
-                                        <td className="py-4 text-sm text-gray-800 text-right font-medium font-mono">
-                                            {formatCurrency(item.total * conversionFactor, displayCurrency)}
-                                        </td>
-                                     </>
-                                  )}
-                              </tr>
-                          ))
-                      ) : (
-                          <tr>
-                             <td className="py-4 text-sm text-gray-800" colSpan={viewMode === 'DELIVERY_NOTE' && !showPricesInDeliveryNote ? 2 : 3}>
-                                 <p className="font-medium">{invoice.description || 'Servicios Profesionales'}</p>
-                             </td>
-                             {(viewMode !== 'DELIVERY_NOTE' || showPricesInDeliveryNote) && (
-                                <td className="py-4 text-sm text-gray-800 text-right font-medium font-mono">
-                                    {formatCurrency(totals.subtotal * conversionFactor, displayCurrency)}
-                                </td>
-                             )}
-                          </tr>
-                      )}
-                  </tbody>
-              </table>
+                           </tr>
+                       )}
+                   </tbody>
+               </table>
 
               {(viewMode !== 'DELIVERY_NOTE' || showPricesInDeliveryNote) && (
                  <div className="mt-8 flex justify-end">
