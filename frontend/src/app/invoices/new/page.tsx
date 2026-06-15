@@ -28,7 +28,7 @@ function NewInvoiceContent() {
   // Items Mode
   const [useItemsMode, setUseItemsMode] = useState(false);
   const [lines, setLines] = useState<any[]>([
-      { id: Date.now(), productId: '', name: '', quantity: 1, price: 0, total: 0 }
+      { id: Date.now(), productId: '', name: '', quantity: 1, price: 0, total: 0, notes: '' }
   ]);
   
   // Contact
@@ -96,7 +96,8 @@ function NewInvoiceContent() {
                 name: item.description || item.name || '',
                 quantity: Number(item.quantity || 1),
                 price: Number(typeof item.unitPrice === 'number' && !isNaN(item.unitPrice) ? item.unitPrice : (typeof item.price === 'number' && !isNaN(item.price) ? item.price : 0)),
-                total: Number(item.total || 0)
+                total: Number(item.total || 0),
+                notes: item.notes || ''
              })));
              setUseItemsMode(true);
           } else {
@@ -179,7 +180,7 @@ function NewInvoiceContent() {
   }, [lines, useItemsMode]);
 
   const addLine = () => {
-    setLines([...lines, { id: Date.now(), productId: '', name: '', quantity: 1, price: 0, total: 0 }]);
+    setLines([...lines, { id: Date.now(), productId: '', name: '', quantity: 1, price: 0, total: 0, notes: '' }]);
   };
 
   const removeLine = (id: number) => {
@@ -267,7 +268,8 @@ function NewInvoiceContent() {
               description: line.name || '',
               quantity: Number(line.quantity || 1),
               unitPrice: Number(line.price || 0),
-              total: Number(line.total || 0)
+              total: Number(line.total || 0),
+              notes: line.notes || ''
           })) : undefined, // Send lines mapped to backend structure if in items mode
           isDeliveryNote: type === 'INVOICE' ? isDeliveryNote : false,
           purchaseOrder: type === 'INVOICE' ? (purchaseOrder || undefined) : undefined,
@@ -589,6 +591,12 @@ function NewInvoiceContent() {
                                                     onChange={(e) => updateLine(line.id, 'name', e.target.value)}
                                                 />
                                             )}
+                                            <input 
+                                                className="w-full mt-1 p-1 text-[11px] border-b border-dashed border-slate-200 focus:border-blue-300 outline-none bg-transparent text-gray-500 placeholder:text-slate-300"
+                                                placeholder="Anotación/Comentario de línea..."
+                                                value={line.notes || ''}
+                                                onChange={(e) => updateLine(line.id, 'notes', e.target.value)}
+                                            />
                                         </div>
                                         <div className="col-span-2">
                                             <input 

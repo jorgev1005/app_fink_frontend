@@ -14,6 +14,7 @@ interface InvoiceItem {
   price?: number; // Fallback for legacy price field
   total: number;
   productId?: string;
+  notes?: string;
 }
 
 interface Invoice {
@@ -619,6 +620,11 @@ export default function InvoiceDetailsPage() {
                               <tr key={item.id} className="border-b border-gray-50 last:border-0">
                                   <td className="py-4 text-sm text-gray-800">
                                       <p className="font-medium">{item.description || item.name || 'Ítem sin nombre'}</p>
+                                      {item.notes && (
+                                         <p className="text-[10px] text-gray-400 mt-0.5 font-normal whitespace-pre-wrap leading-tight">
+                                            {item.notes}
+                                         </p>
+                                      )}
                                       {(() => {
                                           const prod = products.find(p => p.id === item.productId) ||
                                                        products.find(p => p.name.toLowerCase() === (item.description || item.name || '').toLowerCase());
