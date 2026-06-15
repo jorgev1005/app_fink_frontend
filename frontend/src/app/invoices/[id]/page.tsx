@@ -514,38 +514,71 @@ export default function InvoiceDetailsPage() {
           
           {/* Header */}
           <div className="p-8 md:p-12 border-b border-gray-100 print:p-4">
-              <div className="flex justify-between items-start mb-10">
-                  <div>
-                      {invoice.project?.logoUrl ? (
-                          <div className="mb-4">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img 
-                                  src={`/backend-api${invoice.project.logoUrl}`} 
-                                  alt={invoice.project.name} 
-                                  className="max-h-16 max-w-[200px] object-contain"
-                                  onError={(e) => {
-                                      e.currentTarget.style.display = 'none';
-                                  }}
-                              />
+              <div className="flex flex-col md:flex-row justify-between items-start gap-8 mb-10">
+                  {/* Left Column: Logo + Project Name & Client Details */}
+                  <div className="flex-1">
+                      {/* Logo and Project Name Row */}
+                      <div className="flex items-center gap-4 mb-6">
+                          {invoice.project?.logoUrl ? (
+                              <div className="shrink-0">
+                                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                                  <img 
+                                      src={`/backend-api${invoice.project.logoUrl}`} 
+                                      alt={invoice.project.name} 
+                                      className="max-h-16 max-w-[200px] object-contain"
+                                      onError={(e) => {
+                                          e.currentTarget.style.display = 'none';
+                                      }}
+                                  />
+                              </div>
+                          ) : null}
+                          <div>
+                              {invoice.project?.description ? (
+                                  <div className="text-sm text-gray-700 font-bold leading-relaxed whitespace-pre-wrap">
+                                      {invoice.project.description}
+                                  </div>
+                              ) : (
+                                  invoice.project?.name && (
+                                      <h1 className="text-xl font-bold text-gray-800">{invoice.project.name}</h1>
+                                  )
+                              )}
                           </div>
-                      ) : null}
-                      {invoice.project?.description ? (
-                          <div className="text-sm text-gray-600 mb-2 whitespace-pre-wrap leading-relaxed max-w-md">
-                              {invoice.project.description}
+                      </div>
+
+                      {/* Client / Provider Details */}
+                      <div className="mt-4">
+                          <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
+                             {invoice.type === 'INVOICE' ? 'Cliente' : 'Proveedor'}
+                          </h3>
+                          <div className="text-gray-800 text-sm space-y-1">
+                              <p className="font-bold text-lg mb-1">{contactName}</p>
+                              {contact?.taxId && <p>RIF/NIT: {contact.taxId}</p>}
+                              {contact?.address && <p className="max-w-md">Dirección: {contact.address}</p>}
+                              {contact?.phone && <p>Teléfono: {contact.phone}</p>}
+                              {contact?.email && <p>Email: {contact.email}</p>}
                           </div>
-                      ) : (
-                          invoice.project?.name && (
-                              <h1 className="text-xl font-bold text-gray-800 mb-1">{invoice.project.name}</h1>
-                          )
-                      )}
-                      <div className="text-sm text-gray-500 space-y-1">
+                      </div>
+                  </div>
+
+                  {/* Right Column: Invoice Type, Code, Status & Dates/OC */}
+                  <div className="text-right flex flex-col items-end">
+                      <h2 className="text-3xl font-light text-gray-800 mb-2">
+                         {viewMode === 'DELIVERY_NOTE' ? 'Nota de Entrega' : getTypeLabel(invoice.type)}
+                      </h2>
+                      <p className="font-mono text-lg font-medium text-gray-600 mb-2">#{invoice.code}</p>
+                      <div className="mb-4">
+                          {getStatusBadge(invoice.status, invoice.type)}
+                      </div>
+                      
+                      {/* Dates and Purchase Order Info */}
+                      <div className="text-sm text-gray-500 space-y-1 text-right">
                           <p>Fecha de Emisión: {formatDate(invoice.issueDate)}</p>
                           <p>Fecha de Vencimiento: {formatDate(invoice.dueDate)}</p>
                           {invoice.purchaseOrder && (
-                              <p>Orden de Compra: <span className="font-mono text-gray-800 font-semibold">{invoice.purchaseOrder}</span></p>
+                              <p>Orden de Compra: {invoice.purchaseOrder}</p>
                           )}
                           {invoice.purchaseOrderDate && (
-                              <p>Fecha de O.C.: <span className="text-gray-800 font-semibold">{invoice.purchaseOrderDate}</span></p>
+                              <p>Fecha de O.C.: {invoice.purchaseOrderDate}</p>
                           )}
                           {displayCurrency !== invoice.currency && (
                               <p className="text-xs text-blue-600 font-semibold mt-1">
@@ -554,38 +587,15 @@ export default function InvoiceDetailsPage() {
                           )}
                       </div>
                   </div>
-                  <div className="text-right">
-                      <h2 className="text-3xl font-light text-gray-800 mb-2">
-                         {viewMode === 'DELIVERY_NOTE' ? 'Nota de Entrega' : getTypeLabel(invoice.type)}
-                      </h2>
-                      <p className="font-mono text-lg font-medium text-gray-600 mb-2">#{invoice.code}</p>
-                      {getStatusBadge(invoice.status, invoice.type)}
-                  </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mt-12">
-                  <div>
-                      <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">
-                         {invoice.type === 'INVOICE' ? 'Cliente' : 'Proveedor'}
-                      </h3>
-                      <div className="text-gray-800">
-                          <p className="font-bold text-lg mb-1">{contactName}</p>
-                          {contact?.taxId && <p className="text-sm text-gray-600">RIF/NIT: {contact.taxId}</p>}
-                          {contact?.phone && <p className="text-sm text-gray-600">Teléfono: {contact.phone}</p>}
-                          {contact?.email && <p className="text-sm text-gray-600">Email: {contact.email}</p>}
-                          {contact?.address && <p className="text-sm text-gray-600 mt-1 max-w-xs">Dirección: {contact.address}</p>}
-                      </div>
+              {/* Concept/Details (Only rendered if description is present) */}
+              {invoice.description && (
+                  <div className="mt-8 pt-6 border-t border-gray-150">
+                      <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Concepto</h3>
+                      <p className="text-gray-700 text-sm whitespace-pre-wrap">{invoice.description}</p>
                   </div>
-                  {/* Details */}
-                  <div className="md:text-right">
-                      {invoice.description && (
-                          <div className="bg-gray-50 p-4 rounded-lg inline-block text-left md:min-w-[200px]">
-                              <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Concepto</h3>
-                              <p className="text-gray-700 text-sm whitespace-pre-wrap">{invoice.description}</p>
-                          </div>
-                      )}
-                  </div>
-              </div>
+              )}
           </div>
 
           {/* Items Table */}
