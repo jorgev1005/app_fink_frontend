@@ -648,69 +648,100 @@ export default function InvoiceDetailsPage() {
                               </>
                            )}
                        </tr>
-                   </thead>
-                   <tbody>
-                       {invoice.items && invoice.items.length > 0 ? (() => {
-                           const filteredItems = printLayout === 'FREE_FORM'
-                               ? invoice.items.filter((item) => {
-                                   const price = typeof item.unitPrice === 'number' ? item.unitPrice : (typeof item.price === 'number' ? item.price : 0);
-                                   const total = typeof item.total === 'number' ? item.total : 0;
-                                   return total !== 0 || price !== 0;
-                                 })
-                               : invoice.items;
-                           return filteredItems.map((item) => (
-                               <tr key={item.id} className="border-b border-gray-50 last:border-0">
-                                   <td className={`${printLayout === 'FREE_FORM' ? 'py-1.5' : 'py-4'} text-sm text-gray-800`}>
-                                       <p className="font-medium">{item.description || item.name || 'Ítem sin nombre'}</p>
-                                       {item.notes && (
-                                          <p className="text-[10px] text-gray-400 mt-0.5 font-normal whitespace-pre-wrap leading-tight">
-                                             {item.notes}
-                                          </p>
-                                       )}
-                                   </td>
-                                   <td className={`${printLayout === 'FREE_FORM' ? 'py-1.5' : 'py-4'} text-sm text-gray-600 text-right`}>
-                                       <div>{item.quantity}</div>
-                                       {(() => {
-                                          const prod = products.find(p => p.id === item.productId);
-                                          if (prod && prod.empaqueCantidad && prod.empaqueCantidad > 1) {
-                                             const bultos = item.quantity / prod.empaqueCantidad;
-                                             const bultosStr = Number(bultos.toFixed(2)).toLocaleString('es-VE');
-                                             const unit = (prod.unidad_empaque || 'bulto').trim();
-                                             const finalUnit = bultos === 1 ? unit : (unit.endsWith('s') ? unit : `${unit}s`);
-                                             return (
-                                                <div className="text-[10px] text-gray-400 mt-0.5 font-normal">
-                                                   ({bultosStr} {finalUnit})
-                                                </div>
-                                             );
-                                          }
-                                          return null;
-                                       })()}
-                                   </td>
-                                   {(viewMode !== 'DELIVERY_NOTE' || showPricesInDeliveryNote) && (
-                                      <>
-                                         <td className={`${printLayout === 'FREE_FORM' ? 'py-1.5' : 'py-4'} text-sm text-gray-600 text-right font-mono`}>
-                                             {formatCurrency((typeof item.unitPrice === 'number' && !isNaN(item.unitPrice) ? item.unitPrice : (typeof item.price === 'number' && !isNaN(item.price) ? item.price : 0)) * conversionFactor, displayCurrency)}
+                    </thead>
+                    <tbody>
+                       {(() => {
+                           const itemsToRender = invoice.items || [];
+                           const hasItems = itemsToRender.length > 0;
+                           const rows = [];
+
+                           if (hasItems) {
+                               const filteredItems = printLayout === 'FREE_FORM'
+                                   ? itemsToRender.filter((item) => {
+                                       const price = typeof item.unitPrice === 'number' ? item.unitPrice : (typeof item.price === 'number' ? item.price : 0);
+                                       const total = typeof item.total === 'number' ? item.total : 0;
+                                       return total !== 0 || price !== 0;
+                                     })
+                                   : itemsToRender;
+
+                               filteredItems.forEach((item) => {
+                                   rows.push(
+                                       <tr key={item.id} className="border-b border-gray-50 last:border-0">
+                                           <td className={`${printLayout === 'FREE_FORM' ? 'py-1.5' : 'py-4'} text-sm text-gray-800`}>
+                                               <p className="font-medium">{item.description || item.name || 'Ítem sin nombre'}</p>
+                                               {item.notes && (
+                                                  <p className="text-[10px] text-gray-400 mt-0.5 font-normal whitespace-pre-wrap leading-tight">
+                                                     {item.notes}
+                                                  </p>
+                                               )}
+                                           </td>
+                                           <td className={`${printLayout === 'FREE_FORM' ? 'py-1.5' : 'py-4'} text-sm text-gray-600 text-right`}>
+                                               <div>{item.quantity}</div>
+                                               {(() => {
+                                                  const prod = products.find(p => p.id === item.productId);
+                                                  if (prod && prod.empaqueCantidad && prod.empaqueCantidad > 1) {
+                                                     const bultos = item.quantity / prod.empaqueCantidad;
+                                                     const bultosStr = Number(bultos.toFixed(2)).toLocaleString('es-VE');
+                                                     const unit = (prod.unidad_empaque || 'bulto').trim();
+                                                     const finalUnit = bultos === 1 ? unit : (unit.endsWith('s') ? unit : `${unit}s`);
+                                                     return (
+                                                        <div className="text-[10px] text-gray-400 mt-0.5 font-normal">
+                                                           ({bultosStr} {finalUnit})
+                                                        </div>
+                                                     );
+                                                  }
+                                                  return null;
+                                               })()}
+                                           </td>
+                                           {(viewMode !== 'DELIVERY_NOTE' || showPricesInDeliveryNote) && (
+                                              <>
+                                                 <td className={`${printLayout === 'FREE_FORM' ? 'py-1.5' : 'py-4'} text-sm text-gray-600 text-right font-mono`}>
+                                                     {formatCurrency((typeof item.unitPrice === 'number' && !isNaN(item.unitPrice) ? item.unitPrice : (typeof item.price === 'number' && !isNaN(item.price) ? item.price : 0)) * conversionFactor, displayCurrency)}
+                                                 </td>
+                                                 <td className={`${printLayout === 'FREE_FORM' ? 'py-1.5' : 'py-4'} text-sm text-gray-800 text-right font-medium font-mono`}>
+                                                     {formatCurrency(item.total * conversionFactor, displayCurrency)}
+                                                 </td>
+                                              </>
+                                           )}
+                                       </tr>
+                                   );
+                               });
+                           } else {
+                               rows.push(
+                                   <tr key="fallback">
+                                      <td className="py-4 text-sm text-gray-800" colSpan={viewMode === 'DELIVERY_NOTE' && !showPricesInDeliveryNote ? 2 : 3}>
+                                          <p className="font-medium">{invoice.description || 'Servicios Profesionales'}</p>
+                                      </td>
+                                      {(viewMode !== 'DELIVERY_NOTE' || showPricesInDeliveryNote) && (
+                                         <td className="py-4 text-sm text-gray-800 text-right font-medium font-mono">
+                                             {formatCurrency(totals.subtotal * conversionFactor, displayCurrency)}
                                          </td>
-                                         <td className={`${printLayout === 'FREE_FORM' ? 'py-1.5' : 'py-4'} text-sm text-gray-800 text-right font-medium font-mono`}>
-                                             {formatCurrency(item.total * conversionFactor, displayCurrency)}
-                                         </td>
-                                      </>
-                                   )}
-                               </tr>
-                           ));
-                       })() : (
-                           <tr>
-                              <td className="py-4 text-sm text-gray-800" colSpan={viewMode === 'DELIVERY_NOTE' && !showPricesInDeliveryNote ? 2 : 3}>
-                                  <p className="font-medium">{invoice.description || 'Servicios Profesionales'}</p>
-                              </td>
-                              {(viewMode !== 'DELIVERY_NOTE' || showPricesInDeliveryNote) && (
-                                 <td className="py-4 text-sm text-gray-800 text-right font-medium font-mono">
-                                     {formatCurrency(totals.subtotal * conversionFactor, displayCurrency)}
-                                 </td>
-                              )}
-                           </tr>
-                       )}
-                   </tbody>
+                                      )}
+                                   </tr>
+                               );
+                           }
+
+                           // Pad up to 10 rows if in FREE_FORM printLayout
+                           if (printLayout === 'FREE_FORM' && rows.length < 10) {
+                               const padCount = 10 - rows.length;
+                               for (let i = 0; i < padCount; i++) {
+                                   rows.push(
+                                       <tr key={`pad-${i}`} className="border-b border-gray-50 last:border-0 print:border-0">
+                                           <td className="py-1.5 text-sm">&nbsp;</td>
+                                           <td className="py-1.5 text-sm">&nbsp;</td>
+                                           {(viewMode !== 'DELIVERY_NOTE' || showPricesInDeliveryNote) && (
+                                              <>
+                                                 <td className="py-1.5 text-sm">&nbsp;</td>
+                                                 <td className="py-1.5 text-sm">&nbsp;</td>
+                                              </>
+                                           )}
+                                       </tr>
+                                   );
+                               }
+                           }
+
+                           return rows;
+                       })()}</tbody>
                </table>
 
               {(viewMode !== 'DELIVERY_NOTE' || showPricesInDeliveryNote) && (
