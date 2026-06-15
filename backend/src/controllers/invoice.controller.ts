@@ -64,7 +64,7 @@ export const createInvoice = async (req: Request, res: Response) => {
       projectId, type, issueDate, dueDate, currency, total, code,
       vendorId, customerId, description, taxAmount,
       isPaid, paymentAccountId, paymentMethod, paymentReference, lines,
-      status, isDeliveryNote
+      status, isDeliveryNote, purchaseOrder, purchaseOrderDate
     } = req.body;
     
     const user = (req as any).user;
@@ -145,6 +145,8 @@ export const createInvoice = async (req: Request, res: Response) => {
           status: targetStatus,
           lines: JSON.stringify(finalLinesData), // Store consistent object structure
           createdBy: user.id,
+          purchaseOrder: purchaseOrder || null,
+          purchaseOrderDate: purchaseOrderDate || null,
         }
       });
 
@@ -280,7 +282,8 @@ export const updateInvoice = async (req: Request, res: Response) => {
     const user = (req as any).user;
     const { 
       projectId, type, issueDate, dueDate, currency, total, code,
-      vendorId, customerId, description, taxAmount, lines, status 
+      vendorId, customerId, description, taxAmount, lines, status,
+      purchaseOrder, purchaseOrderDate
     } = req.body;
     
     // Check existence and status
@@ -394,6 +397,8 @@ export const updateInvoice = async (req: Request, res: Response) => {
           lines: JSON.stringify(finalLinesData),
           vendorId: vendorId !== undefined ? (vendorId || null) : invoice.vendorId,
           customerId: customerId !== undefined ? (customerId || null) : invoice.customerId,
+          purchaseOrder: purchaseOrder !== undefined ? (purchaseOrder || null) : invoice.purchaseOrder,
+          purchaseOrderDate: purchaseOrderDate !== undefined ? (purchaseOrderDate || null) : invoice.purchaseOrderDate,
         }
       });
 

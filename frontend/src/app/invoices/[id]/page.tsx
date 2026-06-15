@@ -51,6 +51,8 @@ interface Invoice {
   outstanding: number;
   totalCost?: number;
   netProfit?: number;
+  purchaseOrder?: string;
+  purchaseOrderDate?: string;
 }
 
 export default function InvoiceDetailsPage() {
@@ -539,6 +541,12 @@ export default function InvoiceDetailsPage() {
                       <div className="text-sm text-gray-500 space-y-1">
                           <p>Fecha de Emisión: {formatDate(invoice.issueDate)}</p>
                           <p>Fecha de Vencimiento: {formatDate(invoice.dueDate)}</p>
+                          {invoice.purchaseOrder && (
+                              <p>Orden de Compra: <span className="font-mono text-gray-800 font-semibold">{invoice.purchaseOrder}</span></p>
+                          )}
+                          {invoice.purchaseOrderDate && (
+                              <p>Fecha de O.C.: <span className="text-gray-800 font-semibold">{invoice.purchaseOrderDate}</span></p>
+                          )}
                           {displayCurrency !== invoice.currency && (
                               <p className="text-xs text-blue-600 font-semibold mt-1">
                                   Tasa Ref: {getActiveRate().toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 4 })} {rateSource === 'BCV_EUR' ? 'BS/EUR' : 'BS/USD'}

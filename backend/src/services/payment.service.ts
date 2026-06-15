@@ -221,6 +221,45 @@ export const PaymentService = {
                 }
             });
 
+            // Keep the corresponding posting transaction in sync
+            const postingTxn = await tx.transaction.findFirst({
+              where: {
+                projectId: inv.projectId,
+                reference: inv.code,
+                type: inv.type === 'BILL' ? 'EXPENSE' : 'INCOME',
+                status: 'COMPLETED'
+              }
+            });
+
+            if (postingTxn) {
+              let addedPaid = a.amount;
+              if (postingTxn.currency !== currency && effectiveRate) {
+                  if (postingTxn.currency === 'USD' && currency === 'BS') addedPaid = a.amount / effectiveRate;
+                  else if (postingTxn.currency === 'BS' && currency === 'USD') addedPaid = a.amount * effectiveRate;
+              }
+              
+              const txnAmount = Number(postingTxn.amount || 0);
+              const currentPaid = Number(postingTxn.amountPaid || 0) + addedPaid;
+              const normalizedPaid = Math.min(txnAmount, currentPaid);
+              const epsilon = 0.01;
+
+              let nextPaymentStatus: 'PENDING' | 'PARTIAL' | 'PAID' = 'PENDING';
+
+              if (normalizedPaid >= txnAmount - epsilon) {
+                nextPaymentStatus = 'PAID';
+              } else if (normalizedPaid > epsilon) {
+                nextPaymentStatus = 'PARTIAL';
+              }
+
+              await tx.transaction.update({
+                where: { id: postingTxn.id },
+                data: {
+                  amountPaid: normalizedPaid,
+                  paymentStatus: nextPaymentStatus
+                }
+              });
+            }
+
             if (newStatus === 'PAID') {
                 await calculateInvoiceProfitability(inv.id, tx);
             }

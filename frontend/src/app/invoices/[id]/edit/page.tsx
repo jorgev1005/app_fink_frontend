@@ -46,6 +46,10 @@ export default function EditInvoicePage() {
   const [issueDate, setIssueDate] = useState('');
   const [dueDate, setDueDate] = useState('');
   
+  // Purchase Order
+  const [purchaseOrder, setPurchaseOrder] = useState('');
+  const [purchaseOrderDate, setPurchaseOrderDate] = useState('');
+  
   // Initial Load (Projects & Invoice Data)
   useEffect(() => {
     const init = async () => {
@@ -117,6 +121,8 @@ export default function EditInvoicePage() {
             setIssueDate(inv.issueDate ? inv.issueDate.slice(0,10) : '');
             setDueDate(inv.dueDate ? inv.dueDate.slice(0,10) : '');
             setContactId(inv.vendorId || inv.customerId || '');
+            setPurchaseOrder(inv.purchaseOrder || '');
+            setPurchaseOrderDate(inv.purchaseOrderDate || '');
         }
       } catch (e: any) {
         console.error('Error loading data', e);
@@ -236,7 +242,9 @@ export default function EditInvoicePage() {
               quantity: Number(line.quantity || 1),
               unitPrice: Number(line.price || 0),
               total: Number(line.total || 0)
-          })) : []
+          })) : [],
+          purchaseOrder: type === 'INVOICE' ? (purchaseOrder || null) : null,
+          purchaseOrderDate: type === 'INVOICE' ? (purchaseOrderDate || null) : null
       };      
       await api.invoices.update(id, body);
       router.push('/invoices');
@@ -413,6 +421,31 @@ export default function EditInvoicePage() {
                             />
                         </div>
                     </div>
+
+                    {/* Purchase Order (Only for Sales Invoices) */}
+                    {type === 'INVOICE' && (
+                        <div className="grid grid-cols-2 gap-4 md:col-span-2">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Orden de Compra (O.C.)</label>
+                                <input 
+                                    className="w-full p-2.5 bg-white border border-gray-200 focus:ring-2 focus:ring-blue-100 rounded-xl transition-all outline-none"
+                                    placeholder="Ej. OC-1234, OC-5678"
+                                    value={purchaseOrder}
+                                    onChange={(e) => setPurchaseOrder(e.target.value)}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Fecha de O.C.</label>
+                                <input 
+                                    type="text"
+                                    className="w-full p-2.5 bg-white border border-gray-200 focus:ring-2 focus:ring-blue-100 rounded-xl transition-all outline-none"
+                                    placeholder="Ej. 05/06/2026, 10/06/2026"
+                                    value={purchaseOrderDate}
+                                    onChange={(e) => setPurchaseOrderDate(e.target.value)}
+                                />
+                            </div>
+                        </div>
+                    )}
                 </div>
             </section>
 

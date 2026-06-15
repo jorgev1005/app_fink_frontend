@@ -233,6 +233,46 @@ export const payInvoice = async (req: Request, res: Response) => {
       const newOutstanding = Number(invoice.outstanding) - payAmount;
       const nextStatus = newOutstanding <= 0 ? 'PAID' : 'PARTIALLY_PAID';
       await tx.invoice.update({ where: { id: invoice.id }, data: { outstanding: newOutstanding <= 0 ? 0 : newOutstanding, status: nextStatus } });
+
+      // Keep the corresponding posting transaction in sync
+      const postingTxn = await tx.transaction.findFirst({
+        where: {
+          projectId: invoice.projectId,
+          reference: invoice.code,
+          type: invoice.type === 'BILL' ? 'EXPENSE' : 'INCOME',
+          status: 'COMPLETED'
+        }
+      });
+
+      if (postingTxn) {
+        let addedPaid = payAmount;
+        if (postingTxn.currency !== (currency || invoice.currency)) {
+          // if currencies differ, we could apply conversion rate here if available
+          // For simplicity/safety, we assume rate is 1 or keep it as is
+        }
+        
+        const txnAmount = Number(postingTxn.amount || 0);
+        const currentPaid = Number(postingTxn.amountPaid || 0) + addedPaid;
+        const normalizedPaid = Math.min(txnAmount, currentPaid);
+        const epsilon = 0.01;
+
+        let nextPaymentStatus: 'PENDING' | 'PARTIAL' | 'PAID' = 'PENDING';
+
+        if (normalizedPaid >= txnAmount - epsilon) {
+          nextPaymentStatus = 'PAID';
+        } else if (normalizedPaid > epsilon) {
+          nextPaymentStatus = 'PARTIAL';
+        }
+
+        await tx.transaction.update({
+          where: { id: postingTxn.id },
+          data: {
+            amountPaid: normalizedPaid,
+            paymentStatus: nextPaymentStatus
+          }
+        });
+      }
+
       if (nextStatus === 'PAID') {
         await calculateInvoiceProfitability(invoice.id, tx);
       }
