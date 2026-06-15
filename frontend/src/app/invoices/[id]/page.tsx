@@ -361,27 +361,38 @@ export default function InvoiceDetailsPage() {
 
   return (
     <div className="min-h-screen bg-gray-100 p-4 md:p-8 print:bg-white print:p-0">
-      {printLayout === 'FREE_FORM' && (
-        <style dangerouslySetInnerHTML={{__html: `
-          @media print {
-            @page {
-              margin-left: 0.5cm !important;
-              margin-right: 0.5cm !important;
-              margin-top: 4.5cm !important;
-              margin-bottom: 4cm !important;
-            }
-            body {
-              margin: 0 !important;
-              padding: 0 !important;
-            }
-            .print-no-shadow {
-              box-shadow: none !important;
-              border: none !important;
-              padding: 0 !important;
+      <style dangerouslySetInnerHTML={{__html: `
+        @media print {
+          @page {
+            margin: 0 !important;
+          }
+          body {
+            margin: 0 !important;
+            padding: 0 !important;
+          }
+          .print-wrapper {
+            box-shadow: none !important;
+            border: none !important;
+            border-radius: 0 !important;
+            max-width: 100% !important;
+            margin: 0 !important;
+            ${printLayout === 'FREE_FORM' 
+              ? `
+                padding-left: 0.5cm !important;
+                padding-right: 0.5cm !important;
+                padding-top: 4.5cm !important;
+                padding-bottom: 4.0cm !important;
+                `
+              : `
+                padding-left: 1.5cm !important;
+                padding-right: 1.5cm !important;
+                padding-top: 1.5cm !important;
+                padding-bottom: 1.5cm !important;
+                `
             }
           }
-        `}} />
-      )}
+        }
+      `}} />
       
       {/* Action Bar */}
       <div className="max-w-4xl mx-auto mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 print:hidden">
@@ -544,7 +555,7 @@ export default function InvoiceDetailsPage() {
       </div>
 
       {/* Invoice Paper */}
-      <div className={`max-w-4xl mx-auto bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden print:shadow-none print:border-none print:rounded-none print:max-w-full print:my-0 print-no-shadow`}>
+      <div className={`max-w-4xl mx-auto bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden print:shadow-none print:border-none print:rounded-none print:max-w-full print:my-0 print-no-shadow print-wrapper`}>
            
            {/* Header */}
            <div className={`${printLayout === 'FREE_FORM' ? 'p-4 print:p-0 print:pb-2' : 'p-8 md:p-12 print:p-4'} border-b border-gray-100`}>
@@ -804,7 +815,7 @@ export default function InvoiceDetailsPage() {
               )}
           </div>
           
-          <div className="bg-gray-50 px-8 py-6 border-t border-gray-200 text-center text-xs text-gray-400">
+          <div className="bg-gray-50 px-8 py-6 border-t border-gray-200 text-center text-xs text-gray-400 print:hidden">
                Documento generado por Sistema FINK
           </div>
       </div>
