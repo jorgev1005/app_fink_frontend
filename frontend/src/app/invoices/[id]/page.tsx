@@ -625,18 +625,6 @@ export default function InvoiceDetailsPage() {
                                             {item.notes}
                                          </p>
                                       )}
-                                      {(() => {
-                                          const prod = products.find(p => p.id === item.productId) ||
-                                                       products.find(p => p.name.toLowerCase() === (item.description || item.name || '').toLowerCase());
-                                          if (prod && prod.description) {
-                                             return (
-                                                <p className="text-[10px] text-gray-400 mt-0.5 font-normal whitespace-pre-wrap leading-tight">
-                                                   {prod.description}
-                                                </p>
-                                             );
-                                          }
-                                          return null;
-                                       })()}
                                   </td>
                                   <td className="py-4 text-sm text-gray-600 text-right">
                                       <div>{item.quantity}</div>
