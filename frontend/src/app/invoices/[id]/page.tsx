@@ -782,6 +782,97 @@ export default function InvoiceDetailsPage() {
                  </div>
               )}
 
+              {/* Delivery Note Summary: grouped by product code */}
+              {viewMode === 'DELIVERY_NOTE' && (() => {
+                const itemsToSummarize = invoice.items || [];
+                if (itemsToSummarize.length === 0) return null;
+
+                // Build a map: productId → { description, totalQty, totalBultos, empaqueCantidad, unidadEmpaque }
+                const summaryMap = new Map<string, {
+                  description: string;
+                  totalQty: number;
+                  empaqueCantidad: number;
+                  unidadEmpaque: string;
+                }>();
+
+                itemsToSummarize.forEach((item) => {
+                  const key = item.productId || `__no_product__${item.description || item.name || ''}`;
+                  const prod = products.find((p: any) => p.id === item.productId);
+                  const empaqQty = prod?.empaqueCantidad && prod.empaqueCantidad > 1 ? prod.empaqueCantidad : 0;
+                  const unidad = prod?.unidad_empaque || 'bulto';
+
+                  if (summaryMap.has(key)) {
+                    const entry = summaryMap.get(key)!;
+                    entry.totalQty += item.quantity;
+                  } else {
+                    summaryMap.set(key, {
+                      description: item.description || item.name || 'Sin nombre',
+                      totalQty: item.quantity,
+                      empaqueCantidad: empaqQty,
+                      unidadEmpaque: unidad,
+                    });
+                  }
+                });
+
+                const summaryRows = Array.from(summaryMap.values());
+                // Only show summary if there's at least one product with packaging OR if any product appears merged (qty > original single entry)
+                // Always show when in delivery note mode with items
+                const grandTotalQty = summaryRows.reduce((acc, r) => acc + r.totalQty, 0);
+                const grandTotalBultos = summaryRows.reduce((acc, r) => {
+                  if (r.empaqueCantidad > 0) return acc + (r.totalQty / r.empaqueCantidad);
+                  return acc;
+                }, 0);
+
+                const hasBultos = summaryRows.some(r => r.empaqueCantidad > 0);
+
+                return (
+                  <div className={`mt-6 pt-4 border-t border-gray-200 ${printLayout === 'FREE_FORM' ? 'mt-3 pt-2' : ''}`}>
+                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
+                      Resumen de Despacho
+                    </h4>
+                    <table className="w-full text-left text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-200">
+                          <th className="py-1.5 text-xs font-bold text-gray-400 uppercase tracking-wider w-1/2">Producto</th>
+                          <th className="py-1.5 text-xs font-bold text-gray-400 uppercase tracking-wider text-right">Total Unid.</th>
+                          {hasBultos && (
+                            <th className="py-1.5 text-xs font-bold text-gray-400 uppercase tracking-wider text-right">Total Bultos</th>
+                          )}
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {summaryRows.map((row, idx) => {
+                          const bultosNum = row.empaqueCantidad > 0 ? row.totalQty / row.empaqueCantidad : null;
+                          const bultosStr = bultosNum !== null
+                            ? `${Number(bultosNum.toFixed(2)).toLocaleString('es-VE')} ${bultosNum === 1 ? row.unidadEmpaque : (row.unidadEmpaque.endsWith('s') ? row.unidadEmpaque : `${row.unidadEmpaque}s`)}`
+                            : '—';
+                          return (
+                            <tr key={idx} className="border-b border-gray-50 last:border-0">
+                              <td className={`${printLayout === 'FREE_FORM' ? 'py-1' : 'py-2'} text-gray-700 font-medium`}>{row.description}</td>
+                              <td className={`${printLayout === 'FREE_FORM' ? 'py-1' : 'py-2'} text-gray-800 font-mono text-right font-semibold`}>{row.totalQty.toLocaleString('es-VE')}</td>
+                              {hasBultos && (
+                                <td className={`${printLayout === 'FREE_FORM' ? 'py-1' : 'py-2'} text-gray-600 font-mono text-right`}>{bultosStr}</td>
+                              )}
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                      <tfoot>
+                        <tr className="border-t-2 border-gray-300">
+                          <td className={`${printLayout === 'FREE_FORM' ? 'py-1' : 'py-2'} text-xs font-bold text-gray-500 uppercase`}>TOTAL</td>
+                          <td className={`${printLayout === 'FREE_FORM' ? 'py-1' : 'py-2'} font-mono text-right font-bold text-gray-900`}>{grandTotalQty.toLocaleString('es-VE')}</td>
+                          {hasBultos && (
+                            <td className={`${printLayout === 'FREE_FORM' ? 'py-1' : 'py-2'} font-mono text-right font-bold text-gray-700`}>
+                              {Number(grandTotalBultos.toFixed(2)).toLocaleString('es-VE')}
+                            </td>
+                          )}
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                );
+              })()}
+
               {/* Internal Profitability Details (print:hidden) */}
               {invoice.type === 'INVOICE' && invoice.status === 'PAID' && (invoice.totalCost !== undefined) && (
                  <div className="mt-8 pt-6 border-t border-dashed border-gray-200 print:hidden">
