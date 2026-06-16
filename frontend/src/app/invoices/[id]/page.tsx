@@ -826,17 +826,17 @@ export default function InvoiceDetailsPage() {
                 const hasBultos = summaryRows.some(r => r.empaqueCantidad > 0);
 
                 return (
-                  <div className={`mt-6 pt-4 border-t border-gray-200 ${printLayout === 'FREE_FORM' ? 'mt-3 pt-2' : ''}`}>
-                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">
+                  <div className="mt-3 pt-2 border-t border-gray-200 print:mt-2 print:pt-1">
+                    <h4 className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-0.5 print:mb-0">
                       Resumen de Despacho
                     </h4>
-                    <table className="w-full text-left text-sm">
+                    <table className="w-full text-left">
                       <thead>
-                        <tr className="border-b border-gray-200">
-                          <th className="py-1.5 text-xs font-bold text-gray-400 uppercase tracking-wider w-1/2">Producto</th>
-                          <th className="py-1.5 text-xs font-bold text-gray-400 uppercase tracking-wider text-right">Total Unid.</th>
+                        <tr className="border-b border-gray-300">
+                          <th className="py-0.5 text-[9px] font-bold text-gray-400 uppercase tracking-wider w-1/2">Producto</th>
+                          <th className="py-0.5 text-[9px] font-bold text-gray-400 uppercase tracking-wider text-right">Unidades</th>
                           {hasBultos && (
-                            <th className="py-1.5 text-xs font-bold text-gray-400 uppercase tracking-wider text-right">Total Bultos</th>
+                            <th className="py-0.5 text-[9px] font-bold text-gray-400 uppercase tracking-wider text-right">Bultos</th>
                           )}
                         </tr>
                       </thead>
@@ -848,21 +848,21 @@ export default function InvoiceDetailsPage() {
                             : '—';
                           return (
                             <tr key={idx} className="border-b border-gray-50 last:border-0">
-                              <td className={`${printLayout === 'FREE_FORM' ? 'py-1' : 'py-2'} text-gray-700 font-medium`}>{row.description}</td>
-                              <td className={`${printLayout === 'FREE_FORM' ? 'py-1' : 'py-2'} text-gray-800 font-mono text-right font-semibold`}>{row.totalQty.toLocaleString('es-VE')}</td>
+                              <td className="py-0.5 text-[10px] text-gray-700 font-medium leading-tight">{row.description}</td>
+                              <td className="py-0.5 text-[10px] text-gray-800 font-mono text-right font-semibold leading-tight">{row.totalQty.toLocaleString('es-VE')}</td>
                               {hasBultos && (
-                                <td className={`${printLayout === 'FREE_FORM' ? 'py-1' : 'py-2'} text-gray-600 font-mono text-right`}>{bultosStr}</td>
+                                <td className="py-0.5 text-[10px] text-gray-600 font-mono text-right leading-tight">{bultosStr}</td>
                               )}
                             </tr>
                           );
                         })}
                       </tbody>
                       <tfoot>
-                        <tr className="border-t-2 border-gray-300">
-                          <td className={`${printLayout === 'FREE_FORM' ? 'py-1' : 'py-2'} text-xs font-bold text-gray-500 uppercase`}>TOTAL</td>
-                          <td className={`${printLayout === 'FREE_FORM' ? 'py-1' : 'py-2'} font-mono text-right font-bold text-gray-900`}>{grandTotalQty.toLocaleString('es-VE')}</td>
+                        <tr className="border-t border-gray-400">
+                          <td className="py-0.5 text-[9px] font-bold text-gray-500 uppercase">TOTAL</td>
+                          <td className="py-0.5 text-[10px] font-mono text-right font-bold text-gray-900">{grandTotalQty.toLocaleString('es-VE')}</td>
                           {hasBultos && (
-                            <td className={`${printLayout === 'FREE_FORM' ? 'py-1' : 'py-2'} font-mono text-right font-bold text-gray-700`}>
+                            <td className="py-0.5 text-[10px] font-mono text-right font-bold text-gray-700">
                               {Number(grandTotalBultos.toFixed(2)).toLocaleString('es-VE')}
                             </td>
                           )}
