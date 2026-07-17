@@ -39,6 +39,9 @@ interface Product {
   empaqueLargoCm?: number;
   empaqueAnchoCm?: number;
   empaqueAltoCm?: number;
+  largoCm?: number;
+  anchoCm?: number;
+  altoCm?: number;
   descuentoDivisasTipo?: string;
   descuentoDivisasValor?: number;
   costPrice?: number;
@@ -91,6 +94,7 @@ export default function InventoryPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [selectedProject, setSelectedProject] = useState<string>('');
+  const [exchangeRate, setExchangeRate] = useState<any>(null);
   
   // Modal State
   const [showModal, setShowModal] = useState(false);
@@ -122,6 +126,7 @@ export default function InventoryPage() {
 
   useEffect(() => {
     loadProjects();
+    loadExchangeRate();
   }, []);
 
   useEffect(() => {
@@ -134,6 +139,15 @@ export default function InventoryPage() {
       setProjects(res.data.data || []);
     } catch (error) {
       console.error("Error loading projects", error);
+    }
+  };
+
+  const loadExchangeRate = async () => {
+    try {
+      const res = await api.exchangeRates.getLatest();
+      setExchangeRate(res.data.data || null);
+    } catch (error) {
+      console.error("Error loading exchange rate", error);
     }
   };
 
@@ -260,12 +274,39 @@ export default function InventoryPage() {
         empaqueLargoCm: 0,
         empaqueAnchoCm: 0,
         empaqueAltoCm: 0,
+        largoCm: 0,
+        anchoCm: 0,
+        altoCm: 0,
         costPrice: 0,
         packagingCost: 0,
       });
     }
     setShowModal(true);
   };
+
+  // Calcular métricas agregadas del inventario actual
+  let totalCostVal = 0;
+  let totalSaleVal = 0;
+  const usdToBs = exchangeRate ? (exchangeRate.usdToBs || 1) : 1;
+
+  products.forEach(p => {
+    const qty = p.stock || 0;
+    if (qty <= 0) return;
+
+    let cost = (p.costPrice || 0) + (p.packagingCost || 0);
+    let price = p.unitPrice || 0;
+
+    if (p.currency === 'BS') {
+      cost = cost / usdToBs;
+      price = price / usdToBs;
+    }
+
+    totalCostVal += qty * cost;
+    totalSaleVal += qty * price;
+  });
+
+  const projectedProfitVal = totalSaleVal - totalCostVal;
+  const profitMarginVal = totalSaleVal > 0 ? (projectedProfitVal / totalSaleVal) * 100 : 0;
 
   return (
     <div className="p-6 space-y-6 bg-slate-50 min-h-screen">
@@ -342,6 +383,61 @@ export default function InventoryPage() {
               <option key={p.id} value={p.id}>{p.name}</option>
             ))}
           </select>
+        </div>
+      </div>
+
+      {/* Resumen de Inventario (Utilidades) */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        {/* Costo Total */}
+        <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between">
+          <div>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Costo de Inventario (Costo + Empaque)</p>
+            <h3 className="text-2xl font-bold text-slate-800 mt-2">
+              {new Intl.NumberFormat('es-VE', { style: 'currency', currency: 'USD' }).format(totalCostVal)}
+            </h3>
+          </div>
+          <div className="text-xs text-slate-400 mt-2">
+            Equivale a {new Intl.NumberFormat('es-VE', { style: 'currency', currency: 'VES' }).format(totalCostVal * usdToBs)} (Tasa: {usdToBs.toFixed(2)})
+          </div>
+        </div>
+
+        {/* Precio Venta Total */}
+        <div className="bg-white p-5 rounded-xl shadow-sm border border-slate-200 flex flex-col justify-between">
+          <div>
+            <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider">Valor de Venta Estimado</p>
+            <h3 className="text-2xl font-bold text-slate-800 mt-2">
+              {new Intl.NumberFormat('es-VE', { style: 'currency', currency: 'USD' }).format(totalSaleVal)}
+            </h3>
+          </div>
+          <div className="text-xs text-slate-400 mt-2">
+            Equivale a {new Intl.NumberFormat('es-VE', { style: 'currency', currency: 'VES' }).format(totalSaleVal * usdToBs)}
+          </div>
+        </div>
+
+        {/* Utilidad Proyectada */}
+        <div className="bg-emerald-50 p-5 rounded-xl shadow-sm border border-emerald-100 flex flex-col justify-between">
+          <div>
+            <p className="text-xs font-semibold text-emerald-700 uppercase tracking-wider">Utilidad Proyectada</p>
+            <h3 className="text-2xl font-bold text-emerald-800 mt-2">
+              {new Intl.NumberFormat('es-VE', { style: 'currency', currency: 'USD' }).format(projectedProfitVal)}
+            </h3>
+          </div>
+          <div className="text-xs text-emerald-600/80 mt-2">
+            Ganancia al vender todo el stock
+          </div>
+        </div>
+
+        {/* Margen */}
+        <div className="bg-blue-50 p-5 rounded-xl shadow-sm border border-blue-100 flex flex-col justify-between">
+          <div>
+            <p className="text-xs font-semibold text-blue-700 uppercase tracking-wider">Margen de Ganancia Promedio</p>
+            <h3 className="text-2xl font-bold text-blue-800 mt-2">
+              {profitMarginVal.toFixed(2)}%
+            </h3>
+          </div>
+          <div className="text-xs text-blue-600/80 mt-2">
+            Sobre valor de venta
+          </div>
         </div>
       </div>
 
@@ -669,6 +765,43 @@ export default function InventoryPage() {
                       value={formData.empaquePesoKg || 0}
                       onChange={e => setFormData({...formData, empaquePesoKg: parseFloat(e.target.value) || 0})}
                     />
+                  </div>
+                </div>
+
+                <label className="block text-sm font-medium text-slate-700 mb-2">Dimensiones del Producto Individual (cm)</label>
+                <div className="grid grid-cols-3 gap-4 mb-4">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-400 w-8">Largo</span>
+                      <input 
+                        type="number" 
+                        className="w-full border border-slate-200 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                        value={formData.largoCm || 0}
+                        onChange={e => setFormData({...formData, largoCm: parseFloat(e.target.value) || 0})}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-400 w-8">Ancho</span>
+                      <input 
+                        type="number" 
+                        className="w-full border border-slate-200 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                        value={formData.anchoCm || 0}
+                        onChange={e => setFormData({...formData, anchoCm: parseFloat(e.target.value) || 0})}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-slate-400 w-8">Alto</span>
+                      <input 
+                        type="number" 
+                        className="w-full border border-slate-200 rounded-lg p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                        value={formData.altoCm || 0}
+                        onChange={e => setFormData({...formData, altoCm: parseFloat(e.target.value) || 0})}
+                      />
+                    </div>
                   </div>
                 </div>
 

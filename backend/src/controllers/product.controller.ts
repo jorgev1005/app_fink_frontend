@@ -5,7 +5,7 @@ import { getProjectAccessFilter, checkProjectWriteAccess } from '../utils/projec
 // GET /api/products - listar productos (opcional por proyecto y búsqueda)
 export const getProducts = async (req: Request, res: Response) => {
   try {
-    const { projectId, search, limit = '50' } = req.query;
+    const { projectId, search, limit = '1000' } = req.query;
     const where: any = { 
       isActive: true,
       ...getProjectAccessFilter(req.user!)
@@ -24,7 +24,11 @@ export const getProducts = async (req: Request, res: Response) => {
       orderBy: { name: 'asc' },
     });
 
-    res.json({ success: true, data: products });
+    const exchangeRate = await prisma.exchangeRate.findFirst({
+      orderBy: { date: 'desc' },
+    });
+
+    res.json({ success: true, data: products, exchangeRate });
   } catch (error: any) {
     res.status(500).json({ success: false, error: { message: error.message } });
   }
@@ -78,6 +82,9 @@ export const createProduct = async (req: Request, res: Response) => {
       empaqueLargoCm,
       empaqueAnchoCm,
       empaqueAltoCm,
+      largoCm,
+      anchoCm,
+      altoCm,
       descuentoDivisasTipo,
       descuentoDivisasValor,
       forSale,
@@ -128,6 +135,9 @@ export const createProduct = async (req: Request, res: Response) => {
         empaqueLargoCm: empaqueLargoCm ? parseFloat(empaqueLargoCm) : 0,
         empaqueAnchoCm: empaqueAnchoCm ? parseFloat(empaqueAnchoCm) : 0,
         empaqueAltoCm: empaqueAltoCm ? parseFloat(empaqueAltoCm) : 0,
+        largoCm: largoCm ? parseFloat(largoCm) : 0,
+        anchoCm: anchoCm ? parseFloat(anchoCm) : 0,
+        altoCm: altoCm ? parseFloat(altoCm) : 0,
         descuentoDivisasTipo: descuentoDivisasTipo || 'dinamico',
         descuentoDivisasValor: descuentoDivisasValor ? parseFloat(descuentoDivisasValor) : 0,
         forSale: forSale !== undefined ? forSale : true,
@@ -151,6 +161,7 @@ export const updateProduct = async (req: Request, res: Response) => {
       division, medidas, tiempo_entrega, unidad_empaque, pedido_minimo, 
       colores_disponibles, descuentos_volumen, fuente_tasa, tasa_manual, url_catalogo, isPublic,
       pesoUnitarioKg, empaqueCantidad, empaquePesoKg, empaqueLargoCm, empaqueAnchoCm, empaqueAltoCm,
+      largoCm, anchoCm, altoCm,
       descuentoDivisasTipo, descuentoDivisasValor, forSale,
       costPrice, packagingCost
     } = req.body;
@@ -206,6 +217,9 @@ export const updateProduct = async (req: Request, res: Response) => {
         ...(empaqueLargoCm !== undefined && { empaqueLargoCm: parseFloat(empaqueLargoCm) }),
         ...(empaqueAnchoCm !== undefined && { empaqueAnchoCm: parseFloat(empaqueAnchoCm) }),
         ...(empaqueAltoCm !== undefined && { empaqueAltoCm: parseFloat(empaqueAltoCm) }),
+        ...(largoCm !== undefined && { largoCm: parseFloat(largoCm) }),
+        ...(anchoCm !== undefined && { anchoCm: parseFloat(anchoCm) }),
+        ...(altoCm !== undefined && { altoCm: parseFloat(altoCm) }),
         ...(descuentoDivisasTipo !== undefined && { descuentoDivisasTipo }),
         ...(descuentoDivisasValor !== undefined && { descuentoDivisasValor: parseFloat(descuentoDivisasValor) }),
         ...(forSale !== undefined && { forSale }),

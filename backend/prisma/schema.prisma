@@ -6,8 +6,8 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = "file:./dev.db"
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 // ============================================
@@ -680,6 +680,9 @@ model Product {
   empaqueLargoCm      Float?  @default(0)
   empaqueAnchoCm      Float?  @default(0)
   empaqueAltoCm       Float?  @default(0)
+  largoCm             Float?  @default(0)
+  anchoCm             Float?  @default(0)
+  altoCm              Float?  @default(0)
 
   isPublic            Boolean @default(true)
   forSale             Boolean @default(true)
