@@ -46,12 +46,23 @@ interface Product {
   descuentoDivisasValor?: number;
   costPrice?: number;
   packagingCost?: number;
+  division?: string;
 }
 
 interface Project {
   id: string;
   name: string;
 }
+
+const standardDivisions = [
+  "Aludra Terra (Agro)",
+  "Aludra Link (Empaques)",
+  "Aludra Link (Ferretería)",
+  "Aludra Link (Demarcación)",
+  "FERRETERIA",
+  "Cotización Bobinas"
+];
+
 
 export default function InventoryPage() {
     // Estado de ordenamiento de tabla
@@ -94,6 +105,7 @@ export default function InventoryPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [selectedProject, setSelectedProject] = useState<string>('');
+  const [selectedDivision, setSelectedDivision] = useState<string>('');
   const [exchangeRate, setExchangeRate] = useState<any>(null);
   
   // Modal State
@@ -122,6 +134,7 @@ export default function InventoryPage() {
     descuentoDivisasValor: 0,
     costPrice: 0,
     packagingCost: 0,
+    division: 'Aludra Terra (Agro)',
   });
 
   useEffect(() => {
@@ -154,7 +167,7 @@ export default function InventoryPage() {
   const loadProducts = async () => {
     setLoading(true);
     try {
-      const params: any = { limit: 100 };
+      const params: any = { limit: 1000 };
       if (selectedProject) params.projectId = selectedProject;
       if (search) params.search = search;
       
@@ -279,17 +292,30 @@ export default function InventoryPage() {
         altoCm: 0,
         costPrice: 0,
         packagingCost: 0,
+        division: 'Aludra Terra (Agro)',
       });
     }
     setShowModal(true);
   };
+
+  // Obtener la lista de divisiones únicas de los productos cargados
+  const divisionsList = Array.from(new Set(products.map(p => p.division).filter(Boolean)));
+
+  // Filtrar productos por división localmente
+  const filteredProducts = products.filter(p => {
+    if (selectedDivision && p.division !== selectedDivision) return false;
+    return true;
+  });
 
   // Calcular métricas agregadas del inventario actual
   let totalCostVal = 0;
   let totalSaleVal = 0;
   const usdToBs = exchangeRate ? (exchangeRate.usdToBs || 1) : 1;
 
-  products.forEach(p => {
+  filteredProducts.forEach(p => {
+    // Solo contemplar productos activos, aptos para la venta (isActive !== false y forSale !== false)
+    if (p.isActive === false || p.forSale === false) return;
+
     const qty = p.stock || 0;
     if (qty <= 0) return;
 
@@ -384,6 +410,20 @@ export default function InventoryPage() {
             ))}
           </select>
         </div>
+
+        <div className="flex items-center gap-2 min-w-[200px]">
+          <Filter size={18} className="text-slate-400" />
+          <select 
+            className="w-full border border-slate-200 rounded-lg py-2 px-3 focus:ring-2 focus:ring-blue-500 outline-none"
+            value={selectedDivision}
+            onChange={(e) => setSelectedDivision(e.target.value)}
+          >
+            <option value="">Todos los Grupos (Divisiones)</option>
+            {divisionsList.map(div => (
+              <option key={div} value={div}>{div}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* Resumen de Inventario (Utilidades) */}
@@ -458,13 +498,20 @@ export default function InventoryPage() {
             <tbody className="divide-y divide-slate-100">
               {loading ? (
                 <tr><td colSpan={6} className="p-8 text-center text-slate-400">Cargando...</td></tr>
-              ) : sortProducts(products).length === 0 ? (
+              ) : sortProducts(filteredProducts).length === 0 ? (
                 <tr><td colSpan={6} className="p-8 text-center text-slate-400">No se encontraron productos</td></tr>
               ) : (
-                sortProducts(products).map((product) => (
+                sortProducts(filteredProducts).map((product) => (
                   <tr key={product.id} className="hover:bg-slate-50 transition-colors group">
                     <td className="p-4">
-                      <div className="font-medium text-slate-800">{product.name}</div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-medium text-slate-800">{product.name}</span>
+                        {product.division && (
+                          <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-slate-100 text-slate-600 rounded">
+                            {product.division}
+                          </span>
+                        )}
+                      </div>
                       {product.description && <div className="text-xs text-slate-500 truncate max-w-[200px]">{product.description}</div>}
                     </td>
                     <td className="p-4 text-slate-500 font-mono text-xs">{product.sku || '-'}</td>
@@ -560,6 +607,40 @@ export default function InventoryPage() {
                   value={formData.description || ''}
                   onChange={e => setFormData({...formData, description: e.target.value})}
                 />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-slate-700 mb-1">Grupo de Producto / División</label>
+                <select 
+                  className="w-full border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 outline-none mb-2"
+                  value={standardDivisions.includes(formData.division || '') ? (formData.division || '') : 'custom'}
+                  onChange={e => {
+                    const val = e.target.value;
+                    if (val === 'custom') {
+                      setFormData({...formData, division: ''});
+                    } else {
+                      setFormData({...formData, division: val});
+                    }
+                  }}
+                >
+                  <option value="Aludra Terra (Agro)">Aludra Terra (Agro)</option>
+                  <option value="Aludra Link (Empaques)">Aludra Link (Empaques)</option>
+                  <option value="Aludra Link (Ferretería)">Aludra Link (Ferretería)</option>
+                  <option value="Aludra Link (Demarcación)">Aludra Link (Demarcación)</option>
+                  <option value="FERRETERIA">FERRETERIA</option>
+                  <option value="Cotización Bobinas">Cotización Bobinas</option>
+                  <option value="custom">Otro (Personalizado...)</option>
+                </select>
+                
+                {(!standardDivisions.includes(formData.division || '') || formData.division === '') && (
+                  <input 
+                    type="text"
+                    className="w-full border border-slate-200 rounded-lg p-2 focus:ring-2 focus:ring-blue-500 outline-none"
+                    value={formData.division || ''}
+                    onChange={e => setFormData({...formData, division: e.target.value})}
+                    placeholder="Escribe el nombre del grupo de producto personalizado"
+                  />
+                )}
               </div>
 
               <div className="grid grid-cols-2 gap-4">
