@@ -16,6 +16,8 @@ async function getNextInvoiceCode(projectId: string, isDeliveryNote: boolean = f
     ? project?.lastDeliveryNoteNumber 
     : project?.lastInvoiceNumber;
 
+  let candidate = '';
+
   if (lastSavedCode) {
     const cleanCode = lastSavedCode.trim();
     const match = cleanCode.match(/(\d+)$/);
@@ -25,37 +27,58 @@ async function getNextInvoiceCode(projectId: string, isDeliveryNote: boolean = f
       const nextVal = numVal + 1;
       const paddedNumStr = String(nextVal).padStart(numStr.length, '0');
       const prefix = cleanCode.substring(0, cleanCode.length - numStr.length);
-      return `${prefix}${paddedNumStr}`;
+      candidate = `${prefix}${paddedNumStr}`;
     }
   }
 
-  // 2. Fallback to querying recent invoices in DB if no setting exists
-  const lastInvoices = await prisma.invoice.findMany({
-    where: {
-      projectId,
-      type: 'INVOICE',
-      code: isDeliveryNote ? { startsWith: 'NE' } : { not: { startsWith: 'NE' } }
-    },
-    orderBy: {
-      createdAt: 'desc'
-    },
-    take: 50
-  });
+  if (!candidate) {
+    // 2. Fallback to querying recent invoices in DB if no setting exists
+    const lastInvoices = await prisma.invoice.findMany({
+      where: {
+        projectId,
+        type: 'INVOICE',
+        code: isDeliveryNote ? { startsWith: 'NE' } : { not: { startsWith: 'NE' } }
+      },
+      orderBy: {
+        createdAt: 'desc'
+      },
+      take: 50
+    });
 
-  for (const inv of lastInvoices) {
-    const cleanCode = inv.code.trim();
-    const match = cleanCode.match(/(\d+)$/);
+    for (const inv of lastInvoices) {
+      const cleanCode = inv.code.trim();
+      const match = cleanCode.match(/(\d+)$/);
+      if (match) {
+        const numStr = match[1];
+        const numVal = parseInt(numStr, 10);
+        const nextVal = numVal + 1;
+        const paddedNumStr = String(nextVal).padStart(numStr.length, '0');
+        const prefix = cleanCode.substring(0, cleanCode.length - numStr.length);
+        candidate = `${prefix}${paddedNumStr}`;
+        break;
+      }
+    }
+  }
+
+  if (!candidate) {
+    candidate = isDeliveryNote ? 'NE-0001' : '0001';
+  }
+
+  // 3. Ensure global uniqueness across the invoices table
+  while (await prisma.invoice.findUnique({ where: { code: candidate } })) {
+    const match = candidate.match(/(\d+)$/);
     if (match) {
       const numStr = match[1];
-      const numVal = parseInt(numStr, 10);
-      const nextVal = numVal + 1;
+      const nextVal = parseInt(numStr, 10) + 1;
       const paddedNumStr = String(nextVal).padStart(numStr.length, '0');
-      const prefix = cleanCode.substring(0, cleanCode.length - numStr.length);
-      return `${prefix}${paddedNumStr}`;
+      const prefix = candidate.substring(0, candidate.length - numStr.length);
+      candidate = `${prefix}${paddedNumStr}`;
+    } else {
+      candidate = `${candidate}-${Date.now()}`;
     }
   }
 
-  return isDeliveryNote ? 'NE-0001' : '0001';
+  return candidate;
 }
 
 export const createInvoice = async (req: Request, res: Response) => {
@@ -84,12 +107,28 @@ export const createInvoice = async (req: Request, res: Response) => {
         return res.status(400).json({ success: false, error: { message: 'El cliente es obligatorio para facturas de venta' } });
     }
 
-    let invoiceCode = code;
+    let invoiceCode = code ? String(code).trim() : '';
     if (!invoiceCode) {
       if (type === 'INVOICE') {
         invoiceCode = await getNextInvoiceCode(projectId, !!isDeliveryNote);
       } else {
-        invoiceCode = `INV-${projectId}-${Date.now()}`;
+        invoiceCode = `BILL-${projectId.substring(0, 4).toUpperCase()}-${Date.now()}`;
+      }
+    }
+
+    // Ensure strict uniqueness in database before creating
+    let checkAttempts = 0;
+    while (await prisma.invoice.findUnique({ where: { code: invoiceCode } })) {
+      checkAttempts++;
+      const match = invoiceCode.match(/(\d+)$/);
+      if (match) {
+        const numStr = match[1];
+        const nextVal = parseInt(numStr, 10) + checkAttempts;
+        const paddedNumStr = String(nextVal).padStart(numStr.length, '0');
+        const prefix = invoiceCode.substring(0, invoiceCode.length - numStr.length);
+        invoiceCode = `${prefix}${paddedNumStr}`;
+      } else {
+        invoiceCode = `${invoiceCode}-${Date.now()}`;
       }
     }
 
