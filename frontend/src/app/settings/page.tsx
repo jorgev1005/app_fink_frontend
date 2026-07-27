@@ -116,6 +116,24 @@ export default function GeneralSettingsPage() {
         </div>
       </div>
 
+      {/* Banner de Permisos de Usuarios */}
+      <div className="mb-6 bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-5 rounded-2xl shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div>
+          <h2 className="text-lg font-bold flex items-center gap-2">
+            🛡️ Permisos de Usuarios por Proyecto
+          </h2>
+          <p className="text-xs text-blue-100 mt-1">
+            Asigna qué correos electrónicos tienen acceso a ver o modificar cada uno de los proyectos.
+          </p>
+        </div>
+        <button
+          onClick={() => router.push("/settings/users")}
+          className="bg-white text-blue-700 hover:bg-blue-50 font-bold text-xs px-4 py-2.5 rounded-xl transition-all shadow-sm flex items-center justify-center gap-2 shrink-0"
+        >
+          Gestionar Permisos de Usuarios
+        </button>
+      </div>
+
       {projects.length === 0 ? (
         <div className="glass-card p-8 text-center text-slate-500">
           <Building className="w-12 h-12 mx-auto mb-3 text-slate-300" />

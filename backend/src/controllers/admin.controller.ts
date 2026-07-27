@@ -96,3 +96,133 @@ export const recalculateBalances = async (req: Request, res: Response) => {
     res.status(500).json({ success: false, error: { message: error.message } });
   }
 };
+
+// Obtener todos los usuarios con sus proyectos asignados
+export const getAllUsersWithProjects = async (req: Request, res: Response) => {
+  try {
+    const users = await prisma.user.findMany({
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        isActive: true,
+        createdAt: true,
+        projects: {
+          include: {
+            project: {
+              select: { id: true, name: true, code: true, color: true }
+            }
+          }
+        }
+      },
+      orderBy: { createdAt: 'desc' }
+    });
+
+    res.json({ success: true, data: users });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
+// Crear o invitar usuario y asignarle proyectos iniciales
+export const createOrInviteUser = async (req: Request, res: Response) => {
+  try {
+    const { email, firstName, lastName, password, role = 'USER', projectIds = [], projectRole = 'MEMBER' } = req.body;
+    
+    if (!email || !email.trim()) {
+      return res.status(400).json({ success: false, error: { message: 'El correo electrónico es requerido.' } });
+    }
+
+    const cleanEmail = email.trim().toLowerCase();
+    const existing = await prisma.user.findUnique({ where: { email: cleanEmail } });
+    if (existing) {
+      return res.status(409).json({ success: false, error: { message: 'Este correo electrónico ya se encuentra registrado.' } });
+    }
+
+    const bcrypt = require('bcryptjs');
+    const hashedPassword = await bcrypt.hash(password || 'Fink2026*', 10);
+
+    const newUser = await prisma.user.create({
+      data: {
+        email: cleanEmail,
+        firstName: (firstName || '').trim(),
+        lastName: (lastName || '').trim(),
+        password: hashedPassword,
+        role: role || 'USER',
+        projects: {
+          create: (projectIds || []).map((pId: string) => ({
+            projectId: pId,
+            role: (projectRole || 'MEMBER').toUpperCase()
+          }))
+        }
+      },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        projects: {
+          include: {
+            project: { select: { id: true, name: true, code: true, color: true } }
+          }
+        }
+      }
+    });
+
+    res.status(201).json({ success: true, data: newUser });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
+// Asignar o actualizar proyectos a un usuario específico
+export const setUserProjectAssignments = async (req: Request, res: Response) => {
+  try {
+    const { userId } = req.params;
+    const { assignments } = req.body; // Array of { projectId: string, role?: string }
+
+    if (!Array.isArray(assignments)) {
+      return res.status(400).json({ success: false, error: { message: 'El cuerpo de la petición debe contener un arreglo assignments.' } });
+    }
+
+    await prisma.$transaction(async (tx) => {
+      // Eliminar asignaciones previas del usuario objetivo
+      await tx.projectUser.deleteMany({ where: { userId } });
+
+      // Crear las nuevas asignaciones
+      if (assignments.length > 0) {
+        await tx.projectUser.createMany({
+          data: assignments.map((a: { projectId: string; role?: string }) => ({
+            userId,
+            projectId: a.projectId,
+            role: (a.role || 'MEMBER').toUpperCase()
+          }))
+        });
+      }
+    });
+
+    const updatedUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+        projects: {
+          include: {
+            project: { select: { id: true, name: true, code: true, color: true } }
+          }
+        }
+      }
+    });
+
+    res.json({ success: true, data: updatedUser });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+

@@ -221,6 +221,10 @@ export const consolidationAPI = {
 export const adminAPI = {
   // Recalcula saldos en el backend (ADMIN)
   recalculateBalances: () => apiClient.post('/api/admin/recalculate-balances'),
+  getUsers: () => apiClient.get('/api/admin/users'),
+  createUser: (data: any) => apiClient.post('/api/admin/users', data),
+  setUserProjects: (userId: string, assignments: { projectId: string; role?: string }[]) =>
+    apiClient.put(`/api/admin/users/${userId}/projects`, { assignments }),
 }
 
 export const recurringAPI = {
