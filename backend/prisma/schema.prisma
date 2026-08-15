@@ -67,6 +67,7 @@ model Project {
   defaultTaxRate          Float   @default(16)
   lastInvoiceNumber       String?
   lastDeliveryNoteNumber  String?
+  paymentConfig           Json?   // Datos bancarios, QR, Pago Móvil, Zelle, Binance y cuentas contables
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt

@@ -379,6 +379,25 @@ export const processPOSSale = async (req: Request, res: Response) => {
           if (pAmount <= 0) continue;
 
           const pCode = `PAY-${posCode}-${Date.now().toString().slice(-4)}`;
+
+          // Resolver cuenta contable destino desde la configuración de cobro del proyecto si no se indicó manualmente
+          let targetAccountId = p.accountId || null;
+          if (!targetAccountId) {
+            const projectObj = await tx.project.findUnique({ where: { id: projectId } });
+            const pConfig: any = projectObj?.paymentConfig;
+            if (pConfig) {
+              const m = (p.method || 'CASH').toUpperCase();
+              if (m === 'PAGO_MOVIL' || m === 'PAGOMOVIL') targetAccountId = pConfig.pagoMovil?.accountId || null;
+              else if (m === 'TRANSFER' || m === 'TRANSFERENCIA') targetAccountId = pConfig.transferencia?.accountId || null;
+              else if (m === 'ZELLE') targetAccountId = pConfig.zelle?.accountId || null;
+              else if (m === 'BINANCE' || m === 'CRYPTO') targetAccountId = pConfig.binance?.accountId || null;
+              else if (m === 'CARD' || m === 'POS' || m === 'PUNTO') targetAccountId = pConfig.puntoVenta?.accountId || null;
+              else if (m === 'CASH' || m === 'EFECTIVO') {
+                targetAccountId = (p.currency === 'USD' ? pConfig.efectivo?.accountIdUsd : pConfig.efectivo?.accountIdBs) || null;
+              }
+            }
+          }
+
           const paymentRec = await tx.payment.create({
             data: {
               projectId,
@@ -390,7 +409,7 @@ export const processPOSSale = async (req: Request, res: Response) => {
               reference: p.reference || null,
               status: 'COMPLETED',
               userId: req.user!.id,
-              accountId: p.accountId || null,
+              accountId: targetAccountId,
               allocations: {
                 create: {
                   invoiceId: invoice.id,
@@ -399,6 +418,18 @@ export const processPOSSale = async (req: Request, res: Response) => {
               }
             }
           });
+
+          // Si hay cuenta contable asociada, registrar transacción de ingreso para reflejar el saldo en FINK
+          if (targetAccountId) {
+            const isUsd = (p.currency || currency) === 'USD';
+            await tx.account.update({
+              where: { id: targetAccountId },
+              data: {
+                ...(isUsd ? { balanceUsd: { increment: pAmount } } : { balanceBs: { increment: pAmount } })
+              }
+            }).catch((e) => console.log('Error actualizando balance de cuenta contable:', e.message));
+          }
+
           createdPayments.push(paymentRec);
         }
       }

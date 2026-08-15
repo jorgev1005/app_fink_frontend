@@ -32,7 +32,7 @@ import path from 'path';
 
 export const createProject = async (req: Request, res: Response) => {
   try {
-    const { name, description, status, color, icon, logoUrl, initialCapitalBs, initialCapitalUsd, initialCapitalEur, sourceProjectId, includeBalances } = req.body;
+    const { name, description, status, color, icon, logoUrl, initialCapitalBs, initialCapitalUsd, initialCapitalEur, sourceProjectId, includeBalances, paymentConfig } = req.body;
     let { code } = req.body;
 
     // Lógica de generación y validación de código
@@ -73,6 +73,7 @@ export const createProject = async (req: Request, res: Response) => {
           initialCapitalBs: initialCapitalBs || 0,
           initialCapitalUsd: initialCapitalUsd || 0,
           initialCapitalEur: initialCapitalEur || 0,
+          paymentConfig: paymentConfig || null,
           users: {
             create: {
               userId: req.user!.id,
@@ -234,7 +235,7 @@ import { checkProjectWriteAccess } from '../utils/projectAccess';
 export const updateProject = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
-    const { name, description, code, status, color, startDate, initialCapitalBs, initialCapitalUsd, initialCapitalEur, defaultTaxRate, lastInvoiceNumber, lastDeliveryNoteNumber } = req.body;
+    const { name, description, code, status, color, startDate, initialCapitalBs, initialCapitalUsd, initialCapitalEur, defaultTaxRate, lastInvoiceNumber, lastDeliveryNoteNumber, paymentConfig } = req.body;
 
     const hasAccess = await checkProjectWriteAccess(req.user!, id);
     if (!hasAccess) {
@@ -261,6 +262,7 @@ export const updateProject = async (req: Request, res: Response) => {
     if (defaultTaxRate !== undefined) updateData.defaultTaxRate = defaultTaxRate !== null ? Number(defaultTaxRate) : 16;
     if (lastInvoiceNumber !== undefined) updateData.lastInvoiceNumber = lastInvoiceNumber;
     if (lastDeliveryNoteNumber !== undefined) updateData.lastDeliveryNoteNumber = lastDeliveryNoteNumber;
+    if (paymentConfig !== undefined) updateData.paymentConfig = paymentConfig;
     
     // Explicitly DO NOT update logoUrl here. It is handled by uploadProjectLogo only.
 
