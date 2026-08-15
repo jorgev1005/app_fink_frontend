@@ -194,7 +194,19 @@ export const productsAPI = {
   delete: (id: string) => apiClient.delete(`/api/products/${id}`),
   search: (projectId: string, search: string, limit = 20) => apiClient.get('/api/products', { params: { projectId, search, limit } }),
   bulkSyncCosts: (data: any) => apiClient.post('/api/products/bulk-sync-costs', data),
+  transferStock: (data: any) => apiClient.post('/api/products/transfer', data),
 }
+
+export const posAPI = {
+  getActiveSession: (projectId: string) => apiClient.get('/api/pos/session/active', { params: { projectId } }),
+  openSession: (data: any) => apiClient.post('/api/pos/session/open', data),
+  closeSession: (data: any) => apiClient.post('/api/pos/session/close', data),
+  getSessionSummary: (sessionId: string) => apiClient.get('/api/pos/session/summary', { params: { sessionId } }),
+  processSale: (data: any) => apiClient.post('/api/pos/sale', data),
+  voidSale: (id: string, reason?: string) => apiClient.post(`/api/pos/sale/${id}/void`, { reason }),
+}
+
+
 
 export const reportsAPI = {
   getContactReports: (params?: any) => apiClient.get('/api/reports/contacts', { params }),
@@ -317,7 +329,6 @@ export const scanAPI = {
   },
 }
 
-// Export default object with all APIs
 export const cfoAPI = {
   getSummary: (projectId: string) => apiClient.get('/api/cfo/summary', { params: { projectId } }),
   getDetailedReport: (projectId: string) => apiClient.get('/api/cfo/report', { params: { projectId } }),
@@ -348,6 +359,7 @@ const api = {
   scan: scanAPI,
   cfo: cfoAPI,
   loans: loansAPI,
+  pos: posAPI,
 }
 
 export default api

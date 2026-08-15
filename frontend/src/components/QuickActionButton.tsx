@@ -10,7 +10,7 @@ export default function QuickActionButton() {
   const [showMenu, setShowMenu] = useState(false);
 
   // No mostrar en ciertas páginas
-  if (pathname === '/login' || pathname === '/register') {
+  if (pathname === '/login' || pathname === '/register' || pathname?.startsWith('/pos')) {
     return null;
   }
 

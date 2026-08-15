@@ -36,6 +36,7 @@ model User {
   consolidationGroups ConsolidationGroup[]
   payments            Payment[]
   occurrenceBatches   OccurrenceBatch[]
+  posSessions         POSSession[]
 
   @@map("users")
 }
@@ -89,6 +90,7 @@ model Project {
   accountCodeSequences    AccountCodeSequence[]
   // Secuencia de códigos de transacción (uno por proyecto)
   transactionCodeSequence TransactionCodeSequence?
+  posSessions             POSSession[]
 
   @@map("projects")
 }
@@ -787,6 +789,9 @@ model Invoice {
   // transaction   Transaction?  @relation(fields: [transactionId], references: [id])
   recurringRuleId String?
 
+  posSessionId String?
+  posSession   POSSession? @relation(fields: [posSessionId], references: [id])
+
   createdBy String
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -967,3 +972,34 @@ model LoanPayment {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
+// ============================================
+// MODULO POS CAJA Y SESIONES DE TURNO
+// ============================================
+model POSSession {
+  id        String   @id @default(uuid())
+  projectId String
+  project   Project  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+
+  openedAt  DateTime @default(now())
+  closedAt  DateTime?
+
+  initialBalanceUsd Float @default(0)
+  initialBalanceBs  Float @default(0)
+  finalBalanceUsd   Float?
+  finalBalanceBs    Float?
+
+  status    String   @default("OPEN") // OPEN, CLOSED
+  notes     String?
+
+  invoices  Invoice[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([projectId, status])
+  @@map("pos_sessions")
+}
+

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef } from 'react';
+import { usePathname } from 'next/navigation';
 import { Calculator, X, RefreshCw, GripHorizontal, Copy, Check } from 'lucide-react';
 import api from '@/lib/api';
 
@@ -42,12 +43,16 @@ const RATE_STYLE_MAP = {
 type RateStyleKey = keyof typeof RATE_STYLE_MAP;
 
 export default function CalculatorWidget() {
+  const pathname = usePathname();
   const [isOpen, setIsOpen] = useState(false);
   const [amount, setAmount] = useState<number | ''>('');
   const [baseCurrency, setBaseCurrency] = useState<'VES' | 'USD'>('VES');
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
+  const [rates, setRates] = useState<any>({});
+  const [loading, setLoading] = useState(false);
+
   const dragStartPos = useRef({ x: 0, y: 0 });
   const activePointerId = useRef<number | null>(null);
 
@@ -80,6 +85,10 @@ export default function CalculatorWidget() {
     };
   }, [isDragging]);
 
+  useEffect(() => {
+    if (isOpen) fetchRates();
+  }, [isOpen]);
+
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if ((e.target as HTMLElement).closest('[data-no-drag="true"]')) return;
     activePointerId.current = e.pointerId;
@@ -91,14 +100,11 @@ export default function CalculatorWidget() {
     e.currentTarget.setPointerCapture?.(e.pointerId);
   };
 
-  const [rates, setRates] = useState<any>({});
-  const [loading, setLoading] = useState(false);
-
   const toggleOpen = () => setIsOpen(!isOpen);
 
-  useEffect(() => {
-    if (isOpen) fetchRates();
-  }, [isOpen]);
+  if (pathname === '/login' || pathname === '/register' || pathname?.startsWith('/pos')) {
+    return null;
+  }
 
   const fetchRates = async () => {
     setLoading(true);

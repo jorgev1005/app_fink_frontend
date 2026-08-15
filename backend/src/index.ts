@@ -128,8 +128,11 @@ app.use('/api/products', productRoutes);
 app.use('/api/consolidation-groups', consolidationRoutes);
 app.use('/api/invoices', invoiceRoutes);
 import auditRoutes from './routes/audit.routes';
+import posRoutes from './routes/pos.routes';
 app.use('/api/recurring', recurringRoutes);
+app.use('/api/pos', posRoutes);
 app.use('/api', auditRoutes);
+
 app.use('/api/entries', entryRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/backups', backupRoutes);

@@ -8,7 +8,7 @@ import { usePathname } from 'next/navigation'
 export default function DashboardButton() {
   const pathname = usePathname()
   
-  if (pathname && pathname.startsWith('/login')) {
+  if (pathname && (pathname.startsWith('/login') || pathname.startsWith('/pos'))) {
     return null;
   }
 

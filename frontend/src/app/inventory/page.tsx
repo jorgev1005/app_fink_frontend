@@ -14,7 +14,9 @@ import {
   AlertCircle,
   Percent,
   RefreshCw,
-  Upload
+  Upload,
+  ArrowRightLeft,
+  FileText
 } from 'lucide-react';
 import api from '@/lib/api';
 import { toast } from 'sonner';
@@ -107,10 +109,26 @@ export default function InventoryPage() {
   const [selectedProject, setSelectedProject] = useState<string>('');
   const [selectedDivision, setSelectedDivision] = useState<string>('');
   const [exchangeRate, setExchangeRate] = useState<any>(null);
+
+  // Estado para modal de Lista de Precios PDF
+  const [showPdfModal, setShowPdfModal] = useState(false);
+  const [pdfAdjustmentPercent, setPdfAdjustmentPercent] = useState<number>(0);
+  const [pdfSelectedProject, setPdfSelectedProject] = useState<string>('all');
+  const [pdfTasaOverride, setPdfTasaOverride] = useState<string>('');
+  const [pdfGenerating, setPdfGenerating] = useState(false);
   
   // Modal State
   const [showModal, setShowModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+
+  // Modal State para Traspaso de Almacén entre Proyectos
+  const [showTransferModal, setShowTransferModal] = useState(false);
+  const [transferProduct, setTransferProduct] = useState<Product | null>(null);
+  const [transferTargetProjectId, setTransferTargetProjectId] = useState<string>('');
+  const [transferQuantity, setTransferQuantity] = useState<number>(1);
+  const [transferNotes, setTransferNotes] = useState<string>('');
+  const [transferring, setTransferring] = useState(false);
+
   const [formData, setFormData] = useState<Partial<Product>>({
     name: '',
     sku: '',
@@ -298,6 +316,98 @@ export default function InventoryPage() {
     setShowModal(true);
   };
 
+  const openTransferModal = (product?: Product) => {
+    if (product) {
+      setTransferProduct(product);
+      setTransferQuantity(product.stock > 0 ? 1 : 0);
+    } else {
+      setTransferProduct(products[0] || null);
+      setTransferQuantity(1);
+    }
+    setTransferTargetProjectId('');
+    setTransferNotes('');
+    setShowTransferModal(true);
+  };
+
+  const handleExecuteTransfer = async () => {
+    if (!transferProduct) {
+      toast.error("Selecciona un producto para realizar el traspaso.");
+      return;
+    }
+    if (!transferTargetProjectId) {
+      toast.error("Selecciona el proyecto de destino.");
+      return;
+    }
+    if (transferQuantity <= 0) {
+      toast.error("La cantidad a traspasar debe ser mayor a 0.");
+      return;
+    }
+    if (transferQuantity > transferProduct.stock) {
+      toast.error(`La cantidad excede el stock disponible en origen (${transferProduct.stock} ${transferProduct.unit || 'u'}).`);
+      return;
+    }
+
+    setTransferring(true);
+    try {
+      const res = await api.products.transferStock({
+        productId: transferProduct.id,
+        toProjectId: transferTargetProjectId,
+        quantity: transferQuantity,
+        notes: transferNotes,
+      });
+
+      if (res.data.success) {
+        toast.success(res.data.message || "Traspaso de inventario realizado con éxito.");
+        setShowTransferModal(false);
+        loadProducts();
+      }
+    } catch (err: any) {
+      toast.error(err.response?.data?.error?.message || "Error al realizar el traspaso de inventario.");
+    } finally {
+      setTransferring(false);
+    }
+  };
+
+  const handleGeneratePriceListPDF = async (action: 'view' | 'download') => {
+    setPdfGenerating(true);
+    try {
+      const token = localStorage.getItem('token');
+      const queryParams = new URLSearchParams({
+        adjustmentPercentage: pdfAdjustmentPercent.toString(),
+        projectId: pdfSelectedProject,
+        ...(pdfTasaOverride ? { tasaOverride: pdfTasaOverride } : {})
+      });
+
+      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+      const url = `${apiUrl}/products/export/price-list-pdf?${queryParams.toString()}`;
+
+      const response = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+
+      if (!response.ok) throw new Error('Error al generar la lista de precios PDF');
+
+      const blob = await response.blob();
+      const blobUrl = URL.createObjectURL(blob);
+
+      if (action === 'view') {
+        window.open(blobUrl, '_blank');
+      } else {
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = `Lista_Precios_Aludra_${new Date().toISOString().slice(0, 10)}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+      }
+      toast.success("Lista de precios PDF generada con éxito");
+    } catch (err: any) {
+      toast.error(err.message || "Error al generar la lista de precios");
+    } finally {
+      setPdfGenerating(false);
+    }
+  };
+
   // Obtener la lista de divisiones únicas de los productos cargados
   const divisionsList = Array.from(new Set(products.map(p => p.division).filter(Boolean)));
 
@@ -354,7 +464,23 @@ export default function InventoryPage() {
           </div>
         </div>
         
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <button 
+            onClick={() => setShowPdfModal(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-900 transition-colors shadow-sm font-medium"
+            title="Generar e imprimir Lista de Precios en PDF"
+          >
+            <FileText size={18} className="text-emerald-400" />
+            Lista de Precios (PDF)
+          </button>
+          <button 
+            onClick={() => openTransferModal()}
+            className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors shadow-sm font-medium"
+            title="Traspasar inventario entre proyectos"
+          >
+            <ArrowRightLeft size={18} />
+            Traspaso de Almacén
+          </button>
           <button 
             onClick={syncBot}
             className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors shadow-sm font-medium"
@@ -383,6 +509,7 @@ export default function InventoryPage() {
           </button>
         </div>
       </div>
+
 
       {/* Filters */}
       <div className="bg-white p-4 rounded-xl shadow-sm flex flex-wrap gap-4 items-center">
@@ -529,6 +656,13 @@ export default function InventoryPage() {
                     <td className="p-4 text-right">
                       <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
                         <button 
+                          onClick={() => openTransferModal(product)}
+                          className="p-1.5 text-amber-600 hover:bg-amber-50 rounded-md transition-colors"
+                          title="Traspasar Inventario a otro proyecto"
+                        >
+                          <ArrowRightLeft size={16} />
+                        </button>
+                        <button 
                           onClick={() => openModal(product)}
                           className="p-1.5 text-blue-600 hover:bg-blue-50 rounded-md transition-colors"
                           title="Editar"
@@ -544,6 +678,7 @@ export default function InventoryPage() {
                         </button>
                       </div>
                     </td>
+
                   </tr>
                 ))
               )}
@@ -955,6 +1090,217 @@ export default function InventoryPage() {
           </div>
         </div>
       )}
+
+      {/* Modal de Traspaso de Almacén entre Proyectos */}
+      {showTransferModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-slate-900/40 p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md animate-in zoom-in-95 duration-200 overflow-hidden border border-slate-200">
+            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-900 text-white">
+              <div className="flex items-center gap-2 font-bold text-base">
+                <ArrowRightLeft className="text-amber-400" size={20} />
+                Traspaso de Almacén entre Proyectos
+              </div>
+              <button onClick={() => setShowTransferModal(false)} className="text-slate-400 hover:text-white transition-colors">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 text-sm">
+              {/* Producto Selección */}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Producto a Traspasar *</label>
+                <select 
+                  className="w-full border border-slate-300 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-amber-500 bg-white font-medium"
+                  value={transferProduct?.id || ''}
+                  onChange={(e) => {
+                    const p = products.find(prod => prod.id === e.target.value);
+                    if (p) {
+                      setTransferProduct(p);
+                      setTransferQuantity(p.stock > 0 ? 1 : 0);
+                    }
+                  }}
+                >
+                  {products.map(p => (
+                    <option key={p.id} value={p.id}>
+                      {p.name} {p.sku ? `(${p.sku})` : ''} — Stock: {p.stock} {p.unit || 'u'}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Proyecto Origen Display */}
+              <div className="bg-amber-50 border border-amber-200 p-3 rounded-lg flex items-center justify-between text-xs text-amber-900 font-medium">
+                <div>
+                  <span className="text-amber-700 block text-[10px] uppercase font-bold">Proyecto Origen</span>
+                  {projects.find(proj => proj.id === transferProduct?.projectId)?.name || 'Sin Proyecto (Global)'}
+                </div>
+                <div className="text-right">
+                  <span className="text-amber-700 block text-[10px] uppercase font-bold">Disponible</span>
+                  <span className="font-bold text-amber-800">{transferProduct?.stock || 0} {transferProduct?.unit || 'u'}</span>
+                </div>
+              </div>
+
+              {/* Proyecto Destino Selection */}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Proyecto Destino (Receptor) *</label>
+                <select 
+                  className="w-full border border-slate-300 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-amber-500 bg-white font-medium"
+                  value={transferTargetProjectId}
+                  onChange={(e) => setTransferTargetProjectId(e.target.value)}
+                >
+                  <option value="">-- Selecciona el proyecto de destino --</option>
+                  {projects.filter(proj => proj.id !== transferProduct?.projectId).map(proj => (
+                    <option key={proj.id} value={proj.id}>{proj.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Cantidad a Traspasar */}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Cantidad a Traspasar *</label>
+                <input 
+                  type="number"
+                  min="1"
+                  max={transferProduct?.stock || 0}
+                  step="1"
+                  className="w-full border border-slate-300 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-amber-500 font-mono font-bold text-slate-800"
+                  value={transferQuantity}
+                  onChange={(e) => setTransferQuantity(parseFloat(e.target.value) || 0)}
+                />
+              </div>
+
+              {/* Notas u Observaciones */}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Motivo / Notas del Traspaso</label>
+                <textarea 
+                  rows={2}
+                  placeholder="Ej. Reasignación de inventario para orden urgente..."
+                  className="w-full border border-slate-300 rounded-lg p-2.5 outline-none focus:ring-2 focus:ring-amber-500 text-xs"
+                  value={transferNotes}
+                  onChange={(e) => setTransferNotes(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
+              <button 
+                onClick={() => setShowTransferModal(false)}
+                className="px-4 py-2 text-slate-600 hover:bg-slate-200 rounded-lg text-xs font-bold transition-colors"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={handleExecuteTransfer}
+                disabled={transferring}
+                className="px-5 py-2 bg-amber-600 hover:bg-amber-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold shadow-md transition-all flex items-center gap-2"
+              >
+                <ArrowRightLeft size={16} />
+                {transferring ? 'Procesando...' : 'Confirmar Traspaso'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Lista de Precios PDF */}
+      {showPdfModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-5 border border-slate-200 animate-in fade-in zoom-in duration-200">
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center text-emerald-600 font-bold">
+                  <FileText size={22} />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-slate-800">Exportar Lista de Precios en PDF</h2>
+                  <p className="text-xs text-slate-500">Mismo diseño e imagen corporativa que el Bot de WhatsApp</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowPdfModal(false)}
+                className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-sm text-slate-700">
+              {/* Porcentaje de Incremento o Descuento */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1 uppercase tracking-wider">
+                  Porcentaje de Incremento o Descuento (%):
+                </label>
+                <div className="relative">
+                  <input 
+                    type="number"
+                    step="0.5"
+                    value={pdfAdjustmentPercent}
+                    onChange={(e) => setPdfAdjustmentPercent(parseFloat(e.target.value) || 0)}
+                    placeholder="Ej: 15 para +15% o -10 para -10%"
+                    className="w-full pl-3 pr-10 py-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white text-slate-800 font-bold outline-none"
+                  />
+                  <span className="absolute right-3 top-2.5 text-slate-400 font-extrabold">%</span>
+                </div>
+                <p className="text-[11px] mt-1.5 font-medium">
+                  {pdfAdjustmentPercent > 0 && <span className="text-emerald-600 font-bold">↑ Incremento del +{pdfAdjustmentPercent}% aplicado a todos los precios de venta</span>}
+                  {pdfAdjustmentPercent < 0 && <span className="text-amber-600 font-bold">↓ Descuento del {pdfAdjustmentPercent}% aplicado a todos los precios de venta</span>}
+                  {pdfAdjustmentPercent === 0 && <span className="text-slate-500">Sin variación. Se usarán los precios base guardados.</span>}
+                </p>
+              </div>
+
+              {/* Filtro por Proyecto */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1 uppercase tracking-wider">
+                  Filtrar Productos:
+                </label>
+                <select 
+                  value={pdfSelectedProject}
+                  onChange={(e) => setPdfSelectedProject(e.target.value)}
+                  className="w-full py-2.5 px-3 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white text-slate-800 font-semibold outline-none"
+                >
+                  <option value="all">📦 Todos los Productos para la Venta (forSale: true)</option>
+                  {projects.map(proj => (
+                    <option key={proj.id} value={proj.id}>📁 Proyecto: {proj.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Tasa BCV Override */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1 uppercase tracking-wider">
+                  Tasa BCV Referencial (Opcional):
+                </label>
+                <input 
+                  type="number"
+                  step="0.01"
+                  value={pdfTasaOverride}
+                  onChange={(e) => setPdfTasaOverride(e.target.value)}
+                  placeholder={`Tasa actual: Bs. ${exchangeRate?.rateBCV ? exchangeRate.rateBCV.toFixed(2) : '36.50'}`}
+                  className="w-full py-2.5 px-3 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white text-slate-800 font-medium outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row gap-3">
+              <button
+                onClick={() => handleGeneratePriceListPDF('view')}
+                disabled={pdfGenerating}
+                className="flex-1 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer"
+              >
+                👁️ {pdfGenerating ? 'Generando PDF...' : 'Ver / Imprimir Lista PDF'}
+              </button>
+              <button
+                onClick={() => handleGeneratePriceListPDF('download')}
+                disabled={pdfGenerating}
+                className="flex-1 py-3 px-4 bg-slate-800 hover:bg-slate-900 disabled:opacity-50 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer"
+              >
+                ⬇️ {pdfGenerating ? 'Generando...' : 'Descargar PDF'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
