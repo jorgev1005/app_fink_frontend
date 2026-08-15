@@ -109,8 +109,9 @@ export default function InventoryPage() {
   const [selectedProject, setSelectedProject] = useState<string>('');
   const [selectedDivision, setSelectedDivision] = useState<string>('');
   const [exchangeRate, setExchangeRate] = useState<any>(null);
-  const [ratesBySource, setRatesBySource] = useState<{ BCV?: number; BINANCE?: number; CUSTOM?: number }>({});
-  const [pdfRateMode, setPdfRateMode] = useState<'BCV' | 'BINANCE' | 'CUSTOM' | 'MANUAL'>('BCV');
+  const [ratesBySource, setRatesBySource] = useState<{ BCV?: number; BINANCE?: number; CUSTOM?: number; EUR?: number }>({});
+  const [pdfRateMode, setPdfRateMode] = useState<'BCV' | 'EUR' | 'BINANCE' | 'CUSTOM'>('BCV');
+  const [pdfExcludeKeywords, setPdfExcludeKeywords] = useState<string>('');
 
   // Estado para modal de Lista de Precios PDF
   const [showPdfModal, setShowPdfModal] = useState(false);
@@ -178,13 +179,15 @@ export default function InventoryPage() {
   const loadExchangeRate = async () => {
     try {
       const res = await api.exchangeRates.getLatest();
-      setExchangeRate(res.data.data || null);
+      const latestData = res.data.data || null;
+      setExchangeRate(latestData);
 
       const resBySource = await apiClient.get('/api/exchange-rates/latest-by-source');
       if (resBySource.data?.success) {
         const d = resBySource.data.data;
         setRatesBySource({
-          BCV: d.BCV?.usdToBs,
+          BCV: d.BCV?.usdToBs || latestData?.usdToBs,
+          EUR: d.BCV?.eurToBs || latestData?.eurToBs,
           BINANCE: d.BINANCE?.usdToBs,
           CUSTOM: d.CUSTOM?.usdToBs,
         });
@@ -387,7 +390,8 @@ export default function InventoryPage() {
       const queryParams = new URLSearchParams({
         adjustmentPercentage: pdfAdjustmentPercent.toString(),
         projectId: pdfSelectedProject,
-        ...(pdfTasaOverride ? { tasaOverride: pdfTasaOverride } : {})
+        ...(pdfTasaOverride ? { tasaOverride: pdfTasaOverride } : {}),
+        ...(pdfExcludeKeywords ? { excludeKeywords: pdfExcludeKeywords } : {})
       });
 
       const url = `/backend-api/api/products/export/price-list-pdf?${queryParams.toString()}`;
@@ -1281,14 +1285,43 @@ export default function InventoryPage() {
                 </select>
               </div>
 
-              {/* Seleccionar o Personalizar Tasa de Cambio */}
+              {/* Filtro de Exclusión de Productos */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1 uppercase tracking-wider">
+                  Excluir Productos (Palabras Clave):
+                </label>
+                <div className="relative">
+                  <input 
+                    type="text"
+                    value={pdfExcludeKeywords}
+                    onChange={(e) => setPdfExcludeKeywords(e.target.value)}
+                    placeholder="Ej: cajas, carton, recicladas"
+                    className="w-full pl-3 pr-8 py-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white text-slate-800 font-semibold outline-none text-xs"
+                  />
+                  {pdfExcludeKeywords && (
+                    <button 
+                      type="button" 
+                      onClick={() => setPdfExcludeKeywords('')}
+                      className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 text-xs font-bold"
+                      title="Limpiar exclusión"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Excluye cualquier producto por su nombre o característica (ej: <span className="font-semibold text-amber-700">cajas, cartón</span>).
+                </p>
+              </div>
+
+              {/* Seleccionar Tasa de Cambio */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
-                  Tasa de Cambio Referencial (Bs/USD):
+                  Tasa de Cambio Referencial Guardada:
                 </label>
 
                 <div className="grid grid-cols-2 gap-2 mb-2">
-                  {/* Opción BCV */}
+                  {/* Opción BCV USD */}
                   <button
                     type="button"
                     onClick={() => {
@@ -1301,9 +1334,29 @@ export default function InventoryPage() {
                         : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
                     }`}
                   >
-                    <span>🏛️ BCV (Oficial)</span>
+                    <span>🏛️ BCV (USD)</span>
                     <span className="text-[11px] font-semibold text-slate-500">
                       Bs. {ratesBySource.BCV ? ratesBySource.BCV.toFixed(2) : (exchangeRate?.usdToBs ? exchangeRate.usdToBs.toFixed(2) : '36.50')}
+                    </span>
+                  </button>
+
+                  {/* Opción BCV EUR */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPdfRateMode('EUR');
+                      const eurRate = ratesBySource.EUR || exchangeRate?.eurToBs;
+                      if (eurRate) setPdfTasaOverride(eurRate.toString());
+                    }}
+                    className={`p-2.5 rounded-xl border text-xs font-bold transition-all flex flex-col items-center justify-center text-center gap-0.5 cursor-pointer ${
+                      pdfRateMode === 'EUR'
+                        ? 'border-emerald-600 bg-emerald-50 text-emerald-800 ring-2 ring-emerald-500/20 shadow-sm'
+                        : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    <span>💶 BCV (EURO)</span>
+                    <span className="text-[11px] font-semibold text-slate-500">
+                      Bs. {ratesBySource.EUR ? ratesBySource.EUR.toFixed(2) : (exchangeRate?.eurToBs ? exchangeRate.eurToBs.toFixed(2) : 'N/A')}
                     </span>
                   </button>
 
@@ -1322,61 +1375,29 @@ export default function InventoryPage() {
                   >
                     <span>⚡ Paralelo / Binance</span>
                     <span className="text-[11px] font-semibold text-slate-500">
-                      {ratesBySource.BINANCE ? `Bs. ${ratesBySource.BINANCE.toFixed(2)}` : 'Personalizada'}
+                      {ratesBySource.BINANCE ? `Bs. ${ratesBySource.BINANCE.toFixed(2)}` : 'N/A'}
                     </span>
                   </button>
 
-                  {/* Opción Tasa Guardada en FINK */}
-                  {ratesBySource.CUSTOM && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setPdfRateMode('CUSTOM');
-                        if (ratesBySource.CUSTOM) setPdfTasaOverride(ratesBySource.CUSTOM.toString());
-                      }}
-                      className={`p-2.5 rounded-xl border text-xs font-bold transition-all flex flex-col items-center justify-center text-center gap-0.5 cursor-pointer ${
-                        pdfRateMode === 'CUSTOM'
-                          ? 'border-emerald-600 bg-emerald-50 text-emerald-800 ring-2 ring-emerald-500/20 shadow-sm'
-                          : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
-                      }`}
-                    >
-                      <span>💼 Guardada FINK</span>
-                      <span className="text-[11px] font-semibold text-slate-500">
-                        Bs. {ratesBySource.CUSTOM.toFixed(2)}
-                      </span>
-                    </button>
-                  )}
-
-                  {/* Opción Manual CUSTOM */}
+                  {/* Opción Tasa Guardada FINK */}
                   <button
                     type="button"
                     onClick={() => {
-                      setPdfRateMode('MANUAL');
+                      setPdfRateMode('CUSTOM');
+                      if (ratesBySource.CUSTOM) setPdfTasaOverride(ratesBySource.CUSTOM.toString());
                     }}
                     className={`p-2.5 rounded-xl border text-xs font-bold transition-all flex flex-col items-center justify-center text-center gap-0.5 cursor-pointer ${
-                      pdfRateMode === 'MANUAL'
+                      pdfRateMode === 'CUSTOM'
                         ? 'border-emerald-600 bg-emerald-50 text-emerald-800 ring-2 ring-emerald-500/20 shadow-sm'
                         : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
                     }`}
                   >
-                    <span>✍️ Manual (CUSTOM)</span>
-                    <span className="text-[11px] font-semibold text-slate-500">Escribir monto</span>
+                    <span>💼 Guardada FINK</span>
+                    <span className="text-[11px] font-semibold text-slate-500">
+                      {ratesBySource.CUSTOM ? `Bs. ${ratesBySource.CUSTOM.toFixed(2)}` : 'Tasa Dashboard'}
+                    </span>
                   </button>
                 </div>
-
-                {(pdfRateMode === 'MANUAL' || pdfRateMode === 'BINANCE' || pdfRateMode === 'CUSTOM') && (
-                  <div className="relative mt-2">
-                    <input 
-                      type="number"
-                      step="0.01"
-                      value={pdfTasaOverride}
-                      onChange={(e) => setPdfTasaOverride(e.target.value)}
-                      placeholder="Ejemplo: 42.50"
-                      className="w-full pl-3 pr-16 py-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white text-slate-800 font-bold outline-none"
-                    />
-                    <span className="absolute right-3 top-2.5 text-xs text-slate-400 font-extrabold">Bs/USD</span>
-                  </div>
-                )}
               </div>
             </div>
 
