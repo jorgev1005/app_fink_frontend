@@ -378,7 +378,7 @@ export default function InventoryPage() {
         ...(pdfTasaOverride ? { tasaOverride: pdfTasaOverride } : {})
       });
 
-      const url = `/backend-api/products/export/price-list-pdf?${queryParams.toString()}`;
+      const url = `/backend-api/api/products/export/price-list-pdf?${queryParams.toString()}`;
 
       const response = await fetch(url, {
         headers: { 
