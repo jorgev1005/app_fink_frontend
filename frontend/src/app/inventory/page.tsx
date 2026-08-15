@@ -18,7 +18,7 @@ import {
   ArrowRightLeft,
   FileText
 } from 'lucide-react';
-import api from '@/lib/api';
+import api, { apiClient } from '@/lib/api';
 import { toast } from 'sonner';
 
 interface Product {
@@ -109,6 +109,8 @@ export default function InventoryPage() {
   const [selectedProject, setSelectedProject] = useState<string>('');
   const [selectedDivision, setSelectedDivision] = useState<string>('');
   const [exchangeRate, setExchangeRate] = useState<any>(null);
+  const [ratesBySource, setRatesBySource] = useState<{ BCV?: number; BINANCE?: number; CUSTOM?: number }>({});
+  const [pdfRateMode, setPdfRateMode] = useState<'BCV' | 'BINANCE' | 'CUSTOM' | 'MANUAL'>('BCV');
 
   // Estado para modal de Lista de Precios PDF
   const [showPdfModal, setShowPdfModal] = useState(false);
@@ -177,6 +179,16 @@ export default function InventoryPage() {
     try {
       const res = await api.exchangeRates.getLatest();
       setExchangeRate(res.data.data || null);
+
+      const resBySource = await apiClient.get('/api/exchange-rates/latest-by-source');
+      if (resBySource.data?.success) {
+        const d = resBySource.data.data;
+        setRatesBySource({
+          BCV: d.BCV?.usdToBs,
+          BINANCE: d.BINANCE?.usdToBs,
+          CUSTOM: d.CUSTOM?.usdToBs,
+        });
+      }
     } catch (error) {
       console.error("Error loading exchange rate", error);
     }
@@ -1269,19 +1281,102 @@ export default function InventoryPage() {
                 </select>
               </div>
 
-              {/* Tasa BCV Override */}
+              {/* Seleccionar o Personalizar Tasa de Cambio */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1 uppercase tracking-wider">
-                  Tasa BCV Referencial (Opcional):
+                <label className="block text-xs font-bold text-slate-700 mb-1.5 uppercase tracking-wider">
+                  Tasa de Cambio Referencial (Bs/USD):
                 </label>
-                <input 
-                  type="number"
-                  step="0.01"
-                  value={pdfTasaOverride}
-                  onChange={(e) => setPdfTasaOverride(e.target.value)}
-                  placeholder={`Tasa actual: Bs. ${exchangeRate?.rateBCV ? exchangeRate.rateBCV.toFixed(2) : '36.50'}`}
-                  className="w-full py-2.5 px-3 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white text-slate-800 font-medium outline-none"
-                />
+
+                <div className="grid grid-cols-2 gap-2 mb-2">
+                  {/* Opción BCV */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPdfRateMode('BCV');
+                      setPdfTasaOverride('');
+                    }}
+                    className={`p-2.5 rounded-xl border text-xs font-bold transition-all flex flex-col items-center justify-center text-center gap-0.5 cursor-pointer ${
+                      pdfRateMode === 'BCV'
+                        ? 'border-emerald-600 bg-emerald-50 text-emerald-800 ring-2 ring-emerald-500/20 shadow-sm'
+                        : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    <span>🏛️ BCV (Oficial)</span>
+                    <span className="text-[11px] font-semibold text-slate-500">
+                      Bs. {ratesBySource.BCV ? ratesBySource.BCV.toFixed(2) : (exchangeRate?.usdToBs ? exchangeRate.usdToBs.toFixed(2) : '36.50')}
+                    </span>
+                  </button>
+
+                  {/* Opción Paralelo / Binance */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPdfRateMode('BINANCE');
+                      if (ratesBySource.BINANCE) setPdfTasaOverride(ratesBySource.BINANCE.toString());
+                    }}
+                    className={`p-2.5 rounded-xl border text-xs font-bold transition-all flex flex-col items-center justify-center text-center gap-0.5 cursor-pointer ${
+                      pdfRateMode === 'BINANCE'
+                        ? 'border-emerald-600 bg-emerald-50 text-emerald-800 ring-2 ring-emerald-500/20 shadow-sm'
+                        : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    <span>⚡ Paralelo / Binance</span>
+                    <span className="text-[11px] font-semibold text-slate-500">
+                      {ratesBySource.BINANCE ? `Bs. ${ratesBySource.BINANCE.toFixed(2)}` : 'Personalizada'}
+                    </span>
+                  </button>
+
+                  {/* Opción Tasa Guardada en FINK */}
+                  {ratesBySource.CUSTOM && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPdfRateMode('CUSTOM');
+                        if (ratesBySource.CUSTOM) setPdfTasaOverride(ratesBySource.CUSTOM.toString());
+                      }}
+                      className={`p-2.5 rounded-xl border text-xs font-bold transition-all flex flex-col items-center justify-center text-center gap-0.5 cursor-pointer ${
+                        pdfRateMode === 'CUSTOM'
+                          ? 'border-emerald-600 bg-emerald-50 text-emerald-800 ring-2 ring-emerald-500/20 shadow-sm'
+                          : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
+                      }`}
+                    >
+                      <span>💼 Guardada FINK</span>
+                      <span className="text-[11px] font-semibold text-slate-500">
+                        Bs. {ratesBySource.CUSTOM.toFixed(2)}
+                      </span>
+                    </button>
+                  )}
+
+                  {/* Opción Manual CUSTOM */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPdfRateMode('MANUAL');
+                    }}
+                    className={`p-2.5 rounded-xl border text-xs font-bold transition-all flex flex-col items-center justify-center text-center gap-0.5 cursor-pointer ${
+                      pdfRateMode === 'MANUAL'
+                        ? 'border-emerald-600 bg-emerald-50 text-emerald-800 ring-2 ring-emerald-500/20 shadow-sm'
+                        : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100'
+                    }`}
+                  >
+                    <span>✍️ Manual (CUSTOM)</span>
+                    <span className="text-[11px] font-semibold text-slate-500">Escribir monto</span>
+                  </button>
+                </div>
+
+                {(pdfRateMode === 'MANUAL' || pdfRateMode === 'BINANCE' || pdfRateMode === 'CUSTOM') && (
+                  <div className="relative mt-2">
+                    <input 
+                      type="number"
+                      step="0.01"
+                      value={pdfTasaOverride}
+                      onChange={(e) => setPdfTasaOverride(e.target.value)}
+                      placeholder="Ejemplo: 42.50"
+                      className="w-full pl-3 pr-16 py-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white text-slate-800 font-bold outline-none"
+                    />
+                    <span className="absolute right-3 top-2.5 text-xs text-slate-400 font-extrabold">Bs/USD</span>
+                  </div>
+                )}
               </div>
             </div>
 

@@ -1,4 +1,5 @@
 import PDFDocument from 'pdfkit';
+import QRCode from 'qrcode';
 
 export interface ProductForPDF {
     sku?: string;
@@ -21,13 +22,21 @@ export interface PriceListPDFOptions {
     projectName?: string;
 }
 
-export function generatePriceListPDFBuffer(options: PriceListPDFOptions): Promise<Buffer> {
-    return new Promise((resolve, reject) => {
-        const { products, tasaBCV, tasaParalelo, tasaEUR, adjustmentPercentage, projectName } = options;
+export async function generatePriceListPDFBuffer(options: PriceListPDFOptions): Promise<Buffer> {
+    const { products, tasaBCV, tasaParalelo, tasaEUR, adjustmentPercentage, projectName } = options;
+    
+    // Generar imagen real de QR Code para catalogo.grupoaludra.com
+    const qrBuffer = await QRCode.toBuffer('https://catalogo.grupoaludra.com/', { 
+        margin: 1, 
+        width: 140,
+        color: { dark: '#1f2937', light: '#ffffff' }
+    });
 
+    return new Promise((resolve, reject) => {
         const doc = new PDFDocument({ 
             size: 'A4', 
             margin: 45, 
+            bufferPages: true,
             info: { Title: 'Lista de Precios Aludra', Author: 'Grupo Aludra' } 
         });
 
@@ -73,24 +82,15 @@ export function generatePriceListPDFBuffer(options: PriceListPDFOptions): Promis
 
         // Encabezado derecho
         doc.fontSize(11).fillColor('white').font('Helvetica-Bold')
-           .text('LISTA DE PRECIOS OFICIAL', 310, 58, { width: 220, align: 'right' });
+           .text('LISTA DE PRECIOS OFICIAL', 310, 62, { width: 220, align: 'right' });
         
         if (projectName) {
             doc.fontSize(8.5).fillColor(GREEN).font('Helvetica-Bold')
-               .text(`PROYECTO: ${projectName.toUpperCase()}`, 310, 72, { width: 220, align: 'right' });
+               .text(`PROYECTO: ${projectName.toUpperCase()}`, 310, 77, { width: 220, align: 'right' });
         }
 
         doc.fontSize(7).fillColor('#9ca3af').font('Helvetica')
-           .text(`Fecha de emisión: ${fmtDate(ahora)}`, 310, 85, { width: 220, align: 'right' });
-
-        if (adjustmentPercentage !== 0) {
-            const sign = adjustmentPercentage > 0 ? '+' : '';
-            doc.fontSize(7.5).fillColor(GREEN).font('Helvetica-Bold')
-               .text(`Ajuste Aplicado: ${sign}${adjustmentPercentage.toFixed(2)}%`, 310, 96, { width: 220, align: 'right' });
-        } else {
-            doc.fontSize(7.5).fillColor('#9ca3af').font('Helvetica')
-               .text(`Precios Base (Sin Ajuste)`, 310, 96, { width: 220, align: 'right' });
-        }
+           .text(`Fecha de emisión: ${fmtDate(ahora)}`, 310, 91, { width: 220, align: 'right' });
 
         // ── BARRA DE TASAS ───────────────────────────────────────
         const parStr = tasaParalelo ? `  |  Paralelo = Bs. ${tasaParalelo.toFixed(2)}/USD` : '';
@@ -108,26 +108,7 @@ export function generatePriceListPDFBuffer(options: PriceListPDFOptions): Promis
 
         const divisions = Object.keys(grouped).sort();
 
-        // Decoración de páginas
-        const drawPageDecoration = (pageNum: number) => {
-            doc.save();
-            const yFooter = doc.page.height - 40;
-            doc.moveTo(LEFT, yFooter).lineTo(LEFT + W, yFooter).strokeColor(GREEN).lineWidth(0.5).stroke();
-            doc.fontSize(6.5).fillColor(GRAY).font('Helvetica')
-               .text(`Grupo Aludra © ${ahora.getFullYear()} | Inversiones Lucem C.A. | Documento generado desde FINK`, LEFT, yFooter + 6, { width: W - 70, align: 'left' });
-            doc.text(`Página ${pageNum}`, LEFT + W - 60, yFooter + 6, { width: 60, align: 'right' });
-            doc.restore();
-        };
-
-        let pageCount = 1;
-        doc.on('pageAdded', () => {
-            pageCount++;
-            drawPageDecoration(pageCount);
-        });
-
-        drawPageDecoration(1);
-
-        // Anchos de columna (Suma: 70 + 285 + 60 + 90 = 505 pt)
+        // Anchos de columna (Suma: 70 + 280 + 60 + 80 = 490 pt)
         const cols = {
             sku: LEFT,
             nombre: LEFT + 75,
@@ -248,16 +229,31 @@ export function generatePriceListPDFBuffer(options: PriceListPDFOptions): Promis
            .text('* Precios y disponibilidad de mercancía sujetos a cambios sin previo aviso.', LEFT + 10, y + 29, { width: W - 110 })
            .text('* Para pedidos y atención comercial personalizada: +58 412-271-1859.', LEFT + 10, y + 40, { width: W - 110 });
 
-        // Caja Informativa QR a la derecha
+        // Caja Informativa con Imagen Real QR
         doc.rect(qrX - 5, qrY, 85, 68).fill(LGRAY);
         doc.rect(qrX - 5, qrY, 2, 68).fill(GREEN);
 
-        doc.fontSize(6.5).fillColor(DARK).font('Helvetica-Bold')
-           .text('ESCANEA EL QR', qrX, qrY + 8, { width: 75, align: 'center' });
-        doc.fontSize(5.5).fillColor(GRAY).font('Helvetica')
-           .text('Catálogo Online', qrX, qrY + 16, { width: 75, align: 'center' });
         doc.fontSize(6).fillColor(DARK).font('Helvetica-Bold')
-           .text('catalogo.grupoaludra.com', qrX, qrY + 34, { width: 75, align: 'center' });
+           .text('CATÁLOGO ONLINE', qrX - 5, qrY + 5, { width: 85, align: 'center' });
+
+        // Insertar imagen PNG del QR Code
+        doc.image(qrBuffer, qrX + 18, qrY + 14, { width: 38, height: 38 });
+
+        doc.fontSize(5).fillColor(GRAY).font('Helvetica')
+           .text('catalogo.grupoaludra.com', qrX - 5, qrY + 55, { width: 85, align: 'center' });
+
+        // ── FOOTERS (DIBUJO DE PÁGINAS Y FOOTER SEGURO) ───────────
+        const range = doc.bufferedPageRange();
+        for (let i = range.start; i < range.start + range.count; i++) {
+            doc.switchToPage(i);
+            const yFooter = doc.page.height - 30;
+            doc.save();
+            doc.moveTo(LEFT, yFooter).lineTo(LEFT + W, yFooter).strokeColor(GREEN).lineWidth(0.5).stroke();
+            doc.fontSize(6.5).fillColor(GRAY).font('Helvetica')
+               .text(`Grupo Aludra © ${ahora.getFullYear()} | Inversiones Lucem C.A. | Documento generado desde FINK`, LEFT, yFooter + 4, { width: W - 70, align: 'left', lineBreak: false });
+            doc.text(`Página ${i + 1} de ${range.count}`, LEFT + W - 60, yFooter + 4, { width: 60, align: 'right', lineBreak: false });
+            doc.restore();
+        }
 
         doc.end();
     });
