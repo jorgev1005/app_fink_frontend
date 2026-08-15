@@ -483,10 +483,10 @@ function POSComponent() {
 
     const defaultAcc = resolveMethodAccount('CASH', 'USD');
     setPaymentEntries([
-      { method: 'CASH', currency: 'USD', amount: totalUSD, accountId: defaultAcc, reference: '' }
+      { method: 'CASH', currency: 'USD', amount: Number(totalUSD.toFixed(2)), accountId: defaultAcc, reference: '' }
     ]);
-    setCashReceivedUsd(totalUSD);
-    setCashReceivedBs(totalBS);
+    setCashReceivedUsd(Number(totalUSD.toFixed(2)));
+    setCashReceivedBs(Number(totalBS.toFixed(2)));
     setShowPaymentModal(true);
   };
 
@@ -964,281 +964,303 @@ function POSComponent() {
 
       {/* MODAL: COBRO MULTI-MONEDA & BANCO RECEPTOR */}
       {showPaymentModal && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-lg w-full p-5 space-y-4 text-white shadow-2xl">
+        <div 
+          onClick={(e) => { if (e.target === e.currentTarget) setShowPaymentModal(false); }}
+          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-2 sm:p-4 overflow-y-auto"
+        >
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-lg w-full p-4 sm:p-5 space-y-3 text-white shadow-2xl max-h-[92vh] flex flex-col my-auto">
             
-            <div className="flex justify-between items-center pb-3 border-b border-slate-800">
-              <h3 className="font-extrabold text-base flex items-center gap-2 text-emerald-400">
-                <CreditCard className="text-emerald-400" size={20} />
+            {/* Header Fijo */}
+            <div className="flex justify-between items-center pb-2.5 border-b border-slate-800 shrink-0">
+              <h3 className="font-extrabold text-sm sm:text-base flex items-center gap-2 text-emerald-400">
+                <CreditCard className="text-emerald-400" size={18} />
                 Desglose de Cobro Multi-Moneda
               </h3>
-              <button onClick={() => setShowPaymentModal(false)} className="text-slate-400 hover:text-white p-1">
-                <X size={18} />
+              <button 
+                onClick={() => setShowPaymentModal(false)} 
+                className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl text-xs font-bold transition-all flex items-center gap-1 cursor-pointer"
+                title="Volver / Cerrar ventana"
+              >
+                <X size={16} />
+                <span className="hidden sm:inline">Volver</span>
               </button>
             </div>
 
-            {/* Total Banner */}
-            <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 flex justify-between items-center">
-              <div>
-                <span className="text-[10px] uppercase font-bold text-slate-400">Total a Cobrar</span>
-                <div className="text-xl font-mono font-bold text-emerald-400">${fmt(totalUSD)} USD</div>
-              </div>
-              <div className="text-right">
-                <span className="text-[10px] uppercase font-bold text-slate-400">Tasa de Cambio</span>
-                <div className="text-xs font-mono text-amber-400 font-bold">Bs. {fmt(exchangeRate)}</div>
-              </div>
-            </div>
-
-            {/* TARJETA DINÁMICA DE DATOS DE COBRO DEL PROYECTO SEGÚN MÉTODO */}
-            {paymentEntries[0]?.method === 'PAGO_MOVIL' && (
-              <div className="bg-slate-950 p-3.5 rounded-2xl border border-emerald-500/30 flex items-center gap-3.5">
-                <div className="p-2 bg-white rounded-xl shrink-0 flex items-center justify-center">
-                  {editPaymentConfig.pagoMovil?.qrImageUrl ? (
-                    <img 
-                      src={editPaymentConfig.pagoMovil.qrImageUrl} 
-                      alt="QR Pago Movil" 
-                      className="w-16 h-16 object-contain"
-                    />
-                  ) : (
-                    <QRCodeSVG 
-                      value={`PAGOMOVIL:${editPaymentConfig.pagoMovil?.bankCode || '0105'}:${editPaymentConfig.pagoMovil?.taxId || 'J-501920310'}:${editPaymentConfig.pagoMovil?.phone || '04141234567'}:${totalBS.toFixed(2)}`} 
-                      size={64} 
-                    />
-                  )}
-                </div>
-                <div className="text-xs space-y-0.5 flex-1">
-                  <div className="flex justify-between items-center">
-                    <span className="font-bold text-emerald-400 block">📱 Pago Móvil ({currentProject?.name || 'Proyecto'})</span>
-                    <button 
-                      onClick={() => setShowPaymentConfigModal(true)}
-                      className="text-[10px] text-slate-400 hover:text-emerald-300"
-                    >
-                      ✏️ Editar
-                    </button>
-                  </div>
-                  <span className="text-slate-200 block font-mono">
-                    Banco: <strong>{editPaymentConfig.pagoMovil?.bankName || 'Mercantil (0105)'}</strong>
-                  </span>
-                  <span className="text-slate-300 block font-mono">
-                    RIF/CI: <strong>{editPaymentConfig.pagoMovil?.taxId || 'J-501920310'}</strong> | Tel: <strong>{editPaymentConfig.pagoMovil?.phone || '0414-1234567'}</strong>
-                  </span>
-                  <span className="text-amber-400 block font-mono font-extrabold text-[11px] pt-0.5">
-                    Monto Exacto: Bs. {fmt(totalBS)}
-                  </span>
-                </div>
-              </div>
-            )}
-
-            {paymentEntries[0]?.method === 'ZELLE' && (
-              <div className="bg-slate-950 p-3.5 rounded-2xl border border-purple-500/30 flex items-center gap-3">
-                <div className="w-12 h-12 bg-purple-600/20 text-purple-400 border border-purple-500/40 rounded-xl flex items-center justify-center font-extrabold text-xl shrink-0">
-                  <DollarSign size={24} />
-                </div>
-                <div className="text-xs space-y-0.5 flex-1">
-                  <div className="flex justify-between items-center">
-                    <span className="font-bold text-purple-400 block">💵 Datos de Cobro Zelle</span>
-                    <button onClick={() => setShowPaymentConfigModal(true)} className="text-[10px] text-slate-400 hover:text-purple-300">✏️ Editar</button>
-                  </div>
-                  <span className="text-slate-200 block font-mono">
-                    Correo: <strong>{editPaymentConfig.zelle?.email || 'pagos@empresa.com'}</strong>
-                  </span>
-                  <span className="text-slate-300 block font-mono">
-                    Titular: <strong>{editPaymentConfig.zelle?.beneficiary || currentProject?.name}</strong>
-                  </span>
-                  <span className="text-emerald-400 block font-mono font-extrabold">Monto: ${fmt(totalUSD)} USD</span>
-                </div>
-              </div>
-            )}
-
-            {paymentEntries[0]?.method === 'USDT' && (
-              <div className="bg-slate-950 p-3.5 rounded-2xl border border-amber-500/30 flex items-center gap-3.5">
-                <div className="p-2 bg-white rounded-xl shrink-0 flex items-center justify-center">
-                  {editPaymentConfig.binance?.qrImageUrl ? (
-                    <img src={editPaymentConfig.binance.qrImageUrl} alt="QR Binance" className="w-16 h-16 object-contain" />
-                  ) : (
-                    <QRCodeSVG value={editPaymentConfig.binance?.walletAddress || editPaymentConfig.binance?.payId || 'BINANCE_PAY'} size={64} />
-                  )}
-                </div>
-                <div className="text-xs space-y-0.5 flex-1">
-                  <div className="flex justify-between items-center">
-                    <span className="font-bold text-amber-400 block">⚡ Binance Pay / USDT Cripto</span>
-                    <button onClick={() => setShowPaymentConfigModal(true)} className="text-[10px] text-slate-400 hover:text-amber-300">✏️ Editar</button>
-                  </div>
-                  <span className="text-slate-200 block font-mono">
-                    Pay ID: <strong>{editPaymentConfig.binance?.payId || '198273645'}</strong>
-                  </span>
-                  <span className="text-slate-400 block font-mono text-[10px] truncate max-w-[240px]">
-                    Billetera: {editPaymentConfig.binance?.walletAddress || 'Red TRC20 / BEP20'}
-                  </span>
-                  <span className="text-emerald-400 block font-mono font-extrabold">Monto: ${fmt(totalUSD)} USDT</span>
-                </div>
-              </div>
-            )}
-
-            {paymentEntries[0]?.method === 'BANK_TRANSFER' && (
-              <div className="bg-slate-950 p-3.5 rounded-2xl border border-blue-500/30 space-y-1 text-xs">
-                <div className="flex justify-between items-center">
-                  <span className="font-bold text-blue-400 block">🏦 Transferencia Bancaria</span>
-                  <button onClick={() => setShowPaymentConfigModal(true)} className="text-[10px] text-slate-400 hover:text-blue-300">✏️ Editar</button>
-                </div>
-                <div className="font-mono text-[11px] text-slate-300">
-                  Banco: <strong>{editPaymentConfig.transferencia?.bankName || 'Banco Mercantil'}</strong>
-                </div>
-                <div className="font-mono text-[11px] text-slate-200 font-bold bg-slate-900 p-1.5 rounded-lg border border-slate-800 flex justify-between items-center">
-                  <span>{editPaymentConfig.transferencia?.accountNumber || '0105-0000-00-0000000000'}</span>
-                </div>
-                <div className="font-mono text-[10px] text-slate-400">
-                  Titular: {editPaymentConfig.transferencia?.beneficiary || currentProject?.name}
-                </div>
-              </div>
-            )}
-
-            {/* Payment Entry Form */}
-            <div className="space-y-3">
-              <label className="block text-xs font-bold uppercase text-slate-400 tracking-wider">Forma de Pago & Banco Receptor</label>
-
-              {paymentEntries.map((pe, idx) => (
-                <div key={idx} className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-2">
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div>
-                      <label className="block text-[10px] text-slate-400 mb-1">Método</label>
-                      <select 
-                        className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-medium outline-none"
-                        value={pe.method}
-                        onChange={(e) => {
-                          const updated = [...paymentEntries];
-                          const m = e.target.value;
-                          updated[idx].method = m;
-                          if (m === 'PAGO_MOVIL') {
-                            updated[idx].currency = 'BS';
-                            updated[idx].amount = totalBS;
-                            updated[idx].accountId = resolveMethodAccount('PAGO_MOVIL', 'BS');
-                          } else if (m === 'ZELLE' || m === 'USDT') {
-                            updated[idx].currency = 'USD';
-                            updated[idx].amount = totalUSD;
-                            updated[idx].accountId = resolveMethodAccount(m, 'USD');
-                          } else {
-                            updated[idx].accountId = resolveMethodAccount(m, pe.currency);
-                          }
-                          setPaymentEntries(updated);
-                        }}
-                      >
-                        <option value="CASH">Efectivo</option>
-                        <option value="PAGO_MOVIL">Pago Móvil</option>
-                        <option value="CARD">Punto de Venta / Tarjeta</option>
-                        <option value="BANK_TRANSFER">Transferencia Bancaria</option>
-                        <option value="ZELLE">Zelle</option>
-                        <option value="USDT">USDT / Binance Pay</option>
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] text-slate-400 mb-1">Moneda</label>
-                      <select 
-                        className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-medium outline-none"
-                        value={pe.currency}
-                        onChange={(e) => {
-                          const updated = [...paymentEntries];
-                          const cur = e.target.value as 'USD' | 'BS';
-                          updated[idx].currency = cur;
-                          updated[idx].amount = cur === 'USD' ? totalUSD : totalBS;
-                          updated[idx].accountId = resolveMethodAccount(pe.method, cur);
-                          setPaymentEntries(updated);
-                        }}
-                      >
-                        <option value="USD">USD ($)</option>
-                        <option value="BS">VES (Bs.)</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 text-xs">
-                    <div>
-                      <label className="block text-[10px] text-slate-400 mb-1">Monto Cobrado</label>
-                      <input 
-                        type="number" 
-                        step="0.01"
-                        className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-mono font-bold outline-none"
-                        value={pe.amount}
-                        onChange={(e) => {
-                          const updated = [...paymentEntries];
-                          updated[idx].amount = parseFloat(e.target.value) || 0;
-                          setPaymentEntries(updated);
-                        }}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] text-slate-400 mb-1">Últimos 4 Núm. Referencia</label>
-                      <input 
-                        type="text" 
-                        placeholder="Ej: 4910"
-                        className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-mono outline-none"
-                        value={pe.reference}
-                        onChange={(e) => {
-                          const updated = [...paymentEntries];
-                          updated[idx].reference = e.target.value;
-                          setPaymentEntries(updated);
-                        }}
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-[10px] text-slate-400 mb-1">Cuenta Contable Receptora en FINK</label>
-                    <select
-                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-xs text-slate-200 outline-none"
-                      value={pe.accountId}
-                      onChange={(e) => {
-                        const updated = [...paymentEntries];
-                        updated[idx].accountId = e.target.value;
-                        setPaymentEntries(updated);
-                      }}
-                    >
-                      <option value="">Selección Automática por Proyecto...</option>
-                      {accounts.filter(a => a.type === 'ASSET').map(a => (
-                        <option key={a.id} value={a.id}>{a.code} - {a.name} ({a.currency || 'USD'})</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-              ))}
-            </div>
-
-            {/* Change Calculator */}
-            <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-2">
-              <label className="block text-[10px] font-bold uppercase text-slate-400 flex items-center gap-1">
-                <Calculator size={12} className="text-amber-400" /> Calculadora de Vuelto / Cambio
-              </label>
-              <div className="grid grid-cols-2 gap-2 text-xs">
+            {/* Contenido con SCROLL Interno */}
+            <div className="overflow-y-auto pr-1 space-y-3 flex-1">
+              {/* Total Banner */}
+              <div className="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 flex justify-between items-center">
                 <div>
-                  <span className="text-slate-400 text-[10px] block">Recibido Efectivo USD:</span>
-                  <input 
-                    type="number" 
-                    className="w-full bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-white font-mono"
-                    value={cashReceivedUsd}
-                    onChange={(e) => setCashReceivedUsd(parseFloat(e.target.value) || 0)}
-                  />
+                  <span className="text-[10px] uppercase font-bold text-slate-400">Total a Cobrar</span>
+                  <div className="text-xl font-mono font-bold text-emerald-400">${fmt(totalUSD)} USD</div>
                 </div>
                 <div className="text-right">
-                  <span className="text-slate-400 text-[10px] block">Vuelto a Entregar:</span>
-                  <span className="text-amber-400 font-mono font-bold block text-sm">
-                    ${fmt(Math.max(0, safeNum(cashReceivedUsd) - safeNum(totalUSD)))} USD
-                  </span>
-                  <span className="text-slate-400 text-[9px] block">
-                    o Bs. {fmt(Math.max(0, safeNum(cashReceivedUsd) - safeNum(totalUSD)) * safeNum(exchangeRate))}
-                  </span>
+                  <span className="text-[10px] uppercase font-bold text-slate-400">Tasa de Cambio</span>
+                  <div className="text-xs font-mono text-amber-400 font-bold">Bs. {fmt(exchangeRate)}</div>
+                </div>
+              </div>
+
+              {/* TARJETA DINÁMICA DE DATOS DE COBRO DEL PROYECTO SEGÚN MÉTODO */}
+              {paymentEntries[0]?.method === 'PAGO_MOVIL' && (
+                <div className="bg-slate-950 p-3 rounded-2xl border border-emerald-500/30 flex items-center gap-3">
+                  <div className="p-1.5 bg-white rounded-xl shrink-0 flex items-center justify-center">
+                    {editPaymentConfig.pagoMovil?.qrImageUrl ? (
+                      <img 
+                        src={editPaymentConfig.pagoMovil.qrImageUrl} 
+                        alt="QR Pago Movil" 
+                        className="w-14 h-14 object-contain"
+                      />
+                    ) : (
+                      <QRCodeSVG 
+                        value={`PAGOMOVIL:${editPaymentConfig.pagoMovil?.bankCode || '0105'}:${editPaymentConfig.pagoMovil?.taxId || 'J-501920310'}:${editPaymentConfig.pagoMovil?.phone || '04141234567'}:${Number(totalBS.toFixed(2))}`} 
+                        size={56} 
+                      />
+                    )}
+                  </div>
+                  <div className="text-xs space-y-0.5 flex-1">
+                    <div className="flex justify-between items-center">
+                      <span className="font-bold text-emerald-400 block">📱 Pago Móvil ({currentProject?.name || 'Proyecto'})</span>
+                      <button 
+                        onClick={() => setShowPaymentConfigModal(true)}
+                        className="text-[10px] text-slate-400 hover:text-emerald-300 font-semibold"
+                      >
+                        ✏️ Editar
+                      </button>
+                    </div>
+                    <span className="text-slate-200 block font-mono text-[11px]">
+                      Banco: <strong>{editPaymentConfig.pagoMovil?.bankName || 'Mercantil (0105)'}</strong>
+                    </span>
+                    <span className="text-slate-300 block font-mono text-[11px]">
+                      RIF: <strong>{editPaymentConfig.pagoMovil?.taxId || 'J-501920310'}</strong> | Tel: <strong>{editPaymentConfig.pagoMovil?.phone || '0414-1234567'}</strong>
+                    </span>
+                    <span className="text-amber-400 block font-mono font-extrabold text-[11px] pt-0.5">
+                      Monto Exacto: Bs. {fmt(totalBS)}
+                    </span>
+                  </div>
+                </div>
+              )}
+
+              {paymentEntries[0]?.method === 'ZELLE' && (
+                <div className="bg-slate-950 p-3 rounded-2xl border border-purple-500/30 flex items-center gap-3">
+                  <div className="w-12 h-12 bg-purple-600/20 text-purple-400 border border-purple-500/40 rounded-xl flex items-center justify-center font-extrabold text-xl shrink-0">
+                    <DollarSign size={22} />
+                  </div>
+                  <div className="text-xs space-y-0.5 flex-1">
+                    <div className="flex justify-between items-center">
+                      <span className="font-bold text-purple-400 block">💵 Datos de Cobro Zelle</span>
+                      <button onClick={() => setShowPaymentConfigModal(true)} className="text-[10px] text-slate-400 hover:text-purple-300 font-semibold">✏️ Editar</button>
+                    </div>
+                    <span className="text-slate-200 block font-mono text-[11px]">
+                      Correo: <strong>{editPaymentConfig.zelle?.email || 'pagos@empresa.com'}</strong>
+                    </span>
+                    <span className="text-slate-300 block font-mono text-[11px]">
+                      Titular: <strong>{editPaymentConfig.zelle?.beneficiary || currentProject?.name}</strong>
+                    </span>
+                    <span className="text-emerald-400 block font-mono font-extrabold">Monto: ${fmt(totalUSD)} USD</span>
+                  </div>
+                </div>
+              )}
+
+              {paymentEntries[0]?.method === 'USDT' && (
+                <div className="bg-slate-950 p-3 rounded-2xl border border-amber-500/30 flex items-center gap-3">
+                  <div className="p-1.5 bg-white rounded-xl shrink-0 flex items-center justify-center">
+                    {editPaymentConfig.binance?.qrImageUrl ? (
+                      <img src={editPaymentConfig.binance.qrImageUrl} alt="QR Binance" className="w-14 h-14 object-contain" />
+                    ) : (
+                      <QRCodeSVG value={editPaymentConfig.binance?.walletAddress || editPaymentConfig.binance?.payId || 'BINANCE_PAY'} size={56} />
+                    )}
+                  </div>
+                  <div className="text-xs space-y-0.5 flex-1">
+                    <div className="flex justify-between items-center">
+                      <span className="font-bold text-amber-400 block">⚡ Binance Pay / USDT Cripto</span>
+                      <button onClick={() => setShowPaymentConfigModal(true)} className="text-[10px] text-slate-400 hover:text-amber-300 font-semibold">✏️ Editar</button>
+                    </div>
+                    <span className="text-slate-200 block font-mono text-[11px]">
+                      Pay ID: <strong>{editPaymentConfig.binance?.payId || '198273645'}</strong>
+                    </span>
+                    <span className="text-slate-400 block font-mono text-[10px] truncate max-w-[240px]">
+                      Billetera: {editPaymentConfig.binance?.walletAddress || 'Red TRC20 / BEP20'}
+                    </span>
+                    <span className="text-emerald-400 block font-mono font-extrabold">Monto: ${fmt(totalUSD)} USDT</span>
+                  </div>
+                </div>
+              )}
+
+              {paymentEntries[0]?.method === 'BANK_TRANSFER' && (
+                <div className="bg-slate-950 p-3 rounded-2xl border border-blue-500/30 space-y-1 text-xs">
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-blue-400 block">🏦 Transferencia Bancaria</span>
+                    <button onClick={() => setShowPaymentConfigModal(true)} className="text-[10px] text-slate-400 hover:text-blue-300 font-semibold">✏️ Editar</button>
+                  </div>
+                  <div className="font-mono text-[11px] text-slate-300">
+                    Banco: <strong>{editPaymentConfig.transferencia?.bankName || 'Banco Mercantil'}</strong>
+                  </div>
+                  <div className="font-mono text-[11px] text-slate-200 font-bold bg-slate-900 p-1.5 rounded-lg border border-slate-800 flex justify-between items-center">
+                    <span>{editPaymentConfig.transferencia?.accountNumber || '0105-0000-00-0000000000'}</span>
+                  </div>
+                  <div className="font-mono text-[10px] text-slate-400">
+                    Titular: {editPaymentConfig.transferencia?.beneficiary || currentProject?.name}
+                  </div>
+                </div>
+              )}
+
+              {/* Payment Entry Form */}
+              <div className="space-y-3">
+                <label className="block text-xs font-bold uppercase text-slate-400 tracking-wider">Forma de Pago & Banco Receptor</label>
+
+                {paymentEntries.map((pe, idx) => (
+                  <div key={idx} className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-2">
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <label className="block text-[10px] text-slate-400 mb-1">Método</label>
+                        <select 
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-medium outline-none"
+                          value={pe.method}
+                          onChange={(e) => {
+                            const updated = [...paymentEntries];
+                            const m = e.target.value;
+                            updated[idx].method = m;
+                            if (m === 'PAGO_MOVIL') {
+                              updated[idx].currency = 'BS';
+                              updated[idx].amount = Number(totalBS.toFixed(2));
+                              updated[idx].accountId = resolveMethodAccount('PAGO_MOVIL', 'BS');
+                            } else if (m === 'ZELLE' || m === 'USDT') {
+                              updated[idx].currency = 'USD';
+                              updated[idx].amount = Number(totalUSD.toFixed(2));
+                              updated[idx].accountId = resolveMethodAccount(m, 'USD');
+                            } else {
+                              updated[idx].accountId = resolveMethodAccount(m, pe.currency);
+                            }
+                            setPaymentEntries(updated);
+                          }}
+                        >
+                          <option value="CASH">Efectivo</option>
+                          <option value="PAGO_MOVIL">Pago Móvil</option>
+                          <option value="CARD">Punto de Venta / Tarjeta</option>
+                          <option value="BANK_TRANSFER">Transferencia Bancaria</option>
+                          <option value="ZELLE">Zelle</option>
+                          <option value="USDT">USDT / Binance Pay</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-[10px] text-slate-400 mb-1">Moneda</label>
+                        <select 
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-medium outline-none"
+                          value={pe.currency}
+                          onChange={(e) => {
+                            const updated = [...paymentEntries];
+                            const cur = e.target.value as 'USD' | 'BS';
+                            updated[idx].currency = cur;
+                            updated[idx].amount = cur === 'USD' ? Number(totalUSD.toFixed(2)) : Number(totalBS.toFixed(2));
+                            updated[idx].accountId = resolveMethodAccount(pe.method, cur);
+                            setPaymentEntries(updated);
+                          }}
+                        >
+                          <option value="USD">USD ($)</option>
+                          <option value="BS">VES (Bs.)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 text-xs">
+                      <div>
+                        <label className="block text-[10px] text-slate-400 mb-1">Monto Cobrado</label>
+                        <input 
+                          type="number" 
+                          step="0.01"
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-mono font-bold outline-none"
+                          value={pe.amount}
+                          onChange={(e) => {
+                            const updated = [...paymentEntries];
+                            updated[idx].amount = parseFloat(e.target.value) || 0;
+                            setPaymentEntries(updated);
+                          }}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-slate-400 mb-1">Últimos 4 Núm. Referencia</label>
+                        <input 
+                          type="text" 
+                          placeholder="Ej: 4910"
+                          className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-white font-mono outline-none"
+                          value={pe.reference}
+                          onChange={(e) => {
+                            const updated = [...paymentEntries];
+                            updated[idx].reference = e.target.value;
+                            setPaymentEntries(updated);
+                          }}
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] text-slate-400 mb-1">Cuenta Contable Receptora en FINK</label>
+                      <select
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-xs text-slate-200 outline-none"
+                        value={pe.accountId}
+                        onChange={(e) => {
+                          const updated = [...paymentEntries];
+                          updated[idx].accountId = e.target.value;
+                          setPaymentEntries(updated);
+                        }}
+                      >
+                        <option value="">Selección Automática por Proyecto...</option>
+                        {accounts.filter(a => a.type === 'ASSET').map(a => (
+                          <option key={a.id} value={a.id}>{a.code} - {a.name} ({a.currency || 'USD'})</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {/* Change Calculator */}
+              <div className="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-2">
+                <label className="block text-[10px] font-bold uppercase text-slate-400 flex items-center gap-1">
+                  <Calculator size={12} className="text-amber-400" /> Calculadora de Vuelto / Cambio
+                </label>
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <span className="text-slate-400 text-[10px] block">Recibido Efectivo USD:</span>
+                    <input 
+                      type="number" 
+                      className="w-full bg-slate-900 border border-slate-700 rounded-lg p-1.5 text-white font-mono"
+                      value={cashReceivedUsd}
+                      onChange={(e) => setCashReceivedUsd(parseFloat(e.target.value) || 0)}
+                    />
+                  </div>
+                  <div className="text-right">
+                    <span className="text-slate-400 text-[10px] block">Vuelto a Entregar:</span>
+                    <span className="text-amber-400 font-mono font-bold block text-sm">
+                      ${fmt(Math.max(0, safeNum(cashReceivedUsd) - safeNum(totalUSD)))} USD
+                    </span>
+                    <span className="text-slate-400 text-[9px] block">
+                      o Bs. {fmt(Math.max(0, safeNum(cashReceivedUsd) - safeNum(totalUSD)) * safeNum(exchangeRate))}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
 
-            <button 
-              onClick={handleExecuteSale}
-              disabled={processingSale}
-              className="w-full py-3.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-sm shadow-lg flex items-center justify-center gap-2 transition-all cursor-pointer"
-            >
-              <CheckCircle2 size={18} />
-              {processingSale ? 'Registrando Venta POS...' : 'Confirmar & Finalizar Venta'}
-            </button>
+            {/* Botones Fijos Abajo */}
+            <div className="pt-2 border-t border-slate-800 shrink-0 flex gap-2">
+              <button 
+                type="button" 
+                onClick={() => setShowPaymentModal(false)}
+                className="w-1/3 py-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs transition-all cursor-pointer"
+              >
+                Volver
+              </button>
+              <button 
+                onClick={handleExecuteSale}
+                disabled={processingSale}
+                className="w-2/3 py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-xs shadow-lg flex items-center justify-center gap-2 transition-all cursor-pointer"
+              >
+                <CheckCircle2 size={16} />
+                {processingSale ? 'Registrando Venta POS...' : 'Confirmar & Finalizar'}
+              </button>
+            </div>
 
           </div>
         </div>
