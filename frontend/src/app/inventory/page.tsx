@@ -378,14 +378,18 @@ export default function InventoryPage() {
         ...(pdfTasaOverride ? { tasaOverride: pdfTasaOverride } : {})
       });
 
-      const apiUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
-      const url = `${apiUrl}/products/export/price-list-pdf?${queryParams.toString()}`;
+      const url = `/backend-api/products/export/price-list-pdf?${queryParams.toString()}`;
 
       const response = await fetch(url, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { 
+          Authorization: `Bearer ${token}` 
+        }
       });
 
-      if (!response.ok) throw new Error('Error al generar la lista de precios PDF');
+      if (!response.ok) {
+        const errData = await response.json().catch(() => ({}));
+        throw new Error(errData?.error?.message || 'Error al generar la lista de precios PDF');
+      }
 
       const blob = await response.blob();
       const blobUrl = URL.createObjectURL(blob);
