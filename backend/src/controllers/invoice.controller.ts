@@ -619,11 +619,27 @@ export const getInvoices = async (req: Request, res: Response) => {
         contactMap = new Map(contacts.map(c => [c.id, c]));
     }
 
+    // Manual population of projects
+    const projectIds = new Set<string>();
+    invoices.forEach(inv => {
+        if (inv.projectId) projectIds.add(inv.projectId);
+    });
+
+    let projectMap = new Map();
+    if (projectIds.size > 0) {
+        const projects = await prisma.project.findMany({
+            where: { id: { in: Array.from(projectIds) } },
+            select: { id: true, name: true, code: true }
+        });
+        projectMap = new Map(projects.map(p => [p.id, p]));
+    }
+
     const enrichedInvoices = invoices.map((inv: any) => ({
         ...inv,
         vendor: inv.vendorId ? contactMap.get(inv.vendorId) : null,
         customer: inv.customerId ? contactMap.get(inv.customerId) : null,
-        contact: inv.vendorId ? contactMap.get(inv.vendorId) : (inv.customerId ? contactMap.get(inv.customerId) : null)
+        contact: inv.vendorId ? contactMap.get(inv.vendorId) : (inv.customerId ? contactMap.get(inv.customerId) : null),
+        project: inv.projectId ? projectMap.get(inv.projectId) : null
     }));
 
     res.json({ success: true, data: enrichedInvoices, pagination: { page: Number(page), limit: Number(limit), total } });
