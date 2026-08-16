@@ -299,18 +299,6 @@ function POSComponent() {
   const [poPaymentTerms, setPoPaymentTerms] = useState('Contado / Según acuerdo comercial');
   const [poNotes, setPoNotes] = useState('');
 
-  // Resolved Destination City
-  const resolvedCity = DESTINATION_CITIES.find(c => c.id === selectedCityId) || DESTINATION_CITIES[0];
-  const effectiveFreightPercent = selectedCityId === 'CUSTOM' ? customAdjustmentPercent : resolvedCity.adjustmentPercent;
-  const effectiveMinOrder = selectedCityId === 'CUSTOM' ? customMinOrder : resolvedCity.minOrderUsd;
-  const effectiveCityName = selectedCityId === 'CUSTOM' ? (customCityName.trim() || 'Destino Personalizado') : resolvedCity.name;
-  
-  // Total cotizado ajustado con recargo de flete
-  const freightMultiplier = 1 + ((effectiveFreightPercent || 0) / 100);
-  const adjustedTotalUSD = totalUSD * freightMultiplier;
-  const isFreeFreight = selectedCityId === 'RETIRO' ? true : (adjustedTotalUSD >= effectiveMinOrder);
-  const neededForFreeFreight = Math.max(0, effectiveMinOrder - adjustedTotalUSD);
-
   const openQuotationModal = () => {
     if (cart.length === 0) {
       toast.error('El carrito de compras está vacío');
@@ -793,6 +781,18 @@ function POSComponent() {
   const taxAmountListUSD = applyTax ? subtotalListUSD * 0.16 : 0;
   const totalListUSD = subtotalListUSD + taxAmountListUSD;
   const totalBS = totalListUSD * safeNum(exchangeRate);
+
+  // Resolved Destination City & Freight Pricing Calculations
+  const resolvedCity = DESTINATION_CITIES.find(c => c.id === selectedCityId) || DESTINATION_CITIES[0];
+  const effectiveFreightPercent = selectedCityId === 'CUSTOM' ? customAdjustmentPercent : resolvedCity.adjustmentPercent;
+  const effectiveMinOrder = selectedCityId === 'CUSTOM' ? customMinOrder : resolvedCity.minOrderUsd;
+  const effectiveCityName = selectedCityId === 'CUSTOM' ? (customCityName.trim() || 'Destino Personalizado') : resolvedCity.name;
+  
+  // Total cotizado ajustado con recargo de flete
+  const freightMultiplier = 1 + ((effectiveFreightPercent || 0) / 100);
+  const adjustedTotalUSD = totalUSD * freightMultiplier;
+  const isFreeFreight = selectedCityId === 'RETIRO' ? true : (adjustedTotalUSD >= effectiveMinOrder);
+  const neededForFreeFreight = Math.max(0, effectiveMinOrder - adjustedTotalUSD);
 
   // Open Payment Modal
   const openPaymentModal = () => {
