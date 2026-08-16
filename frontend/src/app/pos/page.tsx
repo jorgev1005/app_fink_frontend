@@ -29,7 +29,8 @@ import {
   Bitcoin,
   Save,
   Copy,
-  ExternalLink
+  ExternalLink,
+  ZoomIn
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { posAPI, productsAPI, projectsAPI, accountsAPI, exchangeRatesAPI } from '@/lib/api';
@@ -193,6 +194,17 @@ function POSComponent() {
   const [showRateModal, setShowRateModal] = useState(false);
   const [tempRate, setTempRate] = useState<number>(764.35);
   const [savingRate, setSavingRate] = useState(false);
+
+  // QR Zoom Lightbox State
+  const [showQrZoomModal, setShowQrZoomModal] = useState(false);
+  const [zoomQrData, setZoomQrData] = useState<{
+    title: string;
+    subtitle?: string;
+    qrValue?: string;
+    qrImage?: string;
+    amountText?: string;
+    details?: { label: string; value: string }[];
+  } | null>(null);
 
   // Project Payment Config Modal State
   const [showPaymentConfigModal, setShowPaymentConfigModal] = useState(false);
@@ -1004,20 +1016,43 @@ function POSComponent() {
               {/* TARJETA DINÁMICA DE DATOS DE COBRO DEL PROYECTO SEGÚN MÉTODO */}
               {paymentEntries[0]?.method === 'PAGO_MOVIL' && (
                 <div className="bg-slate-950 p-3 rounded-2xl border border-emerald-500/30 flex items-center gap-3">
-                  <div className="p-1.5 bg-white rounded-xl shrink-0 flex items-center justify-center">
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      setZoomQrData({
+                        title: `📱 Pago Móvil - ${currentProject?.name || 'Proyecto'}`,
+                        subtitle: 'Escanea con la aplicación de tu banco o cámara',
+                        qrValue: editPaymentConfig.pagoMovil?.qrImageUrl ? undefined : `PAGOMOVIL:${editPaymentConfig.pagoMovil?.bankCode || '0105'}:${editPaymentConfig.pagoMovil?.taxId || 'J-501920310'}:${editPaymentConfig.pagoMovil?.phone || '04141234567'}:${Number(totalBS.toFixed(2))}`,
+                        qrImage: editPaymentConfig.pagoMovil?.qrImageUrl,
+                        amountText: `Bs. ${fmt(totalBS)}`,
+                        details: [
+                          { label: 'Banco', value: editPaymentConfig.pagoMovil?.bankName || 'Mercantil (0105)' },
+                          { label: 'RIF / Cédula', value: editPaymentConfig.pagoMovil?.taxId || 'J-501920310' },
+                          { label: 'Teléfono', value: editPaymentConfig.pagoMovil?.phone || '0414-1234567' },
+                          { label: 'Monto a Pagar', value: `Bs. ${fmt(totalBS)}` }
+                        ]
+                      });
+                      setShowQrZoomModal(true);
+                    }}
+                    className="relative group p-1.5 bg-white rounded-2xl shrink-0 flex flex-col items-center justify-center cursor-pointer shadow-md hover:ring-2 hover:ring-emerald-400 transition-all"
+                    title="Toca para ampliar el código QR"
+                  >
                     {editPaymentConfig.pagoMovil?.qrImageUrl ? (
                       <img 
                         src={editPaymentConfig.pagoMovil.qrImageUrl} 
                         alt="QR Pago Movil" 
-                        className="w-14 h-14 object-contain"
+                        className="w-14 h-14 sm:w-16 sm:h-16 object-contain rounded-lg"
                       />
                     ) : (
                       <QRCodeSVG 
                         value={`PAGOMOVIL:${editPaymentConfig.pagoMovil?.bankCode || '0105'}:${editPaymentConfig.pagoMovil?.taxId || 'J-501920310'}:${editPaymentConfig.pagoMovil?.phone || '04141234567'}:${Number(totalBS.toFixed(2))}`} 
-                        size={56} 
+                        size={60} 
                       />
                     )}
-                  </div>
+                    <span className="text-[8px] text-slate-800 font-extrabold uppercase mt-0.5 flex items-center gap-0.5">
+                      <ZoomIn size={9} /> Ampliar
+                    </span>
+                  </button>
                   <div className="text-xs space-y-0.5 flex-1">
                     <div className="flex justify-between items-center">
                       <span className="font-bold text-emerald-400 block">📱 Pago Móvil ({currentProject?.name || 'Proyecto'})</span>
@@ -1064,13 +1099,35 @@ function POSComponent() {
 
               {paymentEntries[0]?.method === 'USDT' && (
                 <div className="bg-slate-950 p-3 rounded-2xl border border-amber-500/30 flex items-center gap-3">
-                  <div className="p-1.5 bg-white rounded-xl shrink-0 flex items-center justify-center">
+                  <button 
+                    type="button"
+                    onClick={() => {
+                      setZoomQrData({
+                        title: `⚡ Binance Pay / USDT - ${currentProject?.name || 'Proyecto'}`,
+                        subtitle: 'Escanea desde la App de Binance o Billetera Cripto',
+                        qrValue: editPaymentConfig.binance?.qrImageUrl ? undefined : (editPaymentConfig.binance?.walletAddress || editPaymentConfig.binance?.payId || 'BINANCE_PAY'),
+                        qrImage: editPaymentConfig.binance?.qrImageUrl,
+                        amountText: `$${fmt(totalUSD)} USDT`,
+                        details: [
+                          { label: 'Binance Pay ID', value: editPaymentConfig.binance?.payId || '198273645' },
+                          { label: 'Billetera / Red', value: editPaymentConfig.binance?.walletAddress || 'Red TRC20 / BEP20' },
+                          { label: 'Monto a Pagar', value: `$${fmt(totalUSD)} USDT` }
+                        ]
+                      });
+                      setShowQrZoomModal(true);
+                    }}
+                    className="relative group p-1.5 bg-white rounded-2xl shrink-0 flex flex-col items-center justify-center cursor-pointer shadow-md hover:ring-2 hover:ring-amber-400 transition-all"
+                    title="Toca para ampliar el código QR"
+                  >
                     {editPaymentConfig.binance?.qrImageUrl ? (
-                      <img src={editPaymentConfig.binance.qrImageUrl} alt="QR Binance" className="w-14 h-14 object-contain" />
+                      <img src={editPaymentConfig.binance.qrImageUrl} alt="QR Binance" className="w-14 h-14 sm:w-16 sm:h-16 object-contain rounded-lg" />
                     ) : (
-                      <QRCodeSVG value={editPaymentConfig.binance?.walletAddress || editPaymentConfig.binance?.payId || 'BINANCE_PAY'} size={56} />
+                      <QRCodeSVG value={editPaymentConfig.binance?.walletAddress || editPaymentConfig.binance?.payId || 'BINANCE_PAY'} size={60} />
                     )}
-                  </div>
+                    <span className="text-[8px] text-slate-800 font-extrabold uppercase mt-0.5 flex items-center gap-0.5">
+                      <ZoomIn size={9} /> Ampliar
+                    </span>
+                  </button>
                   <div className="text-xs space-y-0.5 flex-1">
                     <div className="flex justify-between items-center">
                       <span className="font-bold text-amber-400 block">⚡ Binance Pay / USDT Cripto</span>
@@ -1878,6 +1935,74 @@ function POSComponent() {
                 Listo
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: LIGHTBOX / ZOOM QR EN GRANDE */}
+      {showQrZoomModal && zoomQrData && (
+        <div 
+          onClick={(e) => { if (e.target === e.currentTarget) setShowQrZoomModal(false); }}
+          className="fixed inset-0 z-60 bg-black/90 backdrop-blur-lg flex items-center justify-center p-3 overflow-y-auto"
+        >
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl max-w-xs sm:max-w-sm w-full p-5 space-y-4 text-white shadow-2xl text-center flex flex-col items-center my-auto">
+            
+            <div className="w-full flex justify-between items-center pb-2 border-b border-slate-800">
+              <span className="font-extrabold text-xs sm:text-sm text-emerald-400 truncate text-left">
+                {zoomQrData.title}
+              </span>
+              <button 
+                onClick={() => setShowQrZoomModal(false)}
+                className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center gap-1"
+              >
+                <X size={15} /> Cerrar
+              </button>
+            </div>
+
+            {/* Gran Contenedor Blanco para el QR (Máximo Contraste para Escaneo con Teléfonos) */}
+            <div className="bg-white p-4 rounded-3xl shadow-2xl flex items-center justify-center w-64 h-64 sm:w-72 sm:h-72">
+              {zoomQrData.qrImage ? (
+                <img 
+                  src={zoomQrData.qrImage} 
+                  alt="QR Grande" 
+                  className="w-full h-full object-contain"
+                />
+              ) : (
+                <QRCodeSVG 
+                  value={zoomQrData.qrValue || ''} 
+                  size={240} 
+                  level="H"
+                  includeMargin={true}
+                />
+              )}
+            </div>
+
+            {/* Monto Destacado */}
+            {zoomQrData.amountText && (
+              <div className="w-full bg-slate-950 p-2.5 rounded-2xl border border-slate-800">
+                <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider block">Monto a Transferir</span>
+                <span className="text-xl font-extrabold font-mono text-emerald-400 block">{zoomQrData.amountText}</span>
+              </div>
+            )}
+
+            {/* Datos Resumidos para Pago */}
+            {zoomQrData.details && zoomQrData.details.length > 0 && (
+              <div className="w-full bg-slate-950 p-3 rounded-2xl border border-slate-800 text-left space-y-1.5 text-xs font-mono">
+                {zoomQrData.details.map((d, i) => (
+                  <div key={i} className="flex justify-between items-center text-[11px]">
+                    <span className="text-slate-400">{d.label}:</span>
+                    <span className="font-bold text-white text-right truncate ml-2">{d.value}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <button 
+              onClick={() => setShowQrZoomModal(false)}
+              className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-extrabold shadow-lg shadow-emerald-600/30 transition-all cursor-pointer"
+            >
+              ✓ Listo / Volver al Cobro
+            </button>
           </div>
         </div>
       )}
