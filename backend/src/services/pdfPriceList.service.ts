@@ -155,7 +155,7 @@ export async function generatePriceListPDFBuffer(options: PriceListPDFOptions): 
                 let extraParts: string[] = [];
                 if (prod.empaqueCantidad && prod.empaqueCantidad > 1) {
                     extraParts.push(`Empaque: ${prod.empaqueCantidad} ${prod.unit || 'unidades'}`);
-                } else if (prod.unit && prod.unit !== 'Unidades') {
+                } else if (prod.unit && prod.unit.toLowerCase() !== 'unidades' && prod.unit.toLowerCase() !== 'unidad' && prod.unit.toLowerCase() !== 'und') {
                     extraParts.push(`Unidad: ${prod.unit}`);
                 }
                 if (prod.medidas) extraParts.push(`Medidas: ${prod.medidas}`);
@@ -164,7 +164,16 @@ export async function generatePriceListPDFBuffer(options: PriceListPDFOptions): 
 
                 const hasExtra = extraParts.length > 0;
                 const extraTextStr = extraParts.join("  |  ");
-                const rowH = hasExtra ? 22 : 18;
+
+                // Medición dinámica de altura para evitar solapamientos
+                doc.fontSize(7.5).font('Helvetica');
+                const nameHeight = doc.heightOfString(prod.name, { width: colWidths.nombre });
+                doc.fontSize(6.5).font('Helvetica');
+                const skuHeight = doc.heightOfString(prod.sku || 'N/A', { width: colWidths.sku });
+                const extraHeight = hasExtra ? 9 : 0;
+
+                const contentH = Math.max(nameHeight + extraHeight, skuHeight);
+                const rowH = Math.max(contentH + 6, 18);
 
                 if (y > doc.page.height - 55 - rowH) {
                     doc.addPage();
@@ -182,32 +191,46 @@ export async function generatePriceListPDFBuffer(options: PriceListPDFOptions): 
                 const adjustedBs = adjustedUsd * tasaBCV;
 
                 const pBsFormatted = adjustedBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-                const textY = hasExtra ? y + 4 : y + 5;
+                const middleY = y + (rowH / 2) - 4;
 
                 // SKU
                 doc.fontSize(6.5).fillColor(GRAY).font('Helvetica');
-                doc.text(prod.sku || 'N/A', cols.sku + 3, textY, { width: colWidths.sku, lineBreak: false });
+                doc.text(prod.sku || 'N/A', cols.sku + 3, y + 4, { width: colWidths.sku });
 
-                // Nombre y Detalles
+                // Nombre y Detalles con posicionamiento dinámico (nunca se solapa)
                 doc.fontSize(7.5).fillColor(DARK).font('Helvetica');
+                doc.text(prod.name, cols.nombre + 3, y + 3, { width: colWidths.nombre });
+
                 if (hasExtra) {
-                    doc.text(prod.name, cols.nombre + 3, y + 3, { width: colWidths.nombre, lineBreak: false });
+                    const extraY = y + 3 + nameHeight + 1;
                     doc.fontSize(6).fillColor(GRAY).font('Helvetica-Oblique');
-                    doc.text(extraTextStr, cols.nombre + 3, y + 13, { width: colWidths.nombre, lineBreak: false });
-                    doc.fontSize(7.5).fillColor(DARK).font('Helvetica');
-                } else {
-                    doc.text(prod.name, cols.nombre + 3, textY, { width: colWidths.nombre, lineBreak: false });
+                    doc.text(extraTextStr, cols.nombre + 3, extraY, { width: colWidths.nombre, lineBreak: false });
                 }
 
-                // Precios
-                doc.text(`$${adjustedUsd.toFixed(2)}`, cols.pUSD, textY, { width: colWidths.pUSD, align: 'right', lineBreak: false });
-                doc.text(`Bs ${pBsFormatted}`, cols.pBs, textY, { width: colWidths.pBs, align: 'right', lineBreak: false });
+                // Precios centrados verticalmente
+                doc.fontSize(7.5).fillColor(DARK).font('Helvetica');
+                doc.text(`$${adjustedUsd.toFixed(2)}`, cols.pUSD, middleY, { width: colWidths.pUSD, align: 'right', lineBreak: false });
+                doc.text(`Bs ${pBsFormatted}`, cols.pBs, middleY, { width: colWidths.pBs, align: 'right', lineBreak: false });
 
                 y += rowH;
             });
 
             y += 12; // Espacio entre divisiones
         });
+
+        // ── BARRA RESUMEN DE TOTAL DE PRODUCTOS ───────────────────
+        if (y > doc.page.height - 110) {
+            doc.addPage();
+            y = 45;
+        }
+
+        doc.rect(LEFT, y, W, 18).fill('#f8fafc');
+        doc.rect(LEFT, y, W, 18).strokeColor('#cbd5e1').lineWidth(0.5).stroke();
+        doc.fontSize(8).fillColor(DARK).font('Helvetica-Bold')
+           .text(`TOTAL DE PRODUCTOS / ÍTEMS LISTADOS:`, LEFT + 12, y + 5, { continued: true, lineBreak: false })
+           .fillColor(GREEN).font('Helvetica-Bold')
+           .text(`  ${products.length} PRODUCTOS`, { continued: false, lineBreak: false });
+        y += 24;
 
         // ── CUADRO DE CONDICIONES Y MARCO FINAL ───────────────────
         if (y > doc.page.height - 95) {
