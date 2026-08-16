@@ -111,6 +111,7 @@ export default function InventoryPage() {
   const [exchangeRate, setExchangeRate] = useState<any>(null);
   const [ratesBySource, setRatesBySource] = useState<{ BCV?: number; BINANCE?: number; CUSTOM?: number; EUR?: number }>({});
   const [pdfRateMode, setPdfRateMode] = useState<'BCV' | 'EUR' | 'BINANCE' | 'CUSTOM'>('BCV');
+  const [pdfIncludeKeywords, setPdfIncludeKeywords] = useState<string>('');
   const [pdfExcludeKeywords, setPdfExcludeKeywords] = useState<string>('');
 
   // Estado para modal de Lista de Precios PDF
@@ -391,6 +392,7 @@ export default function InventoryPage() {
         adjustmentPercentage: pdfAdjustmentPercent.toString(),
         projectId: pdfSelectedProject,
         ...(pdfTasaOverride ? { tasaOverride: pdfTasaOverride } : {}),
+        ...(pdfIncludeKeywords ? { includeKeywords: pdfIncludeKeywords } : {}),
         ...(pdfExcludeKeywords ? { excludeKeywords: pdfExcludeKeywords } : {})
       });
 
@@ -1285,14 +1287,45 @@ export default function InventoryPage() {
                 </select>
               </div>
 
-              {/* Filtro de Exclusión de Productos */}
+              {/* Filtro de Inclusión de Productos */}
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1 uppercase tracking-wider">
-                  Excluir Productos (Palabras Clave):
+                <label className="block text-xs font-bold text-slate-700 mb-1 uppercase tracking-wider flex items-center justify-between">
+                  <span>Incluir Productos (Palabras Clave):</span>
+                  <span className="text-[10px] text-emerald-600 font-bold lowercase">opcional</span>
                 </label>
                 <div className="relative">
                   <input 
-                    type="text"
+                    type="text" 
+                    value={pdfIncludeKeywords}
+                    onChange={(e) => setPdfIncludeKeywords(e.target.value)}
+                    placeholder="Ej: tuberia, caja, abrazadera"
+                    className="w-full pl-3 pr-8 py-2.5 bg-slate-50 border border-slate-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:bg-white text-slate-800 font-semibold outline-none text-xs"
+                  />
+                  {pdfIncludeKeywords && (
+                    <button 
+                      type="button" 
+                      onClick={() => setPdfIncludeKeywords('')}
+                      className="absolute right-3 top-2.5 text-slate-400 hover:text-slate-600 text-xs font-bold"
+                      title="Limpiar inclusión"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+                <p className="text-[11px] text-slate-500 mt-1">
+                  Incluye <span className="font-semibold text-emerald-700">solo los productos</span> que contengan alguna de estas palabras clave (ej: <span className="font-semibold text-emerald-700">tuberia, caja, abrazadera</span>).
+                </p>
+              </div>
+
+              {/* Filtro de Exclusión de Productos */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1 uppercase tracking-wider flex items-center justify-between">
+                  <span>Excluir Productos (Palabras Clave):</span>
+                  <span className="text-[10px] text-slate-400 font-bold lowercase">opcional</span>
+                </label>
+                <div className="relative">
+                  <input 
+                    type="text" 
                     value={pdfExcludeKeywords}
                     onChange={(e) => setPdfExcludeKeywords(e.target.value)}
                     placeholder="Ej: cajas, carton, recicladas"

@@ -488,7 +488,7 @@ export const transferProductStock = async (req: Request, res: Response) => {
 // GET /api/products/export/price-list-pdf
 export const exportPriceListPDF = async (req: Request, res: Response) => {
   try {
-    const { projectId, adjustmentPercentage = '0', tasaOverride, excludeKeywords } = req.query;
+    const { projectId, adjustmentPercentage = '0', tasaOverride, excludeKeywords, includeKeywords } = req.query;
 
     const where: any = { 
       isActive: true,
@@ -508,12 +508,24 @@ export const exportPriceListPDF = async (req: Request, res: Response) => {
       ]
     });
 
-    if (excludeKeywords && typeof excludeKeywords === 'string') {
-      const keywords = excludeKeywords.split(',').map(k => k.trim().toLowerCase()).filter(Boolean);
-      if (keywords.length > 0) {
+    // 1. Filtrar por palabras clave a INCLUIR (si se especifican, ej: "tuberia, caja, abrazadera")
+    if (includeKeywords && typeof includeKeywords === 'string') {
+      const incKeywords = includeKeywords.split(',').map(k => k.trim().toLowerCase()).filter(Boolean);
+      if (incKeywords.length > 0) {
         products = products.filter(p => {
           const textToSearch = `${p.name} ${p.sku || ''} ${p.description || ''} ${p.division || ''}`.toLowerCase();
-          const isExcluded = keywords.some(kw => textToSearch.includes(kw));
+          return incKeywords.some(kw => textToSearch.includes(kw));
+        });
+      }
+    }
+
+    // 2. Filtrar por palabras clave a EXCLUIR (si se especifican)
+    if (excludeKeywords && typeof excludeKeywords === 'string') {
+      const excKeywords = excludeKeywords.split(',').map(k => k.trim().toLowerCase()).filter(Boolean);
+      if (excKeywords.length > 0) {
+        products = products.filter(p => {
+          const textToSearch = `${p.name} ${p.sku || ''} ${p.description || ''} ${p.division || ''}`.toLowerCase();
+          const isExcluded = excKeywords.some(kw => textToSearch.includes(kw));
           return !isExcluded;
         });
       }
