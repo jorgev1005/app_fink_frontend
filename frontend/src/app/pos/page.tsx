@@ -30,7 +30,8 @@ import {
   Save,
   Copy,
   ExternalLink,
-  ZoomIn
+  ZoomIn,
+  FileText
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { posAPI, productsAPI, projectsAPI, accountsAPI, exchangeRatesAPI } from '@/lib/api';
@@ -74,6 +75,7 @@ interface Product {
   packagingCost?: number;
   division?: string;
   empaqueCantidad?: number;
+  medidas?: string;
   forSale?: boolean;
 }
 
@@ -252,6 +254,109 @@ function POSComponent() {
     puntoVenta: { bankName: '', accountId: '' },
     efectivo: { accountIdUsd: '', accountIdBs: '' }
   });
+
+  // Quotation Modal State
+  const [showQuotationModal, setShowQuotationModal] = useState(false);
+  const [generatingQuotation, setGeneratingQuotation] = useState(false);
+  const [quoteClientName, setQuoteClientName] = useState('');
+  const [quoteClientTaxId, setQuoteClientTaxId] = useState('');
+  const [quoteClientPhone, setQuoteClientPhone] = useState('');
+  const [quoteNotes, setQuoteNotes] = useState('');
+
+  const openQuotationModal = () => {
+    if (cart.length === 0) {
+      toast.error('El carrito de compras está vacío');
+      return;
+    }
+
+    // Auto-completar datos según cliente seleccionado en POS si existen
+    if (customerType === 'express' && expressCustomer.name) {
+      setQuoteClientName(expressCustomer.name || '');
+      setQuoteClientTaxId(expressCustomer.taxId || '');
+      setQuoteClientPhone(expressCustomer.phone || '');
+    } else if (!quoteClientName) {
+      setQuoteClientName('CLIENTE ESTIMADO');
+    }
+
+    setShowQuotationModal(true);
+  };
+
+  const handleExecuteQuotationPDF = async (action: 'view' | 'download' | 'whatsapp') => {
+    if (cart.length === 0) {
+      toast.error('El carrito está vacío');
+      return;
+    }
+
+    setGeneratingQuotation(true);
+    try {
+      const clientName = quoteClientName.trim() || 'CLIENTE ESTIMADO';
+      const token = localStorage.getItem('token');
+
+      const payload = {
+        clientName,
+        clientTaxId: quoteClientTaxId.trim() || undefined,
+        clientPhone: quoteClientPhone.trim() || undefined,
+        projectId: selectedProjectId,
+        tasaOverride: exchangeRate,
+        notes: quoteNotes.trim() || undefined,
+        items: cart.map(ci => ({
+          sku: ci.product.sku || undefined,
+          name: ci.product.name,
+          quantity: ci.quantity,
+          unit: ci.product.unit || 'UNIDAD',
+          unitPrice: safeNum(ci.unitPrice || ci.product.unitPrice),
+          priceList: safeNum(ci.product.priceList || ci.unitPrice),
+          empaqueCantidad: ci.product.empaqueCantidad || undefined,
+          medidas: ci.product.medidas || undefined,
+        }))
+      };
+
+      const response = await fetch('/backend-api/api/pos/quotation-pdf', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        throw new Error('Error al generar la cotización formal en PDF');
+      }
+
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+
+      if (action === 'download') {
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = `Cotizacion_${clientName.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        toast.success('📥 Cotización descargada exitosamente');
+      } else if (action === 'whatsapp') {
+        const phoneClean = (quoteClientPhone || '').replace(/[^0-9]/g, '');
+        const textMsg = `Hola *${clientName}*, le enviamos su *Cotización Formal de ${currentProject?.name || 'Inversiones Lucem'}* con ${cart.length} productos por un total de *$${fmt(totalUSD)} USD* (Bs. ${fmt(totalBS)} a tasa BCV).`;
+        const waUrl = phoneClean 
+          ? `https://wa.me/${phoneClean.startsWith('58') ? phoneClean : '58' + phoneClean.replace(/^0+/, '')}?text=${encodeURIComponent(textMsg)}`
+          : `https://wa.me/?text=${encodeURIComponent(textMsg)}`;
+        
+        window.open(waUrl, '_blank');
+        window.open(blobUrl, '_blank');
+        toast.success('📲 Abriendo WhatsApp y Cotización');
+      } else {
+        window.open(blobUrl, '_blank');
+        toast.success('👁️ Abriendo Cotización en PDF');
+      }
+
+      setShowQuotationModal(false);
+    } catch (err: any) {
+      toast.error(err.message || 'Error al emitir cotización');
+    } finally {
+      setGeneratingQuotation(false);
+    }
+  };
 
   const handleSaveRate = async (saveToSystem: boolean) => {
     const newRate = safeNum(tempRate);
@@ -1019,7 +1124,7 @@ function POSComponent() {
             </div>
 
             {/* Action Buttons */}
-            <div className="pt-1">
+            <div className="pt-1 space-y-2">
               <button
                 onClick={openPaymentModal}
                 disabled={cart.length === 0}
@@ -1027,6 +1132,16 @@ function POSComponent() {
               >
                 <CreditCard size={16} />
                 Cobrar & Despachar (${fmt(totalUSD)} USD)
+              </button>
+
+              <button
+                type="button"
+                onClick={openQuotationModal}
+                disabled={cart.length === 0}
+                className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-emerald-400 font-bold text-xs tracking-wide border border-slate-700/80 hover:border-emerald-500/50 shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer"
+              >
+                <FileText size={15} />
+                📄 Emitir Cotización Formal PDF
               </button>
             </div>
 
@@ -2098,6 +2213,136 @@ function POSComponent() {
             >
               ✓ Listo / Volver al Cobro
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: EMITIR COTIZACIÓN FORMAL EN PDF */}
+      {showQuotationModal && (
+        <div 
+          onClick={(e) => { if (e.target === e.currentTarget) setShowQuotationModal(false); }}
+          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+        >
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl max-w-lg w-full p-5 space-y-4 text-white shadow-2xl max-h-[92vh] flex flex-col my-auto animate-in fade-in zoom-in duration-200">
+            
+            <div className="flex justify-between items-center pb-3 border-b border-slate-800 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-emerald-500/20 text-emerald-400 rounded-2xl flex items-center justify-center font-bold shrink-0">
+                  <FileText size={22} />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-base text-white">Emitir Cotización Formal PDF</h3>
+                  <p className="text-[11px] text-slate-400">Mismo diseño e imagen corporativa del Bot de WhatsApp</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowQuotationModal(false)}
+                className="p-1.5 hover:bg-slate-800 rounded-xl text-slate-400 hover:text-white transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-3.5 text-xs overflow-y-auto flex-1 pr-1">
+              
+              {/* Resumen del Carrito */}
+              <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800 flex justify-between items-center">
+                <div>
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Ítems a Cotizar</span>
+                  <span className="text-sm font-bold text-white font-mono">{cart.length} productos</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Total Estimado</span>
+                  <div className="text-sm font-extrabold font-mono text-emerald-400">${fmt(totalUSD)} USD</div>
+                  <div className="text-[10px] font-bold font-mono text-amber-400">Bs. {fmt(totalBS)}</div>
+                </div>
+              </div>
+
+              {/* Datos del Cliente */}
+              <div className="space-y-2.5 bg-slate-950/60 p-3.5 rounded-2xl border border-slate-800">
+                <span className="font-bold text-emerald-400 text-xs block">👤 Datos del Cliente para el Documento:</span>
+                
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 mb-1">Nombre / Razón Social *</label>
+                  <input
+                    type="text"
+                    value={quoteClientName}
+                    onChange={(e) => setQuoteClientName(e.target.value)}
+                    placeholder="Ej: Constructora Aragua C.A. o Nombre del Cliente"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white font-semibold outline-none focus:ring-2 focus:ring-emerald-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">Cédula / RIF (opcional)</label>
+                    <input
+                      type="text"
+                      value={quoteClientTaxId}
+                      onChange={(e) => setQuoteClientTaxId(e.target.value)}
+                      placeholder="J-12345678-9"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white font-mono outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">Teléfono WhatsApp (opcional)</label>
+                    <input
+                      type="text"
+                      value={quoteClientPhone}
+                      onChange={(e) => setQuoteClientPhone(e.target.value)}
+                      placeholder="0412-1234567"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white font-mono outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 mb-1">Notas o Condiciones Especiales (opcional)</label>
+                  <input
+                    type="text"
+                    value={quoteNotes}
+                    onChange={(e) => setQuoteNotes(e.target.value)}
+                    placeholder="Ej: Tiempo de entrega 24 horas. Flete incluido."
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white outline-none focus:ring-2 focus:ring-emerald-500 text-xs"
+                  />
+                </div>
+              </div>
+
+            </div>
+
+            {/* Botones de Acción */}
+            <div className="pt-3 border-t border-slate-800 shrink-0 space-y-2">
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleExecuteQuotationPDF('view')}
+                  disabled={generatingQuotation}
+                  className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white rounded-xl text-xs font-extrabold shadow-lg flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-95"
+                >
+                  👁️ {generatingQuotation ? 'Generando PDF...' : 'Ver / Imprimir Cotización'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleExecuteQuotationPDF('download')}
+                  disabled={generatingQuotation}
+                  className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white rounded-xl text-xs font-extrabold shadow-lg flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-95"
+                >
+                  ⬇️ {generatingQuotation ? 'Generando...' : 'Descargar PDF'}
+                </button>
+              </div>
+
+              {quoteClientPhone && (
+                <button
+                  type="button"
+                  onClick={() => handleExecuteQuotationPDF('whatsapp')}
+                  disabled={generatingQuotation}
+                  className="w-full py-2.5 bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white rounded-xl text-xs font-extrabold shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer"
+                >
+                  📲 Enviar al WhatsApp del Cliente ({quoteClientPhone})
+                </button>
+              )}
+            </div>
+
           </div>
         </div>
       )}

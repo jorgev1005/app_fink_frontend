@@ -571,6 +571,76 @@ export const voidPOSSale = async (req: Request, res: Response) => {
   }
 };
 
+// POST /api/pos/quotation-pdf
+export const exportQuotationPDF = async (req: Request, res: Response) => {
+  try {
+    const { 
+      clientName = 'CLIENTE ESTIMADO', 
+      clientTaxId, 
+      clientPhone, 
+      clientEmail, 
+      clientAddress,
+      projectId, 
+      items = [], 
+      tasaOverride,
+      notes 
+    } = req.body;
+
+    if (!items || items.length === 0) {
+      return res.status(400).json({ success: false, error: { message: 'Debe incluir al menos un producto en la cotización' } });
+    }
+
+    // Buscar tasa oficial BCV
+    const bcvRate = await prisma.exchangeRate.findFirst({
+      where: { source: 'BCV' },
+      orderBy: { date: 'desc' },
+    });
+    const parallelRate = await prisma.exchangeRate.findFirst({
+      where: { source: { in: ['API', 'PARALELO', 'BINANCE'] } },
+      orderBy: { date: 'desc' },
+    });
+    const fallbackRate = await prisma.exchangeRate.findFirst({
+      orderBy: { date: 'desc' },
+    });
+
+    const tasaBCV = tasaOverride 
+      ? parseFloat(tasaOverride) 
+      : (bcvRate?.usdToBs || (fallbackRate?.source === 'BCV' ? fallbackRate.usdToBs : 771.07));
+    const tasaParalelo = parallelRate ? parallelRate.usdToBs : undefined;
+    const tasaEUR = (bcvRate?.eurToBs && bcvRate.eurToBs > 0) ? bcvRate.eurToBs : (fallbackRate?.eurToBs || undefined);
+
+    let projectName = 'Inversiones Lucem C.A.';
+    if (projectId) {
+      const proj = await prisma.project.findUnique({ where: { id: projectId } });
+      if (proj) projectName = proj.name;
+    }
+
+    const { generateQuotationPDFBuffer } = require('../services/quotationPdf.service');
+    const { buffer, quotationNumber } = await generateQuotationPDFBuffer({
+      clientName,
+      clientTaxId,
+      clientPhone,
+      clientEmail,
+      clientAddress,
+      projectName,
+      tasaBCV,
+      tasaParalelo,
+      tasaEUR,
+      items,
+      notes
+    });
+
+    const safeClient = clientName.replace(/[^a-zA-Z0-9]/g, '_');
+    const filename = `${quotationNumber}_${safeClient}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+    res.send(buffer);
+  } catch (error: any) {
+    console.error('Error generating quotation PDF:', error);
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
 export default {
   getActiveSession,
   openSession,
@@ -578,4 +648,5 @@ export default {
   getSessionSummary,
   processPOSSale,
   voidPOSSale,
+  exportQuotationPDF,
 };

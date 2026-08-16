@@ -5,7 +5,8 @@ import {
   closeSession,
   getSessionSummary,
   processPOSSale,
-  voidPOSSale
+  voidPOSSale,
+  exportQuotationPDF
 } from '../controllers/pos.controller';
 import { authenticate } from '../middleware/auth';
 
@@ -20,5 +21,6 @@ router.get('/session/summary', getSessionSummary);
 
 router.post('/sale', processPOSSale);
 router.post('/sale/:id/void', voidPOSSale);
+router.post('/quotation-pdf', exportQuotationPDF);
 
 export default router;
