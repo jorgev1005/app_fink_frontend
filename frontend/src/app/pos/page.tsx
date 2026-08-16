@@ -31,7 +31,8 @@ import {
   Copy,
   ExternalLink,
   ZoomIn,
-  FileText
+  FileText,
+  Truck
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { posAPI, productsAPI, projectsAPI, accountsAPI, exchangeRatesAPI, contactsAPI } from '@/lib/api';
@@ -100,6 +101,24 @@ interface Account {
   subType: string;
   currency: string;
 }
+
+interface DestinationCity {
+  id: string;
+  name: string;
+  adjustmentPercent: number; // % de recargo en lista para cubrir flete
+  minOrderUsd: number;       // Compra mínima para flete gratis
+  freightCostUsd: number;    // Costo estimado del camión/transporte
+  description: string;
+}
+
+const DESTINATION_CITIES: DestinationCity[] = [
+  { id: 'RETIRO', name: 'Retiro en Almacén / Tienda (La Victoria)', adjustmentPercent: 0, minOrderUsd: 0, freightCostUsd: 0, description: 'Sin recargo - Retiro directo por cuenta del cliente' },
+  { id: 'LOCAL_ARAGUA', name: 'La Victoria / Cagua / Maracay (Eje Aragua)', adjustmentPercent: 5, minOrderUsd: 500, freightCostUsd: 25, description: '+5% en lista | Flete Gratis a partir de $500 USD' },
+  { id: 'VALENCIA', name: 'Valencia / Guacara / Naguanagua (Carabobo)', adjustmentPercent: 15, minOrderUsd: 1000, freightCostUsd: 150, description: '+15% en lista | Flete Gratis a partir de $1,000 USD' },
+  { id: 'CARACAS', name: 'Caracas / Miranda / Los Teques', adjustmentPercent: 12, minOrderUsd: 1000, freightCostUsd: 120, description: '+12% en lista | Flete Gratis a partir de $1,000 USD' },
+  { id: 'BARQUISIMETO', name: 'Barquisimeto / Cabudare (Lara)', adjustmentPercent: 18, minOrderUsd: 1400, freightCostUsd: 250, description: '+18% en lista | Flete Gratis a partir de $1,400 USD' },
+  { id: 'CUSTOM', name: 'Destino Personalizado / Otra Ciudad', adjustmentPercent: 15, minOrderUsd: 1000, freightCostUsd: 150, description: 'Configuración libre de % y compra mínima' },
+];
 
 // Helpers defensivos para formateo numérico seguro
 const safeNum = (v: any): number => {
@@ -255,7 +274,7 @@ function POSComponent() {
     efectivo: { accountIdUsd: '', accountIdBs: '' }
   });
 
-  // Quotation Modal State
+  // Quotation & Freight Modal State
   const [showQuotationModal, setShowQuotationModal] = useState(false);
   const [generatingQuotation, setGeneratingQuotation] = useState(false);
   const [quoteClientName, setQuoteClientName] = useState('');
@@ -264,6 +283,33 @@ function POSComponent() {
   const [quoteClientEmail, setQuoteClientEmail] = useState('');
   const [quoteSaveContact, setQuoteSaveContact] = useState(true);
   const [quoteNotes, setQuoteNotes] = useState('');
+  const [selectedCityId, setSelectedCityId] = useState<string>('RETIRO');
+  const [customCityName, setCustomCityName] = useState<string>('');
+  const [customAdjustmentPercent, setCustomAdjustmentPercent] = useState<number>(15);
+  const [customMinOrder, setCustomMinOrder] = useState<number>(1000);
+
+  // Purchase Order Modal State
+  const [showPurchaseOrderModal, setShowPurchaseOrderModal] = useState(false);
+  const [generatingPO, setGeneratingPO] = useState(false);
+  const [poSupplierName, setPoSupplierName] = useState('SOLO MAYOR');
+  const [poSupplierTaxId, setPoSupplierTaxId] = useState('J-12345678-0');
+  const [poSupplierPhone, setPoSupplierPhone] = useState('0412-271-1859');
+  const [poDeliveryAddress, setPoDeliveryAddress] = useState('Almacén Principal La Victoria, Aragua');
+  const [poExpectedDate, setPoExpectedDate] = useState('Inmediata / 24-48 horas');
+  const [poPaymentTerms, setPoPaymentTerms] = useState('Contado / Según acuerdo comercial');
+  const [poNotes, setPoNotes] = useState('');
+
+  // Resolved Destination City
+  const resolvedCity = DESTINATION_CITIES.find(c => c.id === selectedCityId) || DESTINATION_CITIES[0];
+  const effectiveFreightPercent = selectedCityId === 'CUSTOM' ? customAdjustmentPercent : resolvedCity.adjustmentPercent;
+  const effectiveMinOrder = selectedCityId === 'CUSTOM' ? customMinOrder : resolvedCity.minOrderUsd;
+  const effectiveCityName = selectedCityId === 'CUSTOM' ? (customCityName.trim() || 'Destino Personalizado') : resolvedCity.name;
+  
+  // Total cotizado ajustado con recargo de flete
+  const freightMultiplier = 1 + ((effectiveFreightPercent || 0) / 100);
+  const adjustedTotalUSD = totalUSD * freightMultiplier;
+  const isFreeFreight = selectedCityId === 'RETIRO' ? true : (adjustedTotalUSD >= effectiveMinOrder);
+  const neededForFreeFreight = Math.max(0, effectiveMinOrder - adjustedTotalUSD);
 
   const openQuotationModal = () => {
     if (cart.length === 0) {
@@ -271,7 +317,6 @@ function POSComponent() {
       return;
     }
 
-    // Auto-completar datos según cliente seleccionado en POS si existen
     if (customerType === 'express' && expressCustomer.name) {
       setQuoteClientName(expressCustomer.name || '');
       setQuoteClientTaxId(expressCustomer.taxId || '');
@@ -307,8 +352,7 @@ function POSComponent() {
             type: 'CUSTOMER'
           });
         } catch (e) {
-          // Si ya existe o hay conflicto, continuar sin detener la cotización
-          console.log('Nota: Contacto ya registrado o no se pudo duplicar:', e);
+          console.log('Nota: Contacto ya registrado:', e);
         }
       }
 
@@ -317,6 +361,11 @@ function POSComponent() {
         clientTaxId: quoteClientTaxId.trim() || undefined,
         clientPhone: quoteClientPhone.trim() || undefined,
         clientEmail: quoteClientEmail.trim() || undefined,
+        destinationCity: selectedCityId === 'RETIRO' ? undefined : effectiveCityName,
+        freightAdjustmentPercent: effectiveFreightPercent,
+        minOrderForFreeFreight: effectiveMinOrder,
+        freightCost: resolvedCity.freightCostUsd,
+        isFreeFreight,
         projectId: selectedProjectId,
         tasaOverride: exchangeRate,
         notes: quoteNotes.trim() || undefined,
@@ -355,10 +404,13 @@ function POSComponent() {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-        toast.success('📥 Cotización descargada y cliente guardado');
+        toast.success('📥 Cotización descargada exitosamente');
       } else if (action === 'whatsapp') {
         const phoneClean = (quoteClientPhone || '').replace(/[^0-9]/g, '');
-        const textMsg = `Hola *${clientName}*, le enviamos su *Cotización Formal de ${currentProject?.name || 'Inversiones Lucem'}* con ${cart.length} productos por un total de *$${fmt(totalUSD)} USD* (Bs. ${fmt(totalBS)} a tasa BCV).`;
+        const freightBanner = selectedCityId !== 'RETIRO' 
+          ? (isFreeFreight ? ` 🚚 *Flete GRATIS/Incluido hasta ${effectiveCityName}*` : ` 🚚 Entrega en ${effectiveCityName}`)
+          : '';
+        const textMsg = `Hola *${clientName}*, le enviamos su *Cotización Formal de ${currentProject?.name || 'Inversiones Lucem'}* con ${cart.length} productos por un total de *$${fmt(adjustedTotalUSD)} USD* (Bs. ${fmt(adjustedTotalUSD * exchangeRate)} a tasa BCV).${freightBanner}`;
         const waUrl = phoneClean 
           ? `https://wa.me/${phoneClean.startsWith('58') ? phoneClean : '58' + phoneClean.replace(/^0+/, '')}?text=${encodeURIComponent(textMsg)}`
           : `https://wa.me/?text=${encodeURIComponent(textMsg)}`;
@@ -376,6 +428,94 @@ function POSComponent() {
       toast.error(err.message || 'Error al emitir cotización');
     } finally {
       setGeneratingQuotation(false);
+    }
+  };
+
+  const openPurchaseOrderModal = () => {
+    if (cart.length === 0) {
+      toast.error('El carrito de compras está vacío para generar orden');
+      return;
+    }
+    setShowPurchaseOrderModal(true);
+  };
+
+  const handleExecutePurchaseOrderPDF = async (action: 'view' | 'download' | 'whatsapp') => {
+    if (cart.length === 0) {
+      toast.error('El carrito está vacío');
+      return;
+    }
+
+    setGeneratingPO(true);
+    try {
+      const token = localStorage.getItem('token');
+      const supplierName = poSupplierName.trim() || 'SOLO MAYOR';
+
+      const payload = {
+        supplierName,
+        supplierTaxId: poSupplierTaxId.trim() || undefined,
+        supplierPhone: poSupplierPhone.trim() || undefined,
+        deliveryAddress: poDeliveryAddress.trim() || undefined,
+        expectedDate: poExpectedDate.trim() || undefined,
+        paymentTerms: poPaymentTerms.trim() || undefined,
+        projectId: selectedProjectId,
+        tasaOverride: exchangeRate,
+        notes: poNotes.trim() || undefined,
+        items: cart.map(ci => ({
+          sku: ci.product.sku || undefined,
+          name: ci.product.name,
+          quantity: ci.quantity,
+          unit: ci.product.unit || 'UNIDAD',
+          costPrice: safeNum(ci.product.costPrice || (ci.unitPrice * 0.88)), // Costo proveedor
+          empaqueCantidad: ci.product.empaqueCantidad || undefined,
+          medidas: ci.product.medidas || undefined,
+        }))
+      };
+
+      const response = await fetch('/backend-api/api/pos/purchase-order-pdf', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        throw new Error('Error al generar la orden de compra');
+      }
+
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+
+      if (action === 'download') {
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = `OrdenCompra_${supplierName.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        toast.success('📥 Orden de compra descargada');
+      } else if (action === 'whatsapp') {
+        const phoneClean = (poSupplierPhone || '').replace(/[^0-9]/g, '');
+        const totalPOCost = cart.reduce((acc, ci) => acc + ((ci.product.costPrice || (ci.unitPrice * 0.88)) * ci.quantity), 0);
+        const textMsg = `Estimados *${supplierName}*, adjuntamos nuestra *Orden de Compra Formal* con ${cart.length} renglones por un total de *$${fmt(totalPOCost)} USD*. Favor confirmar disponibilidad para despacho.`;
+        const waUrl = phoneClean 
+          ? `https://wa.me/${phoneClean.startsWith('58') ? phoneClean : '58' + phoneClean.replace(/^0+/, '')}?text=${encodeURIComponent(textMsg)}`
+          : `https://wa.me/?text=${encodeURIComponent(textMsg)}`;
+        
+        window.open(waUrl, '_blank');
+        window.open(blobUrl, '_blank');
+        toast.success('📲 Abriendo WhatsApp y Orden');
+      } else {
+        window.open(blobUrl, '_blank');
+        toast.success('👁️ Abriendo Orden de Compra');
+      }
+
+      setShowPurchaseOrderModal(false);
+    } catch (err: any) {
+      toast.error(err.message || 'Error al emitir orden de compra');
+    } finally {
+      setGeneratingPO(false);
     }
   };
 
@@ -1155,15 +1295,29 @@ function POSComponent() {
                 Cobrar & Despachar (${fmt(totalUSD)} USD)
               </button>
 
-              <button
-                type="button"
-                onClick={openQuotationModal}
-                disabled={cart.length === 0}
-                className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-emerald-400 font-bold text-xs tracking-wide border border-slate-700/80 hover:border-emerald-500/50 shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer"
-              >
-                <FileText size={15} />
-                📄 Emitir Cotización Formal PDF
-              </button>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={openQuotationModal}
+                  disabled={cart.length === 0}
+                  className="py-2.5 px-2 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-emerald-400 font-bold text-xs tracking-tight border border-slate-700/80 hover:border-emerald-500/50 shadow-md flex items-center justify-center gap-1.5 transition-all cursor-pointer truncate"
+                  title="Emitir Cotización Formal PDF con Flete por Ciudad"
+                >
+                  <FileText size={14} className="shrink-0" />
+                  <span>📄 Cotización PDF</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={openPurchaseOrderModal}
+                  disabled={cart.length === 0}
+                  className="py-2.5 px-2 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-blue-400 font-bold text-xs tracking-tight border border-slate-700/80 hover:border-blue-500/50 shadow-md flex items-center justify-center gap-1.5 transition-all cursor-pointer truncate"
+                  title="Generar Orden de Compra formal para el Proveedor a costo"
+                >
+                  <Truck size={14} className="shrink-0" />
+                  <span>📦 Orden Compra</span>
+                </button>
+              </div>
             </div>
 
           </div>
@@ -2291,16 +2445,101 @@ function POSComponent() {
 
             <div className="space-y-3.5 text-xs overflow-y-auto flex-1 pr-1">
               
-              {/* Resumen del Carrito */}
-              <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800 flex justify-between items-center">
-                <div>
-                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Ítems a Cotizar</span>
-                  <span className="text-sm font-bold text-white font-mono">{cart.length} productos</span>
+              {/* Resumen del Carrito & Flete Calculado */}
+              <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800 space-y-2">
+                <div className="flex justify-between items-center">
+                  <div>
+                    <span className="text-[10px] text-slate-400 uppercase font-bold block">Ítems a Cotizar</span>
+                    <span className="text-sm font-bold text-white font-mono">{cart.length} productos</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-[10px] text-slate-400 uppercase font-bold block">Total Cotizado</span>
+                    <div className="text-sm font-extrabold font-mono text-emerald-400">${fmt(adjustedTotalUSD)} USD</div>
+                    <div className="text-[10px] font-bold font-mono text-amber-400">Bs. {fmt(adjustedTotalUSD * exchangeRate)}</div>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <span className="text-[10px] text-slate-400 uppercase font-bold block">Total Estimado</span>
-                  <div className="text-sm font-extrabold font-mono text-emerald-400">${fmt(totalUSD)} USD</div>
-                  <div className="text-[10px] font-bold font-mono text-amber-400">Bs. {fmt(totalBS)}</div>
+
+                {/* Banner de Estado de Flete */}
+                {selectedCityId !== 'RETIRO' && (
+                  <div className={`p-2.5 rounded-xl border text-[11px] font-bold flex items-center gap-2 ${
+                    isFreeFreight 
+                      ? 'bg-emerald-950/60 border-emerald-700 text-emerald-300' 
+                      : 'bg-amber-950/60 border-amber-700 text-amber-300'
+                  }`}>
+                    <Truck size={16} className="shrink-0" />
+                    <div className="flex-1">
+                      {isFreeFreight ? (
+                        <span>🎉 ¡Flete 100% GRATIS / BONIFICADO hasta {effectiveCityName}!</span>
+                      ) : (
+                        <span>⚠️ Faltan ${fmt(neededForFreeFreight)} USD en productos para obtener Flete Gratis hasta {effectiveCityName} (O flete estimado de ${resolvedCity.freightCostUsd} USD)</span>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Configuración de Destino y Flete */}
+              <div className="space-y-2 bg-slate-950/70 p-3.5 rounded-2xl border border-slate-800">
+                <div className="flex items-center justify-between">
+                  <span className="font-bold text-amber-400 text-xs flex items-center gap-1.5">
+                    <Truck size={14} /> 🚚 Ciudad de Destino / Política de Flete:
+                  </span>
+                  {effectiveFreightPercent > 0 && (
+                    <span className="bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full text-[10px] font-extrabold">
+                      +{effectiveFreightPercent}% en lista
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div className="sm:col-span-2">
+                    <select
+                      value={selectedCityId}
+                      onChange={(e) => setSelectedCityId(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white font-semibold outline-none focus:ring-2 focus:ring-amber-500 text-xs cursor-pointer"
+                    >
+                      {DESTINATION_CITIES.map(city => (
+                        <option key={city.id} value={city.id}>
+                          {city.name} {city.adjustmentPercent > 0 ? `(+${city.adjustmentPercent}% | Mín $${city.minOrderUsd})` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {selectedCityId === 'CUSTOM' && (
+                    <>
+                      <div>
+                        <label className="block text-[10px] text-slate-300 font-bold mb-0.5">Nombre Ciudad</label>
+                        <input
+                          type="text"
+                          placeholder="Ej: San Juan de los Morros"
+                          className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2 text-white outline-none"
+                          value={customCityName}
+                          onChange={(e) => setCustomCityName(e.target.value)}
+                        />
+                      </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <div>
+                          <label className="block text-[10px] text-slate-300 font-bold mb-0.5">% Recargo</label>
+                          <input
+                            type="number"
+                            className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2 text-white outline-none"
+                            value={customAdjustmentPercent}
+                            onChange={(e) => setCustomAdjustmentPercent(safeNum(e.target.value))}
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[10px] text-slate-300 font-bold mb-0.5">Mínimo ($)</label>
+                          <input
+                            type="number"
+                            className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2 text-white outline-none"
+                            value={customMinOrder}
+                            onChange={(e) => setCustomMinOrder(safeNum(e.target.value))}
+                          />
+                        </div>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -2370,7 +2609,7 @@ function POSComponent() {
                     type="text"
                     value={quoteNotes}
                     onChange={(e) => setQuoteNotes(e.target.value)}
-                    placeholder="Ej: Tiempo de entrega 24 horas. Flete incluido."
+                    placeholder="Ej: Tiempo de entrega 24 horas. Despacho incluido."
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white outline-none focus:ring-2 focus:ring-emerald-500 text-xs"
                   />
                 </div>
@@ -2407,6 +2646,176 @@ function POSComponent() {
                   className="w-full py-2.5 bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white rounded-xl text-xs font-extrabold shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer"
                 >
                   📲 Enviar al WhatsApp del Cliente ({quoteClientPhone})
+                </button>
+              )}
+            </div>
+
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: GENERAR ORDEN DE COMPRA FORMAL (PROVEEDOR) */}
+      {showPurchaseOrderModal && (
+        <div 
+          onClick={(e) => { if (e.target === e.currentTarget) setShowPurchaseOrderModal(false); }}
+          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+        >
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl max-w-lg w-full p-5 space-y-4 text-white shadow-2xl max-h-[92vh] flex flex-col my-auto animate-in fade-in zoom-in duration-200">
+            
+            <div className="flex justify-between items-center pb-3 border-b border-slate-800 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-500/20 text-blue-400 rounded-2xl flex items-center justify-center font-bold shrink-0">
+                  <Truck size={22} />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-base text-white">Generar Orden de Compra (Proveedor)</h3>
+                  <p className="text-[11px] text-slate-400">Documento formal con precios calculados a Costo Real</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowPurchaseOrderModal(false)}
+                className="p-1.5 hover:bg-slate-800 rounded-xl text-slate-400 hover:text-white transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="space-y-3.5 text-xs overflow-y-auto flex-1 pr-1">
+              
+              {/* Resumen del Pedido a Proveedor */}
+              {(() => {
+                const totalPOCostUSD = cart.reduce((acc, ci) => acc + ((ci.product.costPrice || (ci.unitPrice * 0.88)) * ci.quantity), 0);
+                const totalPOCostBS = totalPOCostUSD * exchangeRate;
+                return (
+                  <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800 flex justify-between items-center">
+                    <div>
+                      <span className="text-[10px] text-slate-400 uppercase font-bold block">Renglones a Solicitar</span>
+                      <span className="text-sm font-bold text-white font-mono">{cart.length} productos ({cart.reduce((a, b) => a + b.quantity, 0)} unidades)</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] text-slate-400 uppercase font-bold block">Costo Total Estimado</span>
+                      <div className="text-sm font-extrabold font-mono text-blue-400">${fmt(totalPOCostUSD)} USD</div>
+                      <div className="text-[10px] font-bold font-mono text-amber-400">Bs. {fmt(totalPOCostBS)}</div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+              {/* Datos del Proveedor */}
+              <div className="space-y-2.5 bg-slate-950/60 p-3.5 rounded-2xl border border-slate-800">
+                <span className="font-bold text-blue-400 text-xs block">🏢 Datos del Proveedor:</span>
+                
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 mb-1">Nombre / Razón Social del Proveedor *</label>
+                  <input
+                    type="text"
+                    value={poSupplierName}
+                    onChange={(e) => setPoSupplierName(e.target.value)}
+                    placeholder="Ej: SOLO MAYOR / DISTRIBUIDORA"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white font-semibold outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">RIF del Proveedor</label>
+                    <input
+                      type="text"
+                      value={poSupplierTaxId}
+                      onChange={(e) => setPoSupplierTaxId(e.target.value)}
+                      placeholder="J-12345678-0"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white font-mono outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">Teléfono (WhatsApp)</label>
+                    <input
+                      type="text"
+                      value={poSupplierPhone}
+                      onChange={(e) => setPoSupplierPhone(e.target.value)}
+                      placeholder="0412-271-1859"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white font-mono outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 mb-1">Lugar de Recepción / Entrega</label>
+                  <input
+                    type="text"
+                    value={poDeliveryAddress}
+                    onChange={(e) => setPoDeliveryAddress(e.target.value)}
+                    placeholder="Ej: Almacén Principal La Victoria, Aragua"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">Tiempo de Entrega</label>
+                    <input
+                      type="text"
+                      value={poExpectedDate}
+                      onChange={(e) => setPoExpectedDate(e.target.value)}
+                      placeholder="Ej: Inmediata / 24-48 horas"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">Condición de Pago</label>
+                    <input
+                      type="text"
+                      value={poPaymentTerms}
+                      onChange={(e) => setPoPaymentTerms(e.target.value)}
+                      placeholder="Ej: Contado / Crédito 7 días"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 mb-1">Observaciones / Instrucciones de Carga (opcional)</label>
+                  <input
+                    type="text"
+                    value={poNotes}
+                    onChange={(e) => setPoNotes(e.target.value)}
+                    placeholder="Ej: Enviar factura fiscal junto con el despacho."
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white outline-none focus:ring-2 focus:ring-blue-500 text-xs"
+                  />
+                </div>
+              </div>
+
+            </div>
+
+            {/* Botones de Acción */}
+            <div className="pt-3 border-t border-slate-800 shrink-0 space-y-2">
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleExecutePurchaseOrderPDF('view')}
+                  disabled={generatingPO}
+                  className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-xl text-xs font-extrabold shadow-lg flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-95"
+                >
+                  👁️ {generatingPO ? 'Generando OC...' : 'Ver / Imprimir Orden'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleExecutePurchaseOrderPDF('download')}
+                  disabled={generatingPO}
+                  className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white rounded-xl text-xs font-extrabold shadow-lg flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-95"
+                >
+                  ⬇️ {generatingPO ? 'Generando...' : 'Descargar PDF'}
+                </button>
+              </div>
+
+              {poSupplierPhone && (
+                <button
+                  type="button"
+                  onClick={() => handleExecutePurchaseOrderPDF('whatsapp')}
+                  disabled={generatingPO}
+                  className="w-full py-2.5 bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white rounded-xl text-xs font-extrabold shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer"
+                >
+                  📲 Enviar al WhatsApp del Proveedor ({poSupplierPhone})
                 </button>
               )}
             </div>

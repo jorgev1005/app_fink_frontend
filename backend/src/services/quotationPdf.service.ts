@@ -6,8 +6,9 @@ export interface QuotationItem {
     name: string;
     quantity: number;
     unit?: string;
-    unitPrice: number;   // Precio de contado en Divisas
+    unitPrice: number;   // Precio base de contado en Divisas
     priceList?: number;  // Precio base en Bolívares a tasa BCV
+    costPrice?: number;
     discountPercent?: number;
     medidas?: string;
     empaqueCantidad?: number;
@@ -21,6 +22,11 @@ export interface QuotationPDFOptions {
     clientPhone?: string;
     clientEmail?: string;
     clientAddress?: string;
+    destinationCity?: string;
+    freightAdjustmentPercent?: number;
+    minOrderForFreeFreight?: number;
+    freightCost?: number;
+    isFreeFreight?: boolean;
     projectName?: string;
     tasaBCV: number;
     tasaParalelo?: number;
@@ -48,6 +54,11 @@ export async function generateQuotationPDFBuffer(options: QuotationPDFOptions): 
         clientPhone,
         clientEmail,
         clientAddress,
+        destinationCity,
+        freightAdjustmentPercent = 0,
+        minOrderForFreeFreight,
+        freightCost,
+        isFreeFreight = false,
         projectName = 'Inversiones Lucem C.A.',
         tasaBCV,
         tasaParalelo,
@@ -58,7 +69,6 @@ export async function generateQuotationPDFBuffer(options: QuotationPDFOptions): 
         notes
     } = options;
 
-    // Generar imagen real de QR Code para contacto directo por WhatsApp
     const whatsappUrl = `https://wa.me/584122711859?text=${encodeURIComponent(`Hola, quisiera confirmar la cotización ${quotationNumber} a nombre de ${clientName}`)}`;
     const qrBuffer = await QRCode.toBuffer(whatsappUrl, { 
         margin: 1, 
@@ -69,7 +79,7 @@ export async function generateQuotationPDFBuffer(options: QuotationPDFOptions): 
     return new Promise((resolve, reject) => {
         const doc = new PDFDocument({ 
             size: 'A4', 
-            margin: 0, // Control estricto para evitar páginas vacías
+            margin: 0, 
             bufferPages: true,
             info: { Title: quotationNumber, Author: 'Grupo Aludra - FINK' } 
         });
@@ -101,7 +111,6 @@ export async function generateQuotationPDFBuffer(options: QuotationPDFOptions): 
         // ── 1. ENCABEZADO CORPORATIVO ─────────────────────────────
         doc.rect(LEFT, 40, W, 85).fill(DARK);
 
-        // Logo / Branding Text
         doc.fontSize(22).fillColor(GREEN).font('Helvetica-Bold')
            .text('ALUDRA', LEFT + 20, 52, { continued: true, lineBreak: false })
            .fillColor('white').font('Helvetica')
@@ -124,7 +133,7 @@ export async function generateQuotationPDFBuffer(options: QuotationPDFOptions): 
            .text(`Emitida: ${fmtDate(ahora)}`, 330, 83, { width: 200, align: 'right', lineBreak: false })
            .text(`Válida hasta: ${fmtDate(vigencia)} (48 horas)`, 330, 95, { width: 200, align: 'right', lineBreak: false });
 
-        // ── 2. BLOQUE DE DATOS DEL CLIENTE ───────────────────────
+        // ── 2. BLOQUE DE DATOS DEL CLIENTE Y DESTINO ─────────────
         let y = 135;
         doc.rect(LEFT, y, W, 42).fill(LGRAY);
         doc.rect(LEFT, y, 4, 42).fill(GREEN);
@@ -137,7 +146,8 @@ export async function generateQuotationPDFBuffer(options: QuotationPDFOptions): 
         const clientDetails = [
             clientTaxId ? `RIF/Cédula: ${clientTaxId}` : '',
             clientPhone ? `Tel: ${clientPhone}` : '',
-            clientEmail ? `Email: ${clientEmail}` : ''
+            clientEmail ? `Email: ${clientEmail}` : '',
+            destinationCity ? `Destino: ${destinationCity.toUpperCase()}` : ''
         ].filter(Boolean).join('   |   ');
 
         if (clientDetails) {
@@ -145,8 +155,21 @@ export async function generateQuotationPDFBuffer(options: QuotationPDFOptions): 
                .text(clientDetails, LEFT + 12, y + 29, { width: 450, lineBreak: false });
         }
 
-        // ── 3. BARRA DE TASAS REFERENCIALES ───────────────────────
+        // ── 3. BANNER DE FLETE Y CONDICIONES DE DESTINO ──────────
         y += 48;
+        if (destinationCity && destinationCity !== 'RETIRO') {
+            doc.rect(LEFT, y, W, 20).fill(isFreeFreight ? '#ecfdf5' : '#fffbeb');
+            doc.rect(LEFT, y, 3, 20).fill(isFreeFreight ? GREEN : '#f59e0b');
+            
+            doc.fontSize(7.5).fillColor(isFreeFreight ? '#065f46' : '#92400e').font('Helvetica-Bold');
+            const cityText = isFreeFreight 
+                ? `🚚 CONDICIÓN DE DESPACHO: ¡FLETE 100% INCLUIDO Y BONIFICADO HASTA ${destinationCity.toUpperCase()}! (Sin costo de envío)`
+                : `🚚 CONDICIÓN DE DESPACHO: Entrega en ${destinationCity.toUpperCase()} (Envío Gratuito disponible a partir de $${(minOrderForFreeFreight || 1000).toFixed(2)} USD)`;
+            doc.text(cityText, LEFT + 10, y + 5, { width: W - 20, lineBreak: false });
+            y += 24;
+        }
+
+        // ── 4. BARRA DE TASAS REFERENCIALES ───────────────────────
         const parStr = tasaParalelo ? `  |  Paralelo = Bs. ${tasaParalelo.toFixed(2)}/USD` : '';
         const eurStr = tasaEUR ? `  |  EUR = Bs. ${tasaEUR.toFixed(2)}/EUR` : '';
         doc.fontSize(7).fillColor(GRAY).font('Helvetica')
@@ -154,8 +177,7 @@ export async function generateQuotationPDFBuffer(options: QuotationPDFOptions): 
 
         y += 14;
 
-        // ── 4. TABLA DE PRODUCTOS COTIZADOS ───────────────────────
-        // Columnas: SKU (55), Descripción (195), Cant (35), P.U. Divisas (55), P.U. BCV (55), Total Divisas (55), Total Bs (55) -> 505 pt
+        // ── 5. TABLA DE PRODUCTOS COTIZADOS ───────────────────────
         const cols = {
             sku: LEFT,
             nombre: LEFT + 58,
@@ -192,11 +214,12 @@ export async function generateQuotationPDFBuffer(options: QuotationPDFOptions): 
 
         let subtotalDivisas = 0;
         let subtotalBcvUsd = 0;
+        const freightFactor = 1 + ((freightAdjustmentPercent || 0) / 100);
 
         items.forEach((item, itemIdx) => {
             const qty = item.quantity || 1;
-            const puDivisas = item.unitPrice || 0;
-            const puBcvUsd = item.priceList && item.priceList > 0 ? item.priceList : puDivisas;
+            const puDivisas = (item.unitPrice || 0) * freightFactor;
+            const puBcvUsd = (item.priceList && item.priceList > 0 ? item.priceList : item.unitPrice) * freightFactor;
 
             const lineTotDivisas = puDivisas * qty;
             const lineTotBcvUsd = puBcvUsd * qty;
@@ -218,7 +241,6 @@ export async function generateQuotationPDFBuffer(options: QuotationPDFOptions): 
             const hasExtra = extraParts.length > 0;
             const extraTextStr = extraParts.join('  |  ');
 
-            // Medición de altura dinámica
             doc.fontSize(7.5).font('Helvetica');
             const nameHeight = doc.heightOfString(item.name, { width: colWidths.nombre });
             doc.fontSize(6.5).font('Helvetica');
@@ -243,7 +265,7 @@ export async function generateQuotationPDFBuffer(options: QuotationPDFOptions): 
             doc.fontSize(6.5).fillColor(GRAY).font('Helvetica');
             doc.text(item.sku || 'N/A', cols.sku + 3, y + 4, { width: colWidths.sku });
 
-            // Nombre y detalles
+            // Nombre
             doc.fontSize(7.5).fillColor(DARK).font('Helvetica');
             doc.text(item.name, cols.nombre + 3, y + 3, { width: colWidths.nombre });
 
@@ -270,7 +292,7 @@ export async function generateQuotationPDFBuffer(options: QuotationPDFOptions): 
 
         y += 8;
 
-        // ── 5. CUADRO DE TOTALES Y CONDICIONES ────────────────────
+        // ── 6. CUADRO DE TOTALES Y CONDICIONES ────────────────────
         const totalBs = subtotalBcvUsd * tasaBCV;
         const totalBsFmt = totalBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -279,7 +301,7 @@ export async function generateQuotationPDFBuffer(options: QuotationPDFOptions): 
             y = 45;
         }
 
-        // Caja de Totales (Derecha)
+        // Totales (Derecha)
         const totW = 220;
         const totX = LEFT + W - totW;
         const totY = y;
@@ -299,7 +321,7 @@ export async function generateQuotationPDFBuffer(options: QuotationPDFOptions): 
         doc.fontSize(10).fillColor(DARK).font('Helvetica-Bold')
            .text(`Bs. ${totalBsFmt}`, totX + 10, totY + 47);
 
-        // Caja de Cuentas Bancarias (Izquierda)
+        // Cuentas Bancarias (Izquierda)
         const bankW = W - totW - 10;
         doc.rect(LEFT, totY, bankW, 58).fill('#f8fafc');
         doc.rect(LEFT, totY, bankW, 58).strokeColor('#cbd5e1').lineWidth(0.5).stroke();
@@ -314,7 +336,7 @@ export async function generateQuotationPDFBuffer(options: QuotationPDFOptions): 
 
         y = totY + 66;
 
-        // ── 6. CONDICIONES Y QR CODE ──────────────────────────────
+        // ── 7. CONDICIONES Y QR CODE ──────────────────────────────
         if (y > doc.page.height - 95) {
             doc.addPage();
             y = 45;
@@ -332,7 +354,6 @@ export async function generateQuotationPDFBuffer(options: QuotationPDFOptions): 
            .text('* Cotización válida por 48 horas continuas sujeta a disponibilidad de inventario.', LEFT + 10, y + 29, { width: W - 110, lineBreak: false })
            .text('* Para confirmar este pedido, responda a este documento o escanee el código QR.', LEFT + 10, y + 40, { width: W - 110, lineBreak: false });
 
-        // Caja de WhatsApp QR
         doc.rect(qrX - 5, qrY, 85, 68).fill(LGRAY);
         doc.rect(qrX - 5, qrY, 2, 68).fill(GREEN);
 
@@ -344,7 +365,7 @@ export async function generateQuotationPDFBuffer(options: QuotationPDFOptions): 
         doc.fontSize(5).fillColor(GRAY).font('Helvetica')
            .text('+58 412-271-1859', qrX - 5, qrY + 55, { width: 85, align: 'center', lineBreak: false });
 
-        // ── 7. FOOTERS DE PÁGINA ──────────────────────────────────
+        // ── 8. FOOTERS DE PÁGINA ──────────────────────────────────
         const range = doc.bufferedPageRange();
         for (let i = range.start; i < range.start + range.count; i++) {
             doc.switchToPage(i);

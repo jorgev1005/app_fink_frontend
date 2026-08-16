@@ -580,6 +580,11 @@ export const exportQuotationPDF = async (req: Request, res: Response) => {
       clientPhone, 
       clientEmail, 
       clientAddress,
+      destinationCity,
+      freightAdjustmentPercent,
+      minOrderForFreeFreight,
+      freightCost,
+      isFreeFreight,
       projectId, 
       items = [], 
       tasaOverride,
@@ -622,6 +627,11 @@ export const exportQuotationPDF = async (req: Request, res: Response) => {
       clientPhone,
       clientEmail,
       clientAddress,
+      destinationCity,
+      freightAdjustmentPercent: freightAdjustmentPercent ? parseFloat(freightAdjustmentPercent) : 0,
+      minOrderForFreeFreight: minOrderForFreeFreight ? parseFloat(minOrderForFreeFreight) : undefined,
+      freightCost: freightCost ? parseFloat(freightCost) : undefined,
+      isFreeFreight: Boolean(isFreeFreight),
       projectName,
       tasaBCV,
       tasaParalelo,
@@ -641,6 +651,73 @@ export const exportQuotationPDF = async (req: Request, res: Response) => {
   }
 };
 
+// POST /api/pos/purchase-order-pdf
+export const exportPurchaseOrderPDF = async (req: Request, res: Response) => {
+  try {
+    const { 
+      supplierName = 'SOLO MAYOR / PROVEEDOR', 
+      supplierTaxId, 
+      supplierPhone, 
+      supplierEmail, 
+      supplierAddress,
+      deliveryAddress,
+      expectedDate,
+      paymentTerms,
+      projectId, 
+      items = [], 
+      tasaOverride,
+      notes 
+    } = req.body;
+
+    if (!items || items.length === 0) {
+      return res.status(400).json({ success: false, error: { message: 'Debe incluir al menos un producto en la orden de compra' } });
+    }
+
+    const bcvRate = await prisma.exchangeRate.findFirst({
+      where: { source: 'BCV' },
+      orderBy: { date: 'desc' },
+    });
+    const fallbackRate = await prisma.exchangeRate.findFirst({
+      orderBy: { date: 'desc' },
+    });
+
+    const tasaBCV = tasaOverride 
+      ? parseFloat(tasaOverride) 
+      : (bcvRate?.usdToBs || (fallbackRate?.source === 'BCV' ? fallbackRate.usdToBs : 771.07));
+
+    let companyName = 'Inversiones Lucem C.A. / Aludra Group';
+    if (projectId) {
+      const proj = await prisma.project.findUnique({ where: { id: projectId } });
+      if (proj) companyName = proj.name;
+    }
+
+    const { generatePurchaseOrderPDFBuffer } = require('../services/purchaseOrderPdf.service');
+    const { buffer, orderNumber } = await generatePurchaseOrderPDFBuffer({
+      supplierName,
+      supplierTaxId,
+      supplierPhone,
+      supplierEmail,
+      supplierAddress,
+      companyName,
+      deliveryAddress,
+      expectedDate,
+      paymentTerms,
+      tasaBCV,
+      items,
+      notes
+    });
+
+    const safeSupplier = supplierName.replace(/[^a-zA-Z0-9]/g, '_');
+    const filename = `${orderNumber}_${safeSupplier}.pdf`;
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+    res.send(buffer);
+  } catch (error: any) {
+    console.error('Error generating purchase order PDF:', error);
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
 export default {
   getActiveSession,
   openSession,
@@ -649,4 +726,5 @@ export default {
   processPOSSale,
   voidPOSSale,
   exportQuotationPDF,
+  exportPurchaseOrderPDF,
 };
