@@ -35,7 +35,7 @@ export async function generatePriceListPDFBuffer(options: PriceListPDFOptions): 
     return new Promise((resolve, reject) => {
         const doc = new PDFDocument({ 
             size: 'A4', 
-            margin: 45, 
+            margin: 0, // Control 100% manual para evitar saltos automáticos no deseados / hojas en blanco
             bufferPages: true,
             info: { Title: 'Lista de Precios Aludra', Author: 'Grupo Aludra' } 
         });
@@ -49,7 +49,7 @@ export async function generatePriceListPDFBuffer(options: PriceListPDFOptions): 
         const DARK   = '#1f2937';
         const GRAY   = '#6b7280';
         const LGRAY  = '#f3f4f6';
-        const W      = doc.page.width - 90; // Usable width: 505.28 pt
+        const W      = doc.page.width - 90; // Ancho utilizable exacto: 505.28 pt
         const LEFT   = 45;
 
         const ahora = new Date();
@@ -68,35 +68,35 @@ export async function generatePriceListPDFBuffer(options: PriceListPDFOptions): 
 
         // Logo / Branding Text
         doc.fontSize(22).fillColor(GREEN).font('Helvetica-Bold')
-           .text('ALUDRA', LEFT + 20, 60, { continued: true })
+           .text('ALUDRA', LEFT + 20, 60, { continued: true, lineBreak: false })
            .fillColor('white').font('Helvetica')
-           .text('GROUP', { continued: false });
+           .text('GROUP', { continued: false, lineBreak: false });
 
         doc.fontSize(7).fillColor('#9ca3af')
-           .text('SOLUCIONES INDUSTRIALES Y COMERCIALES', LEFT + 20, 86);
+           .text('SOLUCIONES INDUSTRIALES Y COMERCIALES', LEFT + 20, 86, { lineBreak: false });
 
         const lucemY = 98;
         doc.fontSize(7).fillColor('#9ca3af')
-           .text('Inversiones Lucem C.A.  RIF: J-40500250-6  |  Ciudad de La Victoria, Aragua, Venezuela', LEFT + 20, lucemY);
-        doc.text('+58 412-271-1859  |  admin@grupoaludra.com  |  www.grupoaludra.com', LEFT + 20, lucemY + 10);
+           .text('Inversiones Lucem C.A.  RIF: J-40500250-6  |  Ciudad de La Victoria, Aragua, Venezuela', LEFT + 20, lucemY, { lineBreak: false });
+        doc.text('+58 412-271-1859  |  admin@grupoaludra.com  |  www.grupoaludra.com', LEFT + 20, lucemY + 10, { lineBreak: false });
 
         // Encabezado derecho
         doc.fontSize(11).fillColor('white').font('Helvetica-Bold')
-           .text('LISTA DE PRECIOS OFICIAL', 310, 62, { width: 220, align: 'right' });
+           .text('LISTA DE PRECIOS OFICIAL', 310, 62, { width: 220, align: 'right', lineBreak: false });
         
         if (projectName) {
             doc.fontSize(8.5).fillColor(GREEN).font('Helvetica-Bold')
-               .text(`PROYECTO: ${projectName.toUpperCase()}`, 310, 77, { width: 220, align: 'right' });
+               .text(`PROYECTO: ${projectName.toUpperCase()}`, 310, 77, { width: 220, align: 'right', lineBreak: false });
         }
 
         doc.fontSize(7).fillColor('#9ca3af').font('Helvetica')
-           .text(`Fecha de emisión: ${fmtDate(ahora)}`, 310, 91, { width: 220, align: 'right' });
+           .text(`Fecha de emisión: ${fmtDate(ahora)}`, 310, 91, { width: 220, align: 'right', lineBreak: false });
 
         // ── BARRA DE TASAS ───────────────────────────────────────
         const parStr = tasaParalelo ? `  |  Paralelo = Bs. ${tasaParalelo.toFixed(2)}/USD` : '';
         const eurStr = tasaEUR ? `  |  EUR = Bs. ${tasaEUR.toFixed(2)}/EUR` : '';
         doc.fontSize(7).fillColor(GRAY).font('Helvetica')
-           .text(`Tasas de referencia vigentes:  BCV = Bs. ${tasaBCV.toFixed(2)}/USD${parStr}${eurStr}`, LEFT, 142, { align: 'center', width: W });
+           .text(`Tasas de referencia vigentes:  BCV = Bs. ${tasaBCV.toFixed(2)}/USD${parStr}${eurStr}`, LEFT, 142, { align: 'center', width: W, lineBreak: false });
 
         // ── AGRUPACIÓN POR DIVISIÓN ───────────────────────────────
         const grouped: { [key: string]: ProductForPDF[] } = {};
@@ -124,27 +124,33 @@ export async function generatePriceListPDFBuffer(options: PriceListPDFOptions): 
 
         let y = 158;
 
+        function drawTableHeader(currentY: number) {
+            doc.rect(LEFT, currentY, W, 15).fill(DARK);
+            doc.fontSize(7).fillColor('white').font('Helvetica-Bold');
+            doc.text('SKU', cols.sku + 3, currentY + 4, { width: colWidths.sku, lineBreak: false });
+            doc.text('DESCRIPCIÓN DEL PRODUCTO', cols.nombre + 3, currentY + 4, { width: colWidths.nombre, lineBreak: false });
+            doc.text('P. USD', cols.pUSD, currentY + 4, { width: colWidths.pUSD, align: 'right', lineBreak: false });
+            doc.text('P. Bs (BCV)', cols.pBs, currentY + 4, { width: colWidths.pBs, align: 'right', lineBreak: false });
+            return currentY + 15;
+        }
+
         divisions.forEach((div) => {
-            if (y > doc.page.height - 100) {
+            const prods = grouped[div];
+            if (!prods || prods.length === 0) return;
+
+            if (y > doc.page.height - 95) {
                 doc.addPage();
-                y = 50;
+                y = 45;
             }
 
             // Encabezado de la división
             doc.fontSize(9).fillColor(DARK).font('Helvetica-Bold')
-               .text(div.toUpperCase(), LEFT, y);
+               .text(div.toUpperCase(), LEFT, y, { lineBreak: false });
             y += 13;
 
             // Encabezado de la tabla
-            doc.rect(LEFT, y, W, 15).fill(DARK);
-            doc.fontSize(7).fillColor('white').font('Helvetica-Bold');
-            doc.text('SKU', cols.sku + 3, y + 4, { width: colWidths.sku });
-            doc.text('DESCRIPCIÓN DEL PRODUCTO', cols.nombre + 3, y + 4, { width: colWidths.nombre });
-            doc.text('P. USD', cols.pUSD, y + 4, { width: colWidths.pUSD, align: 'right' });
-            doc.text('P. Bs (BCV)', cols.pBs, y + 4, { width: colWidths.pBs, align: 'right' });
-            y += 15;
+            y = drawTableHeader(y);
 
-            const prods = grouped[div];
             prods.forEach((prod, prodIdx) => {
                 let extraParts: string[] = [];
                 if (prod.empaqueCantidad && prod.empaqueCantidad > 1) {
@@ -160,18 +166,10 @@ export async function generatePriceListPDFBuffer(options: PriceListPDFOptions): 
                 const extraTextStr = extraParts.join("  |  ");
                 const rowH = hasExtra ? 22 : 18;
 
-                if (y > doc.page.height - 75 - rowH) {
+                if (y > doc.page.height - 55 - rowH) {
                     doc.addPage();
-                    y = 50;
-
-                    // Volver a dibujar encabezado de la tabla en nueva página
-                    doc.rect(LEFT, y, W, 15).fill(DARK);
-                    doc.fontSize(7).fillColor('white').font('Helvetica-Bold');
-                    doc.text('SKU', cols.sku + 3, y + 4, { width: colWidths.sku });
-                    doc.text('DESCRIPCIÓN DEL PRODUCTO', cols.nombre + 3, y + 4, { width: colWidths.nombre });
-                    doc.text('P. USD', cols.pUSD, y + 4, { width: colWidths.pUSD, align: 'right' });
-                    doc.text('P. Bs (BCV)', cols.pBs, y + 4, { width: colWidths.pBs, align: 'right' });
-                    y += 15;
+                    y = 45;
+                    y = drawTableHeader(y);
                 }
 
                 // Zebra striping
@@ -188,22 +186,22 @@ export async function generatePriceListPDFBuffer(options: PriceListPDFOptions): 
 
                 // SKU
                 doc.fontSize(6.5).fillColor(GRAY).font('Helvetica');
-                doc.text(prod.sku || 'N/A', cols.sku + 3, textY, { width: colWidths.sku });
+                doc.text(prod.sku || 'N/A', cols.sku + 3, textY, { width: colWidths.sku, lineBreak: false });
 
                 // Nombre y Detalles
                 doc.fontSize(7.5).fillColor(DARK).font('Helvetica');
                 if (hasExtra) {
-                    doc.text(prod.name, cols.nombre + 3, y + 3, { width: colWidths.nombre });
+                    doc.text(prod.name, cols.nombre + 3, y + 3, { width: colWidths.nombre, lineBreak: false });
                     doc.fontSize(6).fillColor(GRAY).font('Helvetica-Oblique');
-                    doc.text(extraTextStr, cols.nombre + 3, y + 13, { width: colWidths.nombre });
+                    doc.text(extraTextStr, cols.nombre + 3, y + 13, { width: colWidths.nombre, lineBreak: false });
                     doc.fontSize(7.5).fillColor(DARK).font('Helvetica');
                 } else {
-                    doc.text(prod.name, cols.nombre + 3, textY, { width: colWidths.nombre });
+                    doc.text(prod.name, cols.nombre + 3, textY, { width: colWidths.nombre, lineBreak: false });
                 }
 
                 // Precios
-                doc.text(`$${adjustedUsd.toFixed(2)}`, cols.pUSD, textY, { width: colWidths.pUSD, align: 'right' });
-                doc.text(`Bs ${pBsFormatted}`, cols.pBs, textY, { width: colWidths.pBs, align: 'right' });
+                doc.text(`$${adjustedUsd.toFixed(2)}`, cols.pUSD, textY, { width: colWidths.pUSD, align: 'right', lineBreak: false });
+                doc.text(`Bs ${pBsFormatted}`, cols.pBs, textY, { width: colWidths.pBs, align: 'right', lineBreak: false });
 
                 y += rowH;
             });
@@ -212,9 +210,9 @@ export async function generatePriceListPDFBuffer(options: PriceListPDFOptions): 
         });
 
         // ── CUADRO DE CONDICIONES Y MARCO FINAL ───────────────────
-        if (y > doc.page.height - 110) {
+        if (y > doc.page.height - 95) {
             doc.addPage();
-            y = 50;
+            y = 45;
         }
 
         const qrX = LEFT + W - 80;
@@ -223,24 +221,24 @@ export async function generatePriceListPDFBuffer(options: PriceListPDFOptions): 
         doc.rect(LEFT, y, W - 90, 68).fill('#fffbeb');
         doc.rect(LEFT, y, 3, 68).fill('#f59e0b');
         doc.fontSize(8).fillColor('#92400e').font('Helvetica-Bold')
-           .text('Condiciones de Venta y Tarifas:', LEFT + 10, y + 6);
+           .text('Condiciones de Venta y Tarifas:', LEFT + 10, y + 6, { lineBreak: false });
         doc.fontSize(6.5).font('Helvetica')
-           .text('* Los precios en Bolívares se calculan con la tasa oficial del Banco Central de Venezuela (BCV).', LEFT + 10, y + 18, { width: W - 110 })
-           .text('* Precios y disponibilidad de mercancía sujetos a cambios sin previo aviso.', LEFT + 10, y + 29, { width: W - 110 })
-           .text('* Para pedidos y atención comercial personalizada: +58 412-271-1859.', LEFT + 10, y + 40, { width: W - 110 });
+           .text('* Los precios en Bolívares se calculan con la tasa oficial del Banco Central de Venezuela (BCV).', LEFT + 10, y + 18, { width: W - 110, lineBreak: false })
+           .text('* Precios y disponibilidad de mercancía sujetos a cambios sin previo aviso.', LEFT + 10, y + 29, { width: W - 110, lineBreak: false })
+           .text('* Para pedidos y atención comercial personalizada: +58 412-271-1859.', LEFT + 10, y + 40, { width: W - 110, lineBreak: false });
 
         // Caja Informativa con Imagen Real QR
         doc.rect(qrX - 5, qrY, 85, 68).fill(LGRAY);
         doc.rect(qrX - 5, qrY, 2, 68).fill(GREEN);
 
         doc.fontSize(6).fillColor(DARK).font('Helvetica-Bold')
-           .text('CATÁLOGO ONLINE', qrX - 5, qrY + 5, { width: 85, align: 'center' });
+           .text('CATÁLOGO ONLINE', qrX - 5, qrY + 5, { width: 85, align: 'center', lineBreak: false });
 
         // Insertar imagen PNG del QR Code
         doc.image(qrBuffer, qrX + 18, qrY + 14, { width: 38, height: 38 });
 
         doc.fontSize(5).fillColor(GRAY).font('Helvetica')
-           .text('catalogo.grupoaludra.com', qrX - 5, qrY + 55, { width: 85, align: 'center' });
+           .text('catalogo.grupoaludra.com', qrX - 5, qrY + 55, { width: 85, align: 'center', lineBreak: false });
 
         // ── FOOTERS (DIBUJO DE PÁGINAS Y FOOTER SEGURO) ───────────
         const range = doc.bufferedPageRange();
