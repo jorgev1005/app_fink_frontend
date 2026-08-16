@@ -487,13 +487,23 @@ function POSComponent() {
     setCart(cart.filter(ci => ci.product.id !== productId));
   };
 
-  const clearCart = () => {
+  const clearCart = (notify: boolean = true) => {
     setCart([]);
     setPaymentEntries([]);
     setCashReceivedUsd(0);
     setCashReceivedBs(0);
     setCustomerType('generic');
-    toast.success('🛒 Carrito de compras blanqueado (0)');
+    setExpressCustomer({ name: '', taxId: '', phone: '', email: '', address: '' });
+    setApplyTax(false);
+    setSearch('');
+    setSelectedDivision('');
+    setActiveTab('catalog');
+    setShowPaymentModal(false);
+    setShowCustomerModal(false);
+    setShowQrZoomModal(false);
+    if (notify) {
+      toast.success('🛒 Carrito de compras blanqueado (0)');
+    }
   };
 
   // Helper para resolver la cuenta contable de un método según el proyecto
@@ -573,8 +583,7 @@ function POSComponent() {
           payments: [...paymentEntries],
           date: new Date().toLocaleString()
         });
-        clearCart();
-        setShowPaymentModal(false);
+        clearCart(false);
         setShowReceiptModal(true);
         loadProducts(selectedProjectId);
         if (activeSession) checkActiveSession(selectedProjectId);
@@ -1621,32 +1630,49 @@ function POSComponent() {
         </div>
       )}
 
-      {/* MODAL: COMPROBANTE SIN PAPEL / WHATSAPP */}
+      {/* MODAL: COMPROBANTE DE VENTA EXITOSA / TICKET */}
       {showReceiptModal && lastCompletedSale && (
-        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-md w-full p-6 space-y-5 text-white shadow-2xl text-center">
+        <div 
+          onClick={(e) => { if (e.target === e.currentTarget) { setShowReceiptModal(false); clearCart(false); } }}
+          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 overflow-y-auto"
+        >
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl max-w-sm w-full p-5 space-y-4 text-white shadow-2xl my-auto">
             
-            <div className="w-14 h-14 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-400 flex items-center justify-center mx-auto text-2xl">
-              <CheckCircle2 />
+            <div className="flex justify-between items-center pb-2 border-b border-slate-800">
+              <span className="font-extrabold text-sm text-emerald-400 flex items-center gap-1.5">
+                <CheckCircle2 size={18} /> Venta Registrada con Éxito
+              </span>
+              <button 
+                onClick={() => { setShowReceiptModal(false); clearCart(false); }}
+                className="p-1.5 bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
+                title="Cerrar y volver al catálogo"
+              >
+                <X size={16} />
+              </button>
             </div>
 
-            <div>
-              <h3 className="font-extrabold text-lg text-white">¡Venta Registrada con Éxito!</h3>
-              <p className="text-xs font-mono text-emerald-400 mt-1 font-bold">{lastCompletedSale.posCode}</p>
-              <p className="text-[11px] text-slate-400 mt-0.5">{lastCompletedSale.customerName} ({lastCompletedSale.customerTaxId})</p>
-            </div>
+            {/* Ticket Preview Card */}
+            <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-3 font-mono text-xs">
+              <div className="text-center pb-2 border-b border-dashed border-slate-800">
+                <h4 className="font-bold text-white uppercase text-sm">{currentProject?.name || 'GRUPO ALUDRA'}</h4>
+                <p className="text-[10px] text-slate-400">{lastCompletedSale.date}</p>
+                <span className="inline-block mt-1 bg-emerald-500/20 text-emerald-400 px-2 py-0.5 rounded text-[10px] font-bold">
+                  {lastCompletedSale.posCode}
+                </span>
+              </div>
 
-            {/* Recibo Preview Box */}
-            <div className="bg-slate-950 p-4 rounded-2xl border border-slate-800 text-left text-xs space-y-2.5 font-mono">
-              <div className="flex justify-between border-b border-slate-800 pb-2 font-bold">
-                <span>Total Cobrado:</span>
-                <span className="text-emerald-400 font-extrabold text-sm">${fmt(lastCompletedSale.totalUSD)} USD</span>
+              <div className="space-y-1 text-[11px] text-slate-300">
+                <div className="flex justify-between">
+                  <span className="text-slate-400">Cliente:</span>
+                  <span className="font-bold text-white truncate max-w-[170px]">{lastCompletedSale.customerName}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-slate-400">RIF/CI:</span>
+                  <span>{lastCompletedSale.customerTaxId}</span>
+                </div>
               </div>
-              <div className="flex justify-between text-slate-400 text-[11px]">
-                <span>Equivalente en Bs:</span>
-                <span className="text-amber-400 font-bold">Bs. {fmt(lastCompletedSale.totalBS)}</span>
-              </div>
-              <div className="border-t border-slate-850 pt-2 text-[10px] text-slate-400 space-y-1">
+
+              <div className="border-t border-dashed border-slate-800 pt-2 space-y-1 text-[11px]">
                 {lastCompletedSale.items.map((it: any, i: number) => (
                   <div key={i} className="flex justify-between">
                     <span className="line-clamp-1">{it.quantity}x {it.product.name}</span>
@@ -1654,32 +1680,43 @@ function POSComponent() {
                   </div>
                 ))}
               </div>
+
+              <div className="border-t border-slate-800 pt-2 text-right">
+                <div className="text-base font-bold text-emerald-400">${fmt(lastCompletedSale.totalUSD)} USD</div>
+                <div className="text-[11px] text-amber-400">Bs. {fmt(lastCompletedSale.totalBS)}</div>
+              </div>
             </div>
 
             {/* Action Buttons */}
             <div className="space-y-2 pt-1">
               <button
+                type="button"
                 onClick={() => window.print()}
-                className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all"
+                className="w-full py-2.5 bg-slate-800 hover:bg-slate-700 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer"
               >
                 <Printer size={15} /> Imprimir Ticket Térmico (80mm)
               </button>
 
               <button
+                type="button"
                 onClick={() => {
                   const msg = `*COMPROBANTE DE COMPRA - FINK POS*\nTicket: ${lastCompletedSale.posCode}\nCliente: ${lastCompletedSale.customerName}\nTotal: $${fmt(lastCompletedSale.totalUSD)} USD (Bs. ${fmt(lastCompletedSale.totalBS)})\nFecha: ${lastCompletedSale.date}\n\n¡Gracias por su compra!`;
                   window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
                 }}
-                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/30 transition-all"
+                className="w-full py-2.5 bg-emerald-700 hover:bg-emerald-600 text-white rounded-xl text-xs font-bold flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer"
               >
                 <Send size={15} /> Enviar Comprobante por WhatsApp
               </button>
 
               <button
-                onClick={() => setShowReceiptModal(false)}
-                className="w-full py-2 bg-transparent text-slate-400 hover:text-white text-xs font-bold transition-all pt-2"
+                type="button"
+                onClick={() => {
+                  setShowReceiptModal(false);
+                  clearCart(false);
+                }}
+                className="w-full py-3 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-extrabold shadow-lg shadow-emerald-600/30 flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-95"
               >
-                Iniciar Siguiente Venta (Listo)
+                <Plus size={16} /> Iniciar Nueva Venta (Volver a Productos)
               </button>
             </div>
 
