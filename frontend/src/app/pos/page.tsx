@@ -36,6 +36,7 @@ import { posAPI, productsAPI, projectsAPI, accountsAPI, exchangeRatesAPI } from 
 import { toast } from 'sonner';
 
 const VENEZUELAN_BANKS = [
+  { code: '0104', name: 'Banco Venezolano de Crédito (BVC)' },
   { code: '0105', name: 'Banco Mercantil' },
   { code: '0134', name: 'Banesco Banco Universal' },
   { code: '0102', name: 'Banco de Venezuela' },
