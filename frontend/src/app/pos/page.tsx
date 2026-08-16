@@ -487,7 +487,8 @@ function POSComponent() {
     setCart(cart.filter(ci => ci.product.id !== productId));
   };
 
-  const clearCart = (notify: boolean = true) => {
+  const clearCart = (notify: any = true) => {
+    const shouldNotify = typeof notify === 'boolean' ? notify : true;
     setCart([]);
     setPaymentEntries([]);
     setCashReceivedUsd(0);
@@ -501,7 +502,7 @@ function POSComponent() {
     setShowPaymentModal(false);
     setShowCustomerModal(false);
     setShowQrZoomModal(false);
-    if (notify) {
+    if (shouldNotify) {
       toast.success('🛒 Carrito de compras blanqueado (0)');
     }
   };
