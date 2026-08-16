@@ -34,7 +34,7 @@ import {
   FileText
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
-import { posAPI, productsAPI, projectsAPI, accountsAPI, exchangeRatesAPI } from '@/lib/api';
+import { posAPI, productsAPI, projectsAPI, accountsAPI, exchangeRatesAPI, contactsAPI } from '@/lib/api';
 import { toast } from 'sonner';
 
 const VENEZUELAN_BANKS = [
@@ -261,6 +261,8 @@ function POSComponent() {
   const [quoteClientName, setQuoteClientName] = useState('');
   const [quoteClientTaxId, setQuoteClientTaxId] = useState('');
   const [quoteClientPhone, setQuoteClientPhone] = useState('');
+  const [quoteClientEmail, setQuoteClientEmail] = useState('');
+  const [quoteSaveContact, setQuoteSaveContact] = useState(true);
   const [quoteNotes, setQuoteNotes] = useState('');
 
   const openQuotationModal = () => {
@@ -274,6 +276,7 @@ function POSComponent() {
       setQuoteClientName(expressCustomer.name || '');
       setQuoteClientTaxId(expressCustomer.taxId || '');
       setQuoteClientPhone(expressCustomer.phone || '');
+      setQuoteClientEmail(expressCustomer.email || '');
     } else if (!quoteClientName) {
       setQuoteClientName('CLIENTE ESTIMADO');
     }
@@ -292,10 +295,28 @@ function POSComponent() {
       const clientName = quoteClientName.trim() || 'CLIENTE ESTIMADO';
       const token = localStorage.getItem('token');
 
+      // Guardar automáticamente en la agenda de contactos si está marcado
+      if (quoteSaveContact && clientName && clientName.toUpperCase() !== 'CLIENTE ESTIMADO' && selectedProjectId) {
+        try {
+          await contactsAPI.create({
+            projectId: selectedProjectId,
+            name: clientName,
+            taxId: quoteClientTaxId.trim() || undefined,
+            phone: quoteClientPhone.trim() || undefined,
+            email: quoteClientEmail.trim() || undefined,
+            type: 'CUSTOMER'
+          });
+        } catch (e) {
+          // Si ya existe o hay conflicto, continuar sin detener la cotización
+          console.log('Nota: Contacto ya registrado o no se pudo duplicar:', e);
+        }
+      }
+
       const payload = {
         clientName,
         clientTaxId: quoteClientTaxId.trim() || undefined,
         clientPhone: quoteClientPhone.trim() || undefined,
+        clientEmail: quoteClientEmail.trim() || undefined,
         projectId: selectedProjectId,
         tasaOverride: exchangeRate,
         notes: quoteNotes.trim() || undefined,
@@ -334,7 +355,7 @@ function POSComponent() {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-        toast.success('📥 Cotización descargada exitosamente');
+        toast.success('📥 Cotización descargada y cliente guardado');
       } else if (action === 'whatsapp') {
         const phoneClean = (quoteClientPhone || '').replace(/[^0-9]/g, '');
         const textMsg = `Hola *${clientName}*, le enviamos su *Cotización Formal de ${currentProject?.name || 'Inversiones Lucem'}* con ${cart.length} productos por un total de *$${fmt(totalUSD)} USD* (Bs. ${fmt(totalBS)} a tasa BCV).`;
@@ -2103,9 +2124,9 @@ function POSComponent() {
                     onChange={(e) => setExpressCustomer({ ...expressCustomer, name: e.target.value })}
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <div>
-                    <label className="block text-slate-300 font-bold mb-1">Cédula / RIF *</label>
+                    <label className="block text-slate-300 font-bold mb-1">Cédula / RIF</label>
                     <input
                       type="text"
                       placeholder="J-12345678-9"
@@ -2124,20 +2145,45 @@ function POSComponent() {
                       onChange={(e) => setExpressCustomer({ ...expressCustomer, phone: e.target.value })}
                     />
                   </div>
+                  <div>
+                    <label className="block text-slate-300 font-bold mb-1">Correo Electrónico</label>
+                    <input
+                      type="email"
+                      placeholder="cliente@ejemplo.com"
+                      className="w-full bg-slate-950 border border-slate-700 rounded-xl p-2.5 text-white outline-none focus:ring-2 focus:ring-emerald-500"
+                      value={expressCustomer.email}
+                      onChange={(e) => setExpressCustomer({ ...expressCustomer, email: e.target.value })}
+                    />
+                  </div>
                 </div>
               </div>
             )}
 
             <div className="pt-2">
               <button
-                onClick={() => {
+                onClick={async () => {
                   if (customerType === 'express' && !expressCustomer.name) {
                     toast.error('El nombre del cliente es obligatorio');
                     return;
                   }
+                  if (customerType === 'express' && expressCustomer.name && selectedProjectId) {
+                    try {
+                      await contactsAPI.create({
+                        projectId: selectedProjectId,
+                        name: expressCustomer.name.trim(),
+                        taxId: expressCustomer.taxId?.trim() || undefined,
+                        phone: expressCustomer.phone?.trim() || undefined,
+                        email: expressCustomer.email?.trim() || undefined,
+                        type: 'CUSTOMER'
+                      });
+                      toast.success(`Cliente "${expressCustomer.name}" guardado en Contactos`);
+                    } catch (e) {
+                      // Ya registrado o no duplicar
+                    }
+                  }
                   setShowCustomerModal(false);
                 }}
-                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-md transition-all"
+                className="w-full py-2.5 bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-md transition-all cursor-pointer"
               >
                 Listo
               </button>
@@ -2263,7 +2309,7 @@ function POSComponent() {
                 <span className="font-bold text-emerald-400 text-xs block">👤 Datos del Cliente para el Documento:</span>
                 
                 <div>
-                  <label className="block text-[11px] font-bold text-slate-300 mb-1">Nombre / Razón Social *</label>
+                  <label className="block text-[11px] font-bold text-slate-300 mb-1">Nombre Completo / Razón Social *</label>
                   <input
                     type="text"
                     value={quoteClientName}
@@ -2273,9 +2319,9 @@ function POSComponent() {
                   />
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-300 mb-1">Cédula / RIF (opcional)</label>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">Cédula / RIF</label>
                     <input
                       type="text"
                       value={quoteClientTaxId}
@@ -2285,7 +2331,7 @@ function POSComponent() {
                     />
                   </div>
                   <div>
-                    <label className="block text-[11px] font-bold text-slate-300 mb-1">Teléfono WhatsApp (opcional)</label>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">Teléfono (WhatsApp)</label>
                     <input
                       type="text"
                       value={quoteClientPhone}
@@ -2294,6 +2340,28 @@ function POSComponent() {
                       className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white font-mono outline-none focus:ring-2 focus:ring-emerald-500"
                     />
                   </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-300 mb-1">Correo Electrónico</label>
+                    <input
+                      type="email"
+                      value={quoteClientEmail}
+                      onChange={(e) => setQuoteClientEmail(e.target.value)}
+                      placeholder="cliente@ejemplo.com"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white outline-none focus:ring-2 focus:ring-emerald-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="pt-1">
+                  <label className="flex items-center gap-2 text-slate-300 cursor-pointer select-none text-[11px] bg-slate-900/80 p-2 rounded-xl border border-slate-800 hover:border-emerald-500/40 transition-colors">
+                    <input
+                      type="checkbox"
+                      checked={quoteSaveContact}
+                      onChange={(e) => setQuoteSaveContact(e.target.checked)}
+                      className="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 bg-slate-950 border-slate-700 cursor-pointer"
+                    />
+                    <span className="text-emerald-400 font-semibold">💾 Guardar cliente automáticamente en la agenda de Contactos</span>
+                  </label>
                 </div>
 
                 <div>
