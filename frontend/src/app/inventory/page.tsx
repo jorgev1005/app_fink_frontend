@@ -1226,27 +1226,32 @@ export default function InventoryPage() {
 
       {/* Modal de Lista de Precios PDF */}
       {showPdfModal && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-5 border border-slate-200 animate-in fade-in zoom-in duration-200">
-            <div className="flex justify-between items-center border-b border-slate-100 pb-3">
+        <div 
+          onClick={(e) => { if (e.target === e.currentTarget) setShowPdfModal(false); }}
+          className="fixed inset-0 bg-slate-900/70 backdrop-blur-sm z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+        >
+          <div className="bg-white rounded-3xl max-w-lg w-full p-5 sm:p-6 shadow-2xl border border-slate-200 animate-in fade-in zoom-in duration-200 max-h-[92vh] flex flex-col my-auto">
+            {/* Modal Header */}
+            <div className="flex justify-between items-center border-b border-slate-100 pb-3 flex-shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-emerald-100 rounded-xl flex items-center justify-center text-emerald-600 font-bold">
+                <div className="w-10 h-10 bg-emerald-100 rounded-2xl flex items-center justify-center text-emerald-600 font-bold shrink-0">
                   <FileText size={22} />
                 </div>
                 <div>
-                  <h2 className="text-lg font-bold text-slate-800">Exportar Lista de Precios en PDF</h2>
-                  <p className="text-xs text-slate-500">Mismo diseño e imagen corporativa que el Bot de WhatsApp</p>
+                  <h2 className="text-base sm:text-lg font-bold text-slate-800">Exportar Lista de Precios en PDF</h2>
+                  <p className="text-[11px] text-slate-500">Mismo diseño e imagen corporativa que el Bot de WhatsApp</p>
                 </div>
               </div>
               <button 
                 onClick={() => setShowPdfModal(false)}
-                className="p-1.5 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-600 transition-colors"
+                className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-400 hover:text-slate-600 transition-colors shrink-0"
               >
                 <X size={20} />
               </button>
             </div>
 
-            <div className="space-y-4 text-sm text-slate-700">
+            {/* Modal Body (Scrollable) */}
+            <div className="space-y-4 text-xs sm:text-sm text-slate-700 overflow-y-auto flex-1 py-3 pr-1">
               {/* Porcentaje de Incremento o Descuento */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1 uppercase tracking-wider">
@@ -1434,18 +1439,21 @@ export default function InventoryPage() {
               </div>
             </div>
 
-            <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row gap-3">
+            {/* Modal Footer (Pinned Actions) */}
+            <div className="pt-3 border-t border-slate-100 flex flex-col sm:flex-row gap-2.5 flex-shrink-0">
               <button
+                type="button"
                 onClick={() => handleGeneratePriceListPDF('view')}
                 disabled={pdfGenerating}
-                className="flex-1 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer"
+                className="flex-1 py-3 px-4 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-extrabold rounded-xl text-xs flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer active:scale-95"
               >
                 👁️ {pdfGenerating ? 'Generando PDF...' : 'Ver / Imprimir Lista PDF'}
               </button>
               <button
+                type="button"
                 onClick={() => handleGeneratePriceListPDF('download')}
                 disabled={pdfGenerating}
-                className="flex-1 py-3 px-4 bg-slate-800 hover:bg-slate-900 disabled:opacity-50 text-white font-bold rounded-xl text-xs flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer"
+                className="flex-1 py-3 px-4 bg-slate-800 hover:bg-slate-900 disabled:opacity-50 text-white font-extrabold rounded-xl text-xs flex items-center justify-center gap-2 transition-all shadow-md cursor-pointer active:scale-95"
               >
                 ⬇️ {pdfGenerating ? 'Generando...' : 'Descargar PDF'}
               </button>
