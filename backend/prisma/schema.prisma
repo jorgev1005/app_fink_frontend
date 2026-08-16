@@ -644,6 +644,8 @@ model Product {
 
   currency  String @default("USD")
   unitPrice Float  @default(0)
+  priceList Float? @default(0) // Precio 1 (Precio de Lista para liquidación en Bolívares a tasa BCV)
+  priceBs   Float? @default(0) // Precio de referencia en Bolívares
 
   // Nuevos campos: unidad, si es gravable, tasa de impuesto y stock
   unit    String? // ej: 'u', 'kg', 'pcs'

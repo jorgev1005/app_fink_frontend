@@ -63,6 +63,8 @@ interface Product {
   sku?: string;
   description?: string;
   unitPrice: number;
+  priceList?: number;
+  priceBs?: number;
   currency: string;
   stock: number;
   unit?: string;
@@ -314,7 +316,7 @@ function POSComponent() {
 
   const loadProducts = async (projId: string) => {
     try {
-      const res = await productsAPI.getAll({ projectId: projId, search, limit: 500, forSale: true });
+      const res = await productsAPI.getAll({ projectId: projId, search, limit: 3000, forSale: true });
       const rawList: any[] = Array.isArray(res?.data?.data) ? res.data.data : [];
       // Solo mostrar productos con forSale = true (Para la Venta)
       const forSaleOnly = rawList.filter(p => p && p.forSale !== false);
@@ -525,11 +527,19 @@ function POSComponent() {
     return '';
   };
 
-  // Calculations
+  // Calculations: Dual Pricing (Precio 2 USD Divisas vs. Precio 1 BCV Lista)
   const subtotalUSD = cart.reduce((acc, ci) => acc + (safeNum(ci.unitPrice) * safeNum(ci.quantity)), 0);
+  const subtotalListUSD = cart.reduce((acc, ci) => {
+    const listPrice = ci.product.priceList && ci.product.priceList > 0 ? ci.product.priceList : ci.unitPrice;
+    return acc + (safeNum(listPrice) * safeNum(ci.quantity));
+  }, 0);
+
   const taxAmountUSD = applyTax ? subtotalUSD * 0.16 : 0;
   const totalUSD = subtotalUSD + taxAmountUSD;
-  const totalBS = totalUSD * safeNum(exchangeRate);
+
+  const taxAmountListUSD = applyTax ? subtotalListUSD * 0.16 : 0;
+  const totalListUSD = subtotalListUSD + taxAmountListUSD;
+  const totalBS = totalListUSD * safeNum(exchangeRate);
 
   // Open Payment Modal
   const openPaymentModal = () => {
@@ -806,11 +816,27 @@ function POSComponent() {
 
                       {/* Pricing & Package quick add */}
                       <div className="border-t border-slate-800/80 pt-2 space-y-1.5">
-                        <div className="flex justify-between items-baseline">
-                          <div>
-                            <span className="text-xs font-bold text-emerald-400 font-mono">${fmt(priceUsd)}</span>
-                            <span className="text-[10px] text-slate-500 font-mono block">Bs. {fmt(priceBs)}</span>
+                        <div className="flex flex-col gap-1">
+                          {/* Precio 2: Divisas / Efectivo / USDT / Zelle */}
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-black text-emerald-400 font-mono">${fmt(priceUsd)}</span>
+                            <span className="text-[9px] bg-emerald-500/20 text-emerald-300 font-extrabold px-1.5 py-0.5 rounded border border-emerald-500/30">
+                              💵 Divisas
+                            </span>
                           </div>
+
+                          {/* Precio 1: BCV / Pago Móvil / Transferencia */}
+                          {p.priceList && p.priceList > 0 ? (
+                            <div className="flex items-center justify-between text-[10px] font-mono text-slate-300 bg-slate-950/80 px-1.5 py-0.5 rounded border border-slate-800">
+                              <span className="text-slate-400 font-medium">BCV: ${fmt(p.priceList)}</span>
+                              <span className="font-extrabold text-amber-300">Bs. {fmt(p.priceList * exchangeRate)}</span>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-between text-[10px] font-mono text-slate-400">
+                              <span>Ref. BCV:</span>
+                              <span className="font-bold text-slate-300">Bs. {fmt(priceBs)}</span>
+                            </div>
+                          )}
                         </div>
 
                         {/* Botón rápido para agregar por empaque */}

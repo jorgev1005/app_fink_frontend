@@ -5,7 +5,7 @@ import { getProjectAccessFilter, checkProjectWriteAccess } from '../utils/projec
 // GET /api/products - listar productos (opcional por proyecto y búsqueda)
 export const getProducts = async (req: Request, res: Response) => {
   try {
-    const { projectId, search, limit = '1000' } = req.query;
+    const { projectId, search, limit = '3000' } = req.query;
     const where: any = { 
       isActive: true,
       ...getProjectAccessFilter(req.user!)
