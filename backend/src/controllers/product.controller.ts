@@ -565,6 +565,7 @@ export const exportPriceListPDF = async (req: Request, res: Response) => {
         sku: p.sku || undefined,
         name: p.name,
         unitPrice: p.unitPrice,
+        priceList: p.priceList || undefined,
         division: p.division || undefined,
         unit: p.unit || undefined,
         empaqueCantidad: p.empaqueCantidad || undefined,

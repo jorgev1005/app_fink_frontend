@@ -5,6 +5,7 @@ export interface ProductForPDF {
     sku?: string;
     name: string;
     unitPrice: number;
+    priceList?: number;
     division?: string;
     unit?: string;
     empaqueCantidad?: number;
@@ -35,7 +36,7 @@ export async function generatePriceListPDFBuffer(options: PriceListPDFOptions): 
     return new Promise((resolve, reject) => {
         const doc = new PDFDocument({ 
             size: 'A4', 
-            margin: 0, // Control 100% manual para evitar saltos automáticos no deseados / hojas en blanco
+            margin: 0, // Control manual estricto para evitar saltos automáticos no deseados
             bufferPages: true,
             info: { Title: 'Lista de Precios Aludra', Author: 'Grupo Aludra' } 
         });
@@ -49,7 +50,7 @@ export async function generatePriceListPDFBuffer(options: PriceListPDFOptions): 
         const DARK   = '#1f2937';
         const GRAY   = '#6b7280';
         const LGRAY  = '#f3f4f6';
-        const W      = doc.page.width - 90; // Ancho utilizable exacto: 505.28 pt
+        const W      = doc.page.width - 90; // Ancho utilizable: 505.28 pt
         const LEFT   = 45;
 
         const ahora = new Date();
@@ -108,29 +109,32 @@ export async function generatePriceListPDFBuffer(options: PriceListPDFOptions): 
 
         const divisions = Object.keys(grouped).sort();
 
-        // Anchos de columna (Suma: 70 + 280 + 60 + 80 = 490 pt)
+        // Anchos de columna optimizados (Suma: 65 + 228 + 66 + 62 + 84 = 505 pt)
         const cols = {
             sku: LEFT,
-            nombre: LEFT + 75,
-            pUSD: LEFT + 360,
-            pBs: LEFT + 425
+            nombre: LEFT + 68,
+            pDivisas: LEFT + 296,
+            pBcvUsd: LEFT + 362,
+            pBs: LEFT + 424
         };
         const colWidths = {
-            sku: 70,
-            nombre: 280,
-            pUSD: 60,
-            pBs: 80
+            sku: 65,
+            nombre: 225,
+            pDivisas: 64,
+            pBcvUsd: 60,
+            pBs: 81
         };
 
         let y = 158;
 
         function drawTableHeader(currentY: number) {
             doc.rect(LEFT, currentY, W, 15).fill(DARK);
-            doc.fontSize(7).fillColor('white').font('Helvetica-Bold');
+            doc.fontSize(6.5).fillColor('white').font('Helvetica-Bold');
             doc.text('SKU', cols.sku + 3, currentY + 4, { width: colWidths.sku, lineBreak: false });
             doc.text('DESCRIPCIÓN DEL PRODUCTO', cols.nombre + 3, currentY + 4, { width: colWidths.nombre, lineBreak: false });
-            doc.text('P. USD', cols.pUSD, currentY + 4, { width: colWidths.pUSD, align: 'right', lineBreak: false });
-            doc.text('P. Bs (BCV)', cols.pBs, currentY + 4, { width: colWidths.pBs, align: 'right', lineBreak: false });
+            doc.text('P. DIVISAS ($)', cols.pDivisas, currentY + 4, { width: colWidths.pDivisas, align: 'right', lineBreak: false });
+            doc.text('REF. BCV ($)', cols.pBcvUsd, currentY + 4, { width: colWidths.pBcvUsd, align: 'right', lineBreak: false });
+            doc.text('TOTAL Bs (BCV)', cols.pBs, currentY + 4, { width: colWidths.pBs, align: 'right', lineBreak: false });
             return currentY + 15;
         }
 
@@ -185,19 +189,22 @@ export async function generatePriceListPDFBuffer(options: PriceListPDFOptions): 
                 if (prodIdx % 2 === 0) doc.rect(LEFT, y, W, rowH).fill(LGRAY);
                 else doc.rect(LEFT, y, W, rowH).fill('white');
 
-                // Aplicar porcentaje de incremento / descuento
+                // Cálculo estricto de ambos precios:
+                // 1. Precio de Contado en Moneda Extranjera (Efectivo/Zelle/Binance) -> unitPrice
+                // 2. Precio de Lista Oficial para pagos en Bolívares (Tasa BCV) -> priceList
                 const factor = 1 + (adjustmentPercentage / 100);
-                const adjustedUsd = prod.unitPrice * factor;
-                const adjustedBs = adjustedUsd * tasaBCV;
+                const precioDivisas = prod.unitPrice * factor;
+                const precioBcvUsd = (prod.priceList && prod.priceList > 0 ? prod.priceList : prod.unitPrice) * factor;
+                const totalBs = precioBcvUsd * tasaBCV;
 
-                const pBsFormatted = adjustedBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+                const pBsFormatted = totalBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
                 const middleY = y + (rowH / 2) - 4;
 
                 // SKU
                 doc.fontSize(6.5).fillColor(GRAY).font('Helvetica');
                 doc.text(prod.sku || 'N/A', cols.sku + 3, y + 4, { width: colWidths.sku });
 
-                // Nombre y Detalles con posicionamiento dinámico (nunca se solapa)
+                // Nombre y Detalles con posicionamiento dinámico (nunca se solapan)
                 doc.fontSize(7.5).fillColor(DARK).font('Helvetica');
                 doc.text(prod.name, cols.nombre + 3, y + 3, { width: colWidths.nombre });
 
@@ -207,9 +214,10 @@ export async function generatePriceListPDFBuffer(options: PriceListPDFOptions): 
                     doc.text(extraTextStr, cols.nombre + 3, extraY, { width: colWidths.nombre, lineBreak: false });
                 }
 
-                // Precios centrados verticalmente
+                // Precios en columnas separadas
                 doc.fontSize(7.5).fillColor(DARK).font('Helvetica');
-                doc.text(`$${adjustedUsd.toFixed(2)}`, cols.pUSD, middleY, { width: colWidths.pUSD, align: 'right', lineBreak: false });
+                doc.text(`$${precioDivisas.toFixed(2)}`, cols.pDivisas, middleY, { width: colWidths.pDivisas, align: 'right', lineBreak: false });
+                doc.text(`$${precioBcvUsd.toFixed(2)}`, cols.pBcvUsd, middleY, { width: colWidths.pBcvUsd, align: 'right', lineBreak: false });
                 doc.text(`Bs ${pBsFormatted}`, cols.pBs, middleY, { width: colWidths.pBs, align: 'right', lineBreak: false });
 
                 y += rowH;
@@ -246,9 +254,9 @@ export async function generatePriceListPDFBuffer(options: PriceListPDFOptions): 
         doc.fontSize(8).fillColor('#92400e').font('Helvetica-Bold')
            .text('Condiciones de Venta y Tarifas:', LEFT + 10, y + 6, { lineBreak: false });
         doc.fontSize(6.5).font('Helvetica')
-           .text('* Los precios en Bolívares se calculan con la tasa oficial del Banco Central de Venezuela (BCV).', LEFT + 10, y + 18, { width: W - 110, lineBreak: false })
-           .text('* Precios y disponibilidad de mercancía sujetos a cambios sin previo aviso.', LEFT + 10, y + 29, { width: W - 110, lineBreak: false })
-           .text('* Para pedidos y atención comercial personalizada: +58 412-271-1859.', LEFT + 10, y + 40, { width: W - 110, lineBreak: false });
+           .text('* PAGO EN DIVISAS: Aplica columna P. DIVISAS ($) para Efectivo USD, Zelle o Binance USDT.', LEFT + 10, y + 18, { width: W - 110, lineBreak: false })
+           .text('* PAGO EN BOLÍVARES: Se liquida a tasa oficial BCV sobre REF. BCV ($) reflejado en TOTAL Bs (BCV).', LEFT + 10, y + 29, { width: W - 110, lineBreak: false })
+           .text('* Para pedidos y atención comercial personalizada: +58 412-271-1859 | www.grupoaludra.com', LEFT + 10, y + 40, { width: W - 110, lineBreak: false });
 
         // Caja Informativa con Imagen Real QR
         doc.rect(qrX - 5, qrY, 85, 68).fill(LGRAY);
