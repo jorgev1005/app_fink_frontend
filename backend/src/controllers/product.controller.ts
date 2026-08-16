@@ -531,13 +531,27 @@ export const exportPriceListPDF = async (req: Request, res: Response) => {
       }
     }
 
-    const latestRate = await prisma.exchangeRate.findFirst({
+    // Buscar la tasa oficial del BCV específicamente
+    const bcvRate = await prisma.exchangeRate.findFirst({
+      where: { source: 'BCV' },
       orderBy: { date: 'desc' },
     });
 
-    const tasaBCV = tasaOverride ? parseFloat(tasaOverride as string) : (latestRate?.usdToBs || 36.50);
-    const tasaParalelo = undefined;
-    const tasaEUR = latestRate?.eurToBs || undefined;
+    const parallelRate = await prisma.exchangeRate.findFirst({
+      where: { source: { in: ['API', 'PARALELO', 'BINANCE'] } },
+      orderBy: { date: 'desc' },
+    });
+
+    const fallbackRate = await prisma.exchangeRate.findFirst({
+      orderBy: { date: 'desc' },
+    });
+
+    const tasaBCV = tasaOverride 
+      ? parseFloat(tasaOverride as string) 
+      : (bcvRate?.usdToBs || (fallbackRate?.source === 'BCV' ? fallbackRate.usdToBs : 771.07));
+
+    const tasaParalelo = parallelRate ? parallelRate.usdToBs : undefined;
+    const tasaEUR = (bcvRate?.eurToBs && bcvRate.eurToBs > 0) ? bcvRate.eurToBs : (fallbackRate?.eurToBs || undefined);
 
     let projectName: string | undefined = undefined;
     if (projectId && projectId !== 'all') {

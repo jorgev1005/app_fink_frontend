@@ -1364,7 +1364,9 @@ export default function InventoryPage() {
                     type="button"
                     onClick={() => {
                       setPdfRateMode('BCV');
-                      setPdfTasaOverride('');
+                      const bcvVal = ratesBySource.BCV || exchangeRate?.usdToBs;
+                      if (bcvVal) setPdfTasaOverride(bcvVal.toString());
+                      else setPdfTasaOverride('');
                     }}
                     className={`p-2.5 rounded-xl border text-xs font-bold transition-all flex flex-col items-center justify-center text-center gap-0.5 cursor-pointer ${
                       pdfRateMode === 'BCV'
@@ -1374,7 +1376,7 @@ export default function InventoryPage() {
                   >
                     <span>🏛️ BCV (USD)</span>
                     <span className="text-[11px] font-semibold text-slate-500">
-                      Bs. {ratesBySource.BCV ? ratesBySource.BCV.toFixed(2) : (exchangeRate?.usdToBs ? exchangeRate.usdToBs.toFixed(2) : '36.50')}
+                      Bs. {ratesBySource.BCV ? ratesBySource.BCV.toFixed(2) : (exchangeRate?.usdToBs ? exchangeRate.usdToBs.toFixed(2) : '771.07')}
                     </span>
                   </button>
 
