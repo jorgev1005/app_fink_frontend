@@ -288,7 +288,10 @@ export const processPOSSale = async (req: Request, res: Response) => {
       contactName = genericContact.name;
     }
 
-    // 2. Verificar Stock disponible de cada producto en la transacción
+    // 2. Verificar existencia de productos en la transacción (Permitiendo productos bajo pedido / stock 0)
+    let hasPendingStock = false;
+    const productMap = new Map<string, any>();
+
     for (const item of items) {
       if (!item.productId || !item.quantity || item.quantity <= 0) {
         return res.status(400).json({ success: false, error: { message: 'Todos los ítems deben tener productId y cantidad válida.' } });
@@ -299,11 +302,11 @@ export const processPOSSale = async (req: Request, res: Response) => {
         return res.status(404).json({ success: false, error: { message: `El producto "${item.name || item.productId}" no está activo.` } });
       }
 
+      productMap.set(item.productId, prod);
+
+      // Si el stock es menor a la cantidad solicitada, marcar como pendiente por verificar (bajo pedido)
       if (prod.stock < item.quantity) {
-        return res.status(400).json({
-          success: false,
-          error: { message: `Stock insuficiente para "${prod.name}". Disponible: ${prod.stock}, Solicitado: ${item.quantity}` }
-        });
+        hasPendingStock = true;
       }
     }
 
@@ -324,6 +327,8 @@ export const processPOSSale = async (req: Request, res: Response) => {
       const qty = parseFloat(item.quantity) || 1;
       const cost = parseFloat(item.costPrice || item.packagingCost) || 0;
       const lineTotal = price * qty;
+      const prod = productMap.get(item.productId);
+      const isPendingStock = prod ? (prod.stock < qty) : true;
 
       totalSale += lineTotal;
       totalCost += cost * qty;
@@ -335,7 +340,10 @@ export const processPOSSale = async (req: Request, res: Response) => {
         quantity: qty,
         unitPrice: price,
         costPrice: cost,
-        total: lineTotal
+        total: lineTotal,
+        isPendingStock,
+        deliveryStatus: isPendingStock ? 'PENDING_VERIFICATION' : 'DELIVERED',
+        stockAvailableAtSale: prod ? prod.stock : 0
       };
     });
 
@@ -343,15 +351,23 @@ export const processPOSSale = async (req: Request, res: Response) => {
 
     // 5. Ejecutar la Transacción Atómica en Base de Datos
     const result = await prisma.$transaction(async (tx) => {
-      // A. Rebajar stock de productos
+      // A. Rebajar stock de productos si hay unidades en existencia
       for (const item of items) {
-        await tx.product.update({
-          where: { id: item.productId },
-          data: { stock: { decrement: parseFloat(item.quantity) } }
-        });
+        const prod = productMap.get(item.productId);
+        if (prod && prod.stock > 0) {
+          const toDecrement = Math.min(prod.stock, parseFloat(item.quantity));
+          await tx.product.update({
+            where: { id: item.productId },
+            data: { stock: { decrement: toDecrement } }
+          });
+        }
       }
 
       // B. Crear la Factura / Nota de Venta POS
+      const finalNotes = hasPendingStock
+        ? (notes ? `${notes} | ⚠️ Incluye productos bajo pedido pendientes por verificar` : '⚠️ Incluye productos bajo pedido pendientes por verificar')
+        : (notes || null);
+
       const invoice = await tx.invoice.create({
         data: {
           projectId,
@@ -367,6 +383,7 @@ export const processPOSSale = async (req: Request, res: Response) => {
           lines: JSON.stringify(formattedLines),
           totalCost,
           netProfit,
+          notes: finalNotes,
           createdBy: req.user!.id
         }
       });

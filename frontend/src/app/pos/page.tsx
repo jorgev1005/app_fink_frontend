@@ -449,21 +449,13 @@ function POSComponent() {
     }
   };
 
-  // Cart Management
+  // Cart Management: Permite facturación inmediata con o sin stock (Bajo Pedido / Pendiente por Verificar)
   const addToCart = (product: Product, qtyToAdd: number = 1) => {
     const existing = cart.find(ci => ci.product.id === product.id);
     if (existing) {
       const newQty = existing.quantity + qtyToAdd;
-      if (newQty > product.stock) {
-        toast.error(`Stock máximo alcanzado (${product.stock} disponibles)`);
-        return;
-      }
       setCart(cart.map(ci => ci.product.id === product.id ? { ...ci, quantity: newQty } : ci));
     } else {
-      if (qtyToAdd > product.stock) {
-        toast.error(`Stock insuficiente (${product.stock} disponibles)`);
-        return;
-      }
       setCart([...cart, { product, quantity: qtyToAdd, unitPrice: safeNum(product.unitPrice) }]);
     }
   };
@@ -474,11 +466,6 @@ function POSComponent() {
 
     if (quantity <= 0) {
       removeFromCart(productId);
-      return;
-    }
-
-    if (quantity > item.product.stock) {
-      toast.error(`Stock insuficiente (${item.product.stock} disponibles)`);
       return;
     }
 
@@ -774,7 +761,6 @@ function POSComponent() {
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3">
                 {filteredProducts.map(p => {
                   const inCartItem = cart.find(ci => ci.product.id === p.id);
-                  const isOutOfStock = p.stock <= 0;
                   const priceUsd = safeNum(p.unitPrice);
                   const priceBs = priceUsd * safeNum(exchangeRate);
                   const packQty = p.empaqueCantidad || 12;
@@ -782,21 +768,23 @@ function POSComponent() {
                   return (
                     <div 
                       key={p.id}
-                      onClick={() => !isOutOfStock && addToCart(p, 1)}
+                      onClick={() => addToCart(p, 1)}
                       className={`group relative p-3 rounded-2xl border transition-all text-left flex flex-col justify-between cursor-pointer ${
-                        isOutOfStock 
-                          ? 'bg-slate-900/40 border-slate-800/40 opacity-50 cursor-not-allowed'
-                          : inCartItem 
-                            ? 'bg-emerald-950/30 border-emerald-500/50 shadow-md shadow-emerald-950/50' 
-                            : 'bg-slate-900 border-slate-800 hover:border-slate-700 hover:bg-slate-850'
+                        inCartItem 
+                          ? 'bg-emerald-950/30 border-emerald-500/50 shadow-md shadow-emerald-950/50' 
+                          : 'bg-slate-900 border-slate-800 hover:border-slate-700 hover:bg-slate-850'
                       }`}
                     >
                       {/* Top Badges */}
                       <div className="flex justify-between items-start gap-1">
                         <span className={`text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-md ${
-                          p.stock > 10 ? 'bg-slate-800 text-slate-400' : p.stock > 0 ? 'bg-amber-500/20 text-amber-300' : 'bg-red-500/20 text-red-400'
+                          p.stock > 10 
+                            ? 'bg-slate-800 text-slate-400' 
+                            : p.stock > 0 
+                              ? 'bg-amber-500/20 text-amber-300 border border-amber-500/30' 
+                              : 'bg-indigo-500/20 text-indigo-300 border border-indigo-500/30'
                         }`}>
-                          Stock: {p.stock} {p.unit || 'und'}
+                          {p.stock > 0 ? `Stock: ${p.stock} ${p.unit || 'und'}` : '📦 Bajo Pedido'}
                         </span>
                         
                         {inCartItem && (
@@ -840,7 +828,7 @@ function POSComponent() {
                         </div>
 
                         {/* Botón rápido para agregar por empaque */}
-                        {packQty > 1 && !isOutOfStock && (
+                        {packQty > 1 && (
                           <button
                             type="button"
                             onClick={(e) => {
@@ -939,7 +927,14 @@ function POSComponent() {
                     <div key={ci.product.id} className="bg-slate-950 p-2.5 rounded-xl border border-slate-800/80 space-y-2">
                       <div className="flex justify-between items-start">
                         <div className="pr-2">
-                          <h5 className="text-xs font-bold text-white line-clamp-1">{ci.product.name}</h5>
+                          <div className="flex items-center gap-1.5">
+                            <h5 className="text-xs font-bold text-white line-clamp-1">{ci.product.name}</h5>
+                            {ci.product.stock <= 0 && (
+                              <span className="text-[8px] font-extrabold bg-indigo-500/20 text-indigo-300 px-1.5 py-0.5 rounded border border-indigo-500/30 whitespace-nowrap">
+                                📦 Por Verificar
+                              </span>
+                            )}
+                          </div>
                           <span className="text-[10px] text-slate-400 font-mono">${fmt(ci.unitPrice)} c/u</span>
                         </div>
                         <div className="text-right">
@@ -1699,13 +1694,23 @@ function POSComponent() {
                 </div>
               </div>
 
-              <div className="border-t border-dashed border-slate-800 pt-2 space-y-1 text-[11px]">
-                {lastCompletedSale.items.map((it: any, i: number) => (
-                  <div key={i} className="flex justify-between">
-                    <span className="line-clamp-1">{it.quantity}x {it.product.name}</span>
-                    <span>${fmt(safeNum(it.unitPrice) * safeNum(it.quantity))}</span>
-                  </div>
-                ))}
+              <div className="border-t border-dashed border-slate-800 pt-2 space-y-1.5 text-[11px]">
+                {lastCompletedSale.items.map((it: any, i: number) => {
+                  const isPending = (it.product?.stock <= 0) || it.isPendingStock;
+                  return (
+                    <div key={i} className="flex justify-between items-start gap-1">
+                      <div className="flex-1">
+                        <span className="line-clamp-1 text-white">{it.quantity}x {it.product?.name || it.name}</span>
+                        {isPending && (
+                          <span className="text-[9px] font-bold text-amber-300 block">
+                            ⚠️ Bajo Pedido (Por Verificar)
+                          </span>
+                        )}
+                      </div>
+                      <span className="shrink-0 font-mono text-slate-300">${fmt(safeNum(it.unitPrice) * safeNum(it.quantity))}</span>
+                    </div>
+                  );
+                })}
               </div>
 
               <div className="border-t border-slate-800 pt-2 text-right">

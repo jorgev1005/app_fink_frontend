@@ -788,6 +788,7 @@ model Invoice {
   netProfit       Float        @default(0)
   purchaseOrder     String?
   purchaseOrderDate String?
+  notes             String?
   // transactionId String?
   // transaction   Transaction?  @relation(fields: [transactionId], references: [id])
   recurringRuleId String?
