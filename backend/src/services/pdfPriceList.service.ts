@@ -109,19 +109,19 @@ export async function generatePriceListPDFBuffer(options: PriceListPDFOptions): 
 
         const divisions = Object.keys(grouped).sort();
 
-        // Anchos de columna optimizados (Suma: 65 + 228 + 66 + 62 + 84 = 505 pt)
+        // Anchos de columna optimizados (Suma: 65 + 225 + 62 + 62 + 81 = 495 pt)
         const cols = {
             sku: LEFT,
             nombre: LEFT + 68,
-            pDivisas: LEFT + 296,
-            pBcvUsd: LEFT + 362,
+            pBcvUsd: LEFT + 296,
+            pDivisas: LEFT + 360,
             pBs: LEFT + 424
         };
         const colWidths = {
             sku: 65,
             nombre: 225,
-            pDivisas: 64,
-            pBcvUsd: 60,
+            pBcvUsd: 62,
+            pDivisas: 62,
             pBs: 81
         };
 
@@ -132,9 +132,9 @@ export async function generatePriceListPDFBuffer(options: PriceListPDFOptions): 
             doc.fontSize(6.5).fillColor('white').font('Helvetica-Bold');
             doc.text('SKU', cols.sku + 3, currentY + 4, { width: colWidths.sku, lineBreak: false });
             doc.text('DESCRIPCIÓN DEL PRODUCTO', cols.nombre + 3, currentY + 4, { width: colWidths.nombre, lineBreak: false });
+            doc.text('P. BCV ($)', cols.pBcvUsd, currentY + 4, { width: colWidths.pBcvUsd, align: 'right', lineBreak: false });
             doc.text('P. DIVISAS ($)', cols.pDivisas, currentY + 4, { width: colWidths.pDivisas, align: 'right', lineBreak: false });
-            doc.text('REF. BCV ($)', cols.pBcvUsd, currentY + 4, { width: colWidths.pBcvUsd, align: 'right', lineBreak: false });
-            doc.text('TOTAL Bs (BCV)', cols.pBs, currentY + 4, { width: colWidths.pBs, align: 'right', lineBreak: false });
+            doc.text('PAGO EN Bs (BCV)', cols.pBs, currentY + 4, { width: colWidths.pBs, align: 'right', lineBreak: false });
             return currentY + 15;
         }
 
@@ -214,10 +214,10 @@ export async function generatePriceListPDFBuffer(options: PriceListPDFOptions): 
                     doc.text(extraTextStr, cols.nombre + 3, extraY, { width: colWidths.nombre, lineBreak: false });
                 }
 
-                // Precios en columnas separadas
+                // Precios en columnas separadas (Precio 1 BCV a la izquierda, Precio 2 Divisas al centro)
                 doc.fontSize(7.5).fillColor(DARK).font('Helvetica');
-                doc.text(`$${precioDivisas.toFixed(2)}`, cols.pDivisas, middleY, { width: colWidths.pDivisas, align: 'right', lineBreak: false });
                 doc.text(`$${precioBcvUsd.toFixed(2)}`, cols.pBcvUsd, middleY, { width: colWidths.pBcvUsd, align: 'right', lineBreak: false });
+                doc.text(`$${precioDivisas.toFixed(2)}`, cols.pDivisas, middleY, { width: colWidths.pDivisas, align: 'right', lineBreak: false });
                 doc.text(`Bs ${pBsFormatted}`, cols.pBs, middleY, { width: colWidths.pBs, align: 'right', lineBreak: false });
 
                 y += rowH;
