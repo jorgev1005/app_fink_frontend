@@ -274,7 +274,7 @@ function POSComponent() {
     efectivo: { accountIdUsd: '', accountIdBs: '' }
   });
 
-  // Quotation & Freight Modal State
+  // Quotation & Delivery Modal State
   const [showQuotationModal, setShowQuotationModal] = useState(false);
   const [generatingQuotation, setGeneratingQuotation] = useState(false);
   const [quoteClientName, setQuoteClientName] = useState('');
@@ -283,21 +283,10 @@ function POSComponent() {
   const [quoteClientEmail, setQuoteClientEmail] = useState('');
   const [quoteSaveContact, setQuoteSaveContact] = useState(true);
   const [quoteNotes, setQuoteNotes] = useState('');
-  const [selectedCityId, setSelectedCityId] = useState<string>('RETIRO');
-  const [customCityName, setCustomCityName] = useState<string>('');
-  const [customAdjustmentPercent, setCustomAdjustmentPercent] = useState<number>(15);
-  const [customMinOrder, setCustomMinOrder] = useState<number>(1000);
-
-  // Purchase Order Modal State
-  const [showPurchaseOrderModal, setShowPurchaseOrderModal] = useState(false);
-  const [generatingPO, setGeneratingPO] = useState(false);
-  const [poSupplierName, setPoSupplierName] = useState('SOLO MAYOR');
-  const [poSupplierTaxId, setPoSupplierTaxId] = useState('J-12345678-0');
-  const [poSupplierPhone, setPoSupplierPhone] = useState('0412-271-1859');
-  const [poDeliveryAddress, setPoDeliveryAddress] = useState('Almacén Principal La Victoria, Aragua');
-  const [poExpectedDate, setPoExpectedDate] = useState('Inmediata / 24-48 horas');
-  const [poPaymentTerms, setPoPaymentTerms] = useState('Contado / Según acuerdo comercial');
-  const [poNotes, setPoNotes] = useState('');
+  const [deliveryMode, setDeliveryMode] = useState<'PICKUP' | 'SHIPPING'>('SHIPPING');
+  const [quoteFreightPercent, setQuoteFreightPercent] = useState<number>(15);
+  const [quoteDestinationCity, setQuoteDestinationCity] = useState<string>('Valencia');
+  const [quoteMinOrderUSD, setQuoteMinOrderUSD] = useState<number>(1000);
 
   const openQuotationModal = () => {
     if (cart.length === 0) {
@@ -344,16 +333,19 @@ function POSComponent() {
         }
       }
 
+      const effectivePercent = deliveryMode === 'PICKUP' ? 0 : quoteFreightPercent;
+      const effectiveCity = deliveryMode === 'PICKUP' ? 'Retiro en Galpón (La Victoria)' : (quoteDestinationCity.trim() || 'Despacho Nacional');
+      const isFree = deliveryMode === 'PICKUP' ? true : (adjustedTotalUSD >= (quoteMinOrderUSD || 1000));
+
       const payload = {
         clientName,
         clientTaxId: quoteClientTaxId.trim() || undefined,
         clientPhone: quoteClientPhone.trim() || undefined,
         clientEmail: quoteClientEmail.trim() || undefined,
-        destinationCity: selectedCityId === 'RETIRO' ? undefined : effectiveCityName,
-        freightAdjustmentPercent: effectiveFreightPercent,
-        minOrderForFreeFreight: effectiveMinOrder,
-        freightCost: resolvedCity.freightCostUsd,
-        isFreeFreight,
+        destinationCity: effectiveCity,
+        freightAdjustmentPercent: effectivePercent,
+        minOrderForFreeFreight: deliveryMode === 'PICKUP' ? 0 : (quoteMinOrderUSD || 1000),
+        isFreeFreight: isFree,
         projectId: selectedProjectId,
         tasaOverride: exchangeRate,
         notes: quoteNotes.trim() || undefined,
@@ -395,9 +387,9 @@ function POSComponent() {
         toast.success('📥 Cotización descargada exitosamente');
       } else if (action === 'whatsapp') {
         const phoneClean = (quoteClientPhone || '').replace(/[^0-9]/g, '');
-        const freightBanner = selectedCityId !== 'RETIRO' 
-          ? (isFreeFreight ? ` 🚚 *Flete GRATIS/Incluido hasta ${effectiveCityName}*` : ` 🚚 Entrega en ${effectiveCityName}`)
-          : '';
+        const freightBanner = deliveryMode === 'PICKUP'
+          ? ' 🏭 *Retiro en Galpón (Precio Base Fábrica)*'
+          : (isFree ? ` 🚚 *Flete GRATIS/Incluido hasta ${effectiveCity}*` : ` 🚚 Entrega en ${effectiveCity}`);
         const textMsg = `Hola *${clientName}*, le enviamos su *Cotización Formal de ${currentProject?.name || 'Inversiones Lucem'}* con ${cart.length} productos por un total de *$${fmt(adjustedTotalUSD)} USD* (Bs. ${fmt(adjustedTotalUSD * exchangeRate)} a tasa BCV).${freightBanner}`;
         const waUrl = phoneClean 
           ? `https://wa.me/${phoneClean.startsWith('58') ? phoneClean : '58' + phoneClean.replace(/^0+/, '')}?text=${encodeURIComponent(textMsg)}`
@@ -416,94 +408,6 @@ function POSComponent() {
       toast.error(err.message || 'Error al emitir cotización');
     } finally {
       setGeneratingQuotation(false);
-    }
-  };
-
-  const openPurchaseOrderModal = () => {
-    if (cart.length === 0) {
-      toast.error('El carrito de compras está vacío para generar orden');
-      return;
-    }
-    setShowPurchaseOrderModal(true);
-  };
-
-  const handleExecutePurchaseOrderPDF = async (action: 'view' | 'download' | 'whatsapp') => {
-    if (cart.length === 0) {
-      toast.error('El carrito está vacío');
-      return;
-    }
-
-    setGeneratingPO(true);
-    try {
-      const token = localStorage.getItem('token');
-      const supplierName = poSupplierName.trim() || 'SOLO MAYOR';
-
-      const payload = {
-        supplierName,
-        supplierTaxId: poSupplierTaxId.trim() || undefined,
-        supplierPhone: poSupplierPhone.trim() || undefined,
-        deliveryAddress: poDeliveryAddress.trim() || undefined,
-        expectedDate: poExpectedDate.trim() || undefined,
-        paymentTerms: poPaymentTerms.trim() || undefined,
-        projectId: selectedProjectId,
-        tasaOverride: exchangeRate,
-        notes: poNotes.trim() || undefined,
-        items: cart.map(ci => ({
-          sku: ci.product.sku || undefined,
-          name: ci.product.name,
-          quantity: ci.quantity,
-          unit: ci.product.unit || 'UNIDAD',
-          costPrice: safeNum(ci.product.costPrice || (ci.unitPrice * 0.88)), // Costo proveedor
-          empaqueCantidad: ci.product.empaqueCantidad || undefined,
-          medidas: ci.product.medidas || undefined,
-        }))
-      };
-
-      const response = await fetch('/backend-api/api/pos/purchase-order-pdf', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`
-        },
-        body: JSON.stringify(payload)
-      });
-
-      if (!response.ok) {
-        throw new Error('Error al generar la orden de compra');
-      }
-
-      const blob = await response.blob();
-      const blobUrl = window.URL.createObjectURL(blob);
-
-      if (action === 'download') {
-        const link = document.createElement('a');
-        link.href = blobUrl;
-        link.download = `OrdenCompra_${supplierName.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-        toast.success('📥 Orden de compra descargada');
-      } else if (action === 'whatsapp') {
-        const phoneClean = (poSupplierPhone || '').replace(/[^0-9]/g, '');
-        const totalPOCost = cart.reduce((acc, ci) => acc + ((ci.product.costPrice || (ci.unitPrice * 0.88)) * ci.quantity), 0);
-        const textMsg = `Estimados *${supplierName}*, adjuntamos nuestra *Orden de Compra Formal* con ${cart.length} renglones por un total de *$${fmt(totalPOCost)} USD*. Favor confirmar disponibilidad para despacho.`;
-        const waUrl = phoneClean 
-          ? `https://wa.me/${phoneClean.startsWith('58') ? phoneClean : '58' + phoneClean.replace(/^0+/, '')}?text=${encodeURIComponent(textMsg)}`
-          : `https://wa.me/?text=${encodeURIComponent(textMsg)}`;
-        
-        window.open(waUrl, '_blank');
-        window.open(blobUrl, '_blank');
-        toast.success('📲 Abriendo WhatsApp y Orden');
-      } else {
-        window.open(blobUrl, '_blank');
-        toast.success('👁️ Abriendo Orden de Compra');
-      }
-
-      setShowPurchaseOrderModal(false);
-    } catch (err: any) {
-      toast.error(err.message || 'Error al emitir orden de compra');
-    } finally {
-      setGeneratingPO(false);
     }
   };
 
@@ -782,16 +686,15 @@ function POSComponent() {
   const totalListUSD = subtotalListUSD + taxAmountListUSD;
   const totalBS = totalListUSD * safeNum(exchangeRate);
 
-  // Resolved Destination City & Freight Pricing Calculations
-  const resolvedCity = DESTINATION_CITIES.find(c => c.id === selectedCityId) || DESTINATION_CITIES[0];
-  const effectiveFreightPercent = selectedCityId === 'CUSTOM' ? customAdjustmentPercent : resolvedCity.adjustmentPercent;
-  const effectiveMinOrder = selectedCityId === 'CUSTOM' ? customMinOrder : resolvedCity.minOrderUsd;
-  const effectiveCityName = selectedCityId === 'CUSTOM' ? (customCityName.trim() || 'Destino Personalizado') : resolvedCity.name;
+  // Quotation & Delivery Calculations
+  const effectiveFreightPercent = deliveryMode === 'PICKUP' ? 0 : quoteFreightPercent;
+  const effectiveCityName = deliveryMode === 'PICKUP' ? 'Retiro en Galpón (La Victoria)' : (quoteDestinationCity.trim() || 'Despacho Nacional');
+  const effectiveMinOrder = deliveryMode === 'PICKUP' ? 0 : (quoteMinOrderUSD || 1000);
   
   // Total cotizado ajustado con recargo de flete
   const freightMultiplier = 1 + ((effectiveFreightPercent || 0) / 100);
   const adjustedTotalUSD = totalUSD * freightMultiplier;
-  const isFreeFreight = selectedCityId === 'RETIRO' ? true : (adjustedTotalUSD >= effectiveMinOrder);
+  const isFreeFreight = deliveryMode === 'PICKUP' ? true : (adjustedTotalUSD >= effectiveMinOrder);
   const neededForFreeFreight = Math.max(0, effectiveMinOrder - adjustedTotalUSD);
 
   // Open Payment Modal
@@ -1295,29 +1198,15 @@ function POSComponent() {
                 Cobrar & Despachar (${fmt(totalUSD)} USD)
               </button>
 
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  onClick={openQuotationModal}
-                  disabled={cart.length === 0}
-                  className="py-2.5 px-2 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-emerald-400 font-bold text-xs tracking-tight border border-slate-700/80 hover:border-emerald-500/50 shadow-md flex items-center justify-center gap-1.5 transition-all cursor-pointer truncate"
-                  title="Emitir Cotización Formal PDF con Flete por Ciudad"
-                >
-                  <FileText size={14} className="shrink-0" />
-                  <span>📄 Cotización PDF</span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={openPurchaseOrderModal}
-                  disabled={cart.length === 0}
-                  className="py-2.5 px-2 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-blue-400 font-bold text-xs tracking-tight border border-slate-700/80 hover:border-blue-500/50 shadow-md flex items-center justify-center gap-1.5 transition-all cursor-pointer truncate"
-                  title="Generar Orden de Compra formal para el Proveedor a costo"
-                >
-                  <Truck size={14} className="shrink-0" />
-                  <span>📦 Orden Compra</span>
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={openQuotationModal}
+                disabled={cart.length === 0}
+                className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-40 disabled:cursor-not-allowed text-emerald-400 font-bold text-xs tracking-wide border border-slate-700/80 hover:border-emerald-500/50 shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer"
+              >
+                <FileText size={15} />
+                📄 Emitir Cotización Formal PDF
+              </button>
             </div>
 
           </div>
@@ -2445,7 +2334,7 @@ function POSComponent() {
 
             <div className="space-y-3.5 text-xs overflow-y-auto flex-1 pr-1">
               
-              {/* Resumen del Carrito & Flete Calculado */}
+              {/* Resumen del Carrito & Total Cotizado */}
               <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800 space-y-2">
                 <div className="flex justify-between items-center">
                   <div>
@@ -2459,88 +2348,132 @@ function POSComponent() {
                   </div>
                 </div>
 
-                {/* Banner de Estado de Flete */}
-                {selectedCityId !== 'RETIRO' && (
-                  <div className={`p-2.5 rounded-xl border text-[11px] font-bold flex items-center gap-2 ${
-                    isFreeFreight 
-                      ? 'bg-emerald-950/60 border-emerald-700 text-emerald-300' 
-                      : 'bg-amber-950/60 border-amber-700 text-amber-300'
-                  }`}>
-                    <Truck size={16} className="shrink-0" />
-                    <div className="flex-1">
-                      {isFreeFreight ? (
-                        <span>🎉 ¡Flete 100% GRATIS / BONIFICADO hasta {effectiveCityName}!</span>
-                      ) : (
-                        <span>⚠️ Faltan ${fmt(neededForFreeFreight)} USD en productos para obtener Flete Gratis hasta {effectiveCityName} (O flete estimado de ${resolvedCity.freightCostUsd} USD)</span>
-                      )}
+                {/* Banner de Estado de Flete / Retiro */}
+                <div className={`p-2.5 rounded-xl border text-[11px] font-bold flex items-center gap-2 ${
+                  deliveryMode === 'PICKUP'
+                    ? 'bg-slate-900 border-slate-700 text-slate-300'
+                    : (isFreeFreight 
+                        ? 'bg-emerald-950/60 border-emerald-700 text-emerald-300' 
+                        : 'bg-amber-950/60 border-amber-700 text-amber-300')
+                }`}>
+                  <Truck size={16} className="shrink-0" />
+                  <div className="flex-1">
+                    {deliveryMode === 'PICKUP' ? (
+                      <span>🏭 Retiro en Galpón La Victoria: Aplica Tarifa Base de Fábrica (0% recargo de transporte).</span>
+                    ) : isFreeFreight ? (
+                      <span>🎉 ¡Flete 100% GRATIS / BONIFICADO hasta {quoteDestinationCity || 'Destino'}! (Cumple compra mínima de ${quoteMinOrderUSD} USD)</span>
+                    ) : (
+                      <span>⚠️ Faltan ${fmt(neededForFreeFreight)} USD para optar por Flete Gratis a {quoteDestinationCity || 'Destino'} (Mínimo: ${quoteMinOrderUSD} USD)</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Selector de Modalidad y Flete */}
+              <div className="space-y-2.5 bg-slate-950/70 p-3.5 rounded-2xl border border-slate-800">
+                <span className="font-bold text-amber-400 text-xs flex items-center gap-1.5">
+                  <Truck size={14} /> Modalidad de Entrega & Política de Flete:
+                </span>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setDeliveryMode('SHIPPING')}
+                    className={`py-2 px-2.5 rounded-xl text-xs font-bold transition-all border flex items-center justify-center gap-1.5 cursor-pointer ${
+                      deliveryMode === 'SHIPPING'
+                        ? 'bg-amber-500/20 border-amber-500 text-amber-300 shadow-md ring-1 ring-amber-500/40'
+                        : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <span>🚚 Despacho con Flete</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setDeliveryMode('PICKUP')}
+                    className={`py-2 px-2.5 rounded-xl text-xs font-bold transition-all border flex items-center justify-center gap-1.5 cursor-pointer ${
+                      deliveryMode === 'PICKUP'
+                        ? 'bg-emerald-500/20 border-emerald-500 text-emerald-300 shadow-md ring-1 ring-emerald-500/40'
+                        : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-white'
+                    }`}
+                  >
+                    <span>🏭 Retiro en Galpón (0%)</span>
+                  </button>
+                </div>
+
+                {deliveryMode === 'SHIPPING' && (
+                  <div className="space-y-2.5 pt-1 border-t border-slate-800">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                      <div>
+                        <label className="block text-[10px] text-slate-300 font-bold mb-1">Ciudad Destino</label>
+                        <input
+                          type="text"
+                          value={quoteDestinationCity}
+                          onChange={(e) => setQuoteDestinationCity(e.target.value)}
+                          placeholder="Ej: Valencia, Caracas, Maracay"
+                          className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2 text-white font-semibold outline-none focus:ring-2 focus:ring-amber-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-slate-300 font-bold mb-1">% Recargo Flete</label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            value={quoteFreightPercent}
+                            onChange={(e) => setQuoteFreightPercent(safeNum(e.target.value))}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2 pr-6 text-white font-bold font-mono outline-none focus:ring-2 focus:ring-amber-500"
+                          />
+                          <span className="absolute right-2.5 top-2 text-slate-400 font-bold">%</span>
+                        </div>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-slate-300 font-bold mb-1">Compra Mínima ($)</label>
+                        <div className="relative">
+                          <input
+                            type="number"
+                            value={quoteMinOrderUSD}
+                            onChange={(e) => setQuoteMinOrderUSD(safeNum(e.target.value))}
+                            className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2 pl-5 text-white font-bold font-mono outline-none focus:ring-2 focus:ring-amber-500"
+                          />
+                          <span className="absolute left-2 top-2 text-slate-400 font-bold">$</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Botones de Presets Rápidos */}
+                    <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                      <span className="text-[10px] text-slate-400 font-semibold">Presets rápidos:</span>
+                      <button
+                        type="button"
+                        onClick={() => { setQuoteDestinationCity('Valencia'); setQuoteFreightPercent(15); setQuoteMinOrderUSD(1000); }}
+                        className="px-2 py-0.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-amber-300 rounded-md text-[10px] font-bold"
+                      >
+                        Valencia (+15% | Mín $1,000)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setQuoteDestinationCity('Caracas'); setQuoteFreightPercent(12); setQuoteMinOrderUSD(1000); }}
+                        className="px-2 py-0.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-amber-300 rounded-md text-[10px] font-bold"
+                      >
+                        Caracas (+12% | Mín $1,000)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setQuoteDestinationCity('Maracay'); setQuoteFreightPercent(5); setQuoteMinOrderUSD(500); }}
+                        className="px-2 py-0.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-amber-300 rounded-md text-[10px] font-bold"
+                      >
+                        Aragua (+5% | Mín $500)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setQuoteDestinationCity('Barquisimeto'); setQuoteFreightPercent(18); setQuoteMinOrderUSD(1400); }}
+                        className="px-2 py-0.5 bg-slate-900 hover:bg-slate-800 border border-slate-700 text-amber-300 rounded-md text-[10px] font-bold"
+                      >
+                        Lara (+18% | Mín $1,400)
+                      </button>
                     </div>
                   </div>
                 )}
-              </div>
-
-              {/* Configuración de Destino y Flete */}
-              <div className="space-y-2 bg-slate-950/70 p-3.5 rounded-2xl border border-slate-800">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-amber-400 text-xs flex items-center gap-1.5">
-                    <Truck size={14} /> 🚚 Ciudad de Destino / Política de Flete:
-                  </span>
-                  {effectiveFreightPercent > 0 && (
-                    <span className="bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full text-[10px] font-extrabold">
-                      +{effectiveFreightPercent}% en lista
-                    </span>
-                  )}
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <div className="sm:col-span-2">
-                    <select
-                      value={selectedCityId}
-                      onChange={(e) => setSelectedCityId(e.target.value)}
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white font-semibold outline-none focus:ring-2 focus:ring-amber-500 text-xs cursor-pointer"
-                    >
-                      {DESTINATION_CITIES.map(city => (
-                        <option key={city.id} value={city.id}>
-                          {city.name} {city.adjustmentPercent > 0 ? `(+${city.adjustmentPercent}% | Mín $${city.minOrderUsd})` : ''}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  {selectedCityId === 'CUSTOM' && (
-                    <>
-                      <div>
-                        <label className="block text-[10px] text-slate-300 font-bold mb-0.5">Nombre Ciudad</label>
-                        <input
-                          type="text"
-                          placeholder="Ej: San Juan de los Morros"
-                          className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2 text-white outline-none"
-                          value={customCityName}
-                          onChange={(e) => setCustomCityName(e.target.value)}
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="block text-[10px] text-slate-300 font-bold mb-0.5">% Recargo</label>
-                          <input
-                            type="number"
-                            className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2 text-white outline-none"
-                            value={customAdjustmentPercent}
-                            onChange={(e) => setCustomAdjustmentPercent(safeNum(e.target.value))}
-                          />
-                        </div>
-                        <div>
-                          <label className="block text-[10px] text-slate-300 font-bold mb-0.5">Mínimo ($)</label>
-                          <input
-                            type="number"
-                            className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2 text-white outline-none"
-                            value={customMinOrder}
-                            onChange={(e) => setCustomMinOrder(safeNum(e.target.value))}
-                          />
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </div>
               </div>
 
               {/* Datos del Cliente */}
@@ -2646,176 +2579,6 @@ function POSComponent() {
                   className="w-full py-2.5 bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white rounded-xl text-xs font-extrabold shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer"
                 >
                   📲 Enviar al WhatsApp del Cliente ({quoteClientPhone})
-                </button>
-              )}
-            </div>
-
-          </div>
-        </div>
-      )}
-
-      {/* MODAL: GENERAR ORDEN DE COMPRA FORMAL (PROVEEDOR) */}
-      {showPurchaseOrderModal && (
-        <div 
-          onClick={(e) => { if (e.target === e.currentTarget) setShowPurchaseOrderModal(false); }}
-          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
-        >
-          <div className="bg-slate-900 border border-slate-700 rounded-3xl max-w-lg w-full p-5 space-y-4 text-white shadow-2xl max-h-[92vh] flex flex-col my-auto animate-in fade-in zoom-in duration-200">
-            
-            <div className="flex justify-between items-center pb-3 border-b border-slate-800 shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 bg-blue-500/20 text-blue-400 rounded-2xl flex items-center justify-center font-bold shrink-0">
-                  <Truck size={22} />
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-base text-white">Generar Orden de Compra (Proveedor)</h3>
-                  <p className="text-[11px] text-slate-400">Documento formal con precios calculados a Costo Real</p>
-                </div>
-              </div>
-              <button 
-                onClick={() => setShowPurchaseOrderModal(false)}
-                className="p-1.5 hover:bg-slate-800 rounded-xl text-slate-400 hover:text-white transition-colors"
-              >
-                <X size={18} />
-              </button>
-            </div>
-
-            <div className="space-y-3.5 text-xs overflow-y-auto flex-1 pr-1">
-              
-              {/* Resumen del Pedido a Proveedor */}
-              {(() => {
-                const totalPOCostUSD = cart.reduce((acc, ci) => acc + ((ci.product.costPrice || (ci.unitPrice * 0.88)) * ci.quantity), 0);
-                const totalPOCostBS = totalPOCostUSD * exchangeRate;
-                return (
-                  <div className="bg-slate-950 p-3 rounded-2xl border border-slate-800 flex justify-between items-center">
-                    <div>
-                      <span className="text-[10px] text-slate-400 uppercase font-bold block">Renglones a Solicitar</span>
-                      <span className="text-sm font-bold text-white font-mono">{cart.length} productos ({cart.reduce((a, b) => a + b.quantity, 0)} unidades)</span>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-[10px] text-slate-400 uppercase font-bold block">Costo Total Estimado</span>
-                      <div className="text-sm font-extrabold font-mono text-blue-400">${fmt(totalPOCostUSD)} USD</div>
-                      <div className="text-[10px] font-bold font-mono text-amber-400">Bs. {fmt(totalPOCostBS)}</div>
-                    </div>
-                  </div>
-                );
-              })()}
-
-              {/* Datos del Proveedor */}
-              <div className="space-y-2.5 bg-slate-950/60 p-3.5 rounded-2xl border border-slate-800">
-                <span className="font-bold text-blue-400 text-xs block">🏢 Datos del Proveedor:</span>
-                
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-300 mb-1">Nombre / Razón Social del Proveedor *</label>
-                  <input
-                    type="text"
-                    value={poSupplierName}
-                    onChange={(e) => setPoSupplierName(e.target.value)}
-                    placeholder="Ej: SOLO MAYOR / DISTRIBUIDORA"
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white font-semibold outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-300 mb-1">RIF del Proveedor</label>
-                    <input
-                      type="text"
-                      value={poSupplierTaxId}
-                      onChange={(e) => setPoSupplierTaxId(e.target.value)}
-                      placeholder="J-12345678-0"
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white font-mono outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-300 mb-1">Teléfono (WhatsApp)</label>
-                    <input
-                      type="text"
-                      value={poSupplierPhone}
-                      onChange={(e) => setPoSupplierPhone(e.target.value)}
-                      placeholder="0412-271-1859"
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white font-mono outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-300 mb-1">Lugar de Recepción / Entrega</label>
-                  <input
-                    type="text"
-                    value={poDeliveryAddress}
-                    onChange={(e) => setPoDeliveryAddress(e.target.value)}
-                    placeholder="Ej: Almacén Principal La Victoria, Aragua"
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-300 mb-1">Tiempo de Entrega</label>
-                    <input
-                      type="text"
-                      value={poExpectedDate}
-                      onChange={(e) => setPoExpectedDate(e.target.value)}
-                      placeholder="Ej: Inmediata / 24-48 horas"
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-300 mb-1">Condición de Pago</label>
-                    <input
-                      type="text"
-                      value={poPaymentTerms}
-                      onChange={(e) => setPoPaymentTerms(e.target.value)}
-                      placeholder="Ej: Contado / Crédito 7 días"
-                      className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-300 mb-1">Observaciones / Instrucciones de Carga (opcional)</label>
-                  <input
-                    type="text"
-                    value={poNotes}
-                    onChange={(e) => setPoNotes(e.target.value)}
-                    placeholder="Ej: Enviar factura fiscal junto con el despacho."
-                    className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white outline-none focus:ring-2 focus:ring-blue-500 text-xs"
-                  />
-                </div>
-              </div>
-
-            </div>
-
-            {/* Botones de Acción */}
-            <div className="pt-3 border-t border-slate-800 shrink-0 space-y-2">
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => handleExecutePurchaseOrderPDF('view')}
-                  disabled={generatingPO}
-                  className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white rounded-xl text-xs font-extrabold shadow-lg flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-95"
-                >
-                  👁️ {generatingPO ? 'Generando OC...' : 'Ver / Imprimir Orden'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => handleExecutePurchaseOrderPDF('download')}
-                  disabled={generatingPO}
-                  className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 disabled:opacity-50 text-white rounded-xl text-xs font-extrabold shadow-lg flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-95"
-                >
-                  ⬇️ {generatingPO ? 'Generando...' : 'Descargar PDF'}
-                </button>
-              </div>
-
-              {poSupplierPhone && (
-                <button
-                  type="button"
-                  onClick={() => handleExecutePurchaseOrderPDF('whatsapp')}
-                  disabled={generatingPO}
-                  className="w-full py-2.5 bg-green-600 hover:bg-green-500 disabled:opacity-50 text-white rounded-xl text-xs font-extrabold shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer"
-                >
-                  📲 Enviar al WhatsApp del Proveedor ({poSupplierPhone})
                 </button>
               )}
             </div>

@@ -16,7 +16,10 @@ import {
   RefreshCw,
   Upload,
   ArrowRightLeft,
-  FileText
+  FileText,
+  Truck,
+  ShoppingCart,
+  Check
 } from 'lucide-react';
 import api, { apiClient } from '@/lib/api';
 import { toast } from 'sonner';
@@ -49,6 +52,7 @@ interface Product {
   costPrice?: number;
   packagingCost?: number;
   division?: string;
+  medidas?: string;
 }
 
 interface Project {
@@ -121,6 +125,19 @@ export default function InventoryPage() {
   const [pdfTasaOverride, setPdfTasaOverride] = useState<string>('');
   const [pdfGenerating, setPdfGenerating] = useState(false);
   
+  // Estado para Modal de Orden de Compra (OC) a Proveedores
+  const [showPurchaseOrderModal, setShowPurchaseOrderModal] = useState(false);
+  const [poGenerating, setGeneratingPO] = useState(false);
+  const [poSupplierName, setPoSupplierName] = useState('SOLO MAYOR');
+  const [poSupplierTaxId, setPoSupplierTaxId] = useState('J-12345678-0');
+  const [poSupplierPhone, setPoSupplierPhone] = useState('0412-271-1859');
+  const [poDeliveryAddress, setPoDeliveryAddress] = useState('Almacén Principal La Victoria, Aragua');
+  const [poExpectedDate, setPoExpectedDate] = useState('Inmediata / 24-48 horas');
+  const [poPaymentTerms, setPoPaymentTerms] = useState('Contado / Según acuerdo comercial');
+  const [poNotes, setPoNotes] = useState('');
+  const [poItems, setPoItems] = useState<Array<{ product: Product; quantity: number; costPrice: number }>>([]);
+  const [poSearch, setPoSearch] = useState('');
+
   // Modal State
   const [showModal, setShowModal] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
@@ -430,6 +447,118 @@ export default function InventoryPage() {
     }
   };
 
+  // ── MANEJO DE ORDEN DE COMPRA (PROVEEDORES) ───────────────────
+  const openPurchaseOrderModal = () => {
+    setShowPurchaseOrderModal(true);
+  };
+
+  const handleAddProductToPO = (product: Product) => {
+    const existing = poItems.find(item => item.product.id === product.id);
+    const unitCost = product.costPrice && product.costPrice > 0 ? product.costPrice : (product.unitPrice * 0.88);
+    if (existing) {
+      setPoItems(poItems.map(item => item.product.id === product.id ? { ...item, quantity: item.quantity + 1 } : item));
+    } else {
+      setPoItems([...poItems, { product, quantity: 1, costPrice: unitCost }]);
+    }
+    toast.success(`Añadido a la orden: ${product.name}`);
+  };
+
+  const handleUpdatePOQuantity = (productId: string, quantity: number) => {
+    if (quantity <= 0) {
+      setPoItems(poItems.filter(item => item.product.id !== productId));
+    } else {
+      setPoItems(poItems.map(item => item.product.id === productId ? { ...item, quantity } : item));
+    }
+  };
+
+  const handleUpdatePOCost = (productId: string, costPrice: number) => {
+    setPoItems(poItems.map(item => item.product.id === productId ? { ...item, costPrice } : item));
+  };
+
+  const handleRemoveFromPO = (productId: string) => {
+    setPoItems(poItems.filter(item => item.product.id !== productId));
+  };
+
+  const handleExecutePurchaseOrderPDF = async (action: 'view' | 'download' | 'whatsapp') => {
+    if (poItems.length === 0) {
+      toast.error('Debe agregar al menos un producto a la orden de compra');
+      return;
+    }
+
+    setGeneratingPO(true);
+    try {
+      const token = localStorage.getItem('token');
+      const supplierName = poSupplierName.trim() || 'SOLO MAYOR';
+
+      const payload = {
+        supplierName,
+        supplierTaxId: poSupplierTaxId.trim() || undefined,
+        supplierPhone: poSupplierPhone.trim() || undefined,
+        deliveryAddress: poDeliveryAddress.trim() || undefined,
+        expectedDate: poExpectedDate.trim() || undefined,
+        paymentTerms: poPaymentTerms.trim() || undefined,
+        projectId: selectedProject || undefined,
+        tasaOverride: exchangeRate?.usdToBs || undefined,
+        notes: poNotes.trim() || undefined,
+        items: poItems.map(item => ({
+          sku: item.product.sku || undefined,
+          name: item.product.name,
+          quantity: item.quantity,
+          unit: item.product.unit || 'UNIDAD',
+          costPrice: item.costPrice,
+          empaqueCantidad: item.product.empaqueCantidad || undefined,
+          medidas: item.product.medidas || undefined,
+        }))
+      };
+
+      const response = await fetch('/backend-api/api/pos/purchase-order-pdf', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        throw new Error('Error al generar la orden de compra en PDF');
+      }
+
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+
+      if (action === 'download') {
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = `OrdenCompra_${supplierName.replace(/[^a-zA-Z0-9]/g, '_')}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        toast.success('📥 Orden de compra descargada');
+      } else if (action === 'whatsapp') {
+        const phoneClean = (poSupplierPhone || '').replace(/[^0-9]/g, '');
+        const totalPOCost = poItems.reduce((acc, item) => acc + (item.costPrice * item.quantity), 0);
+        const textMsg = `Estimados *${supplierName}*, adjuntamos nuestra *Orden de Compra Formal* con ${poItems.length} renglones por un total de *$${totalPOCost.toFixed(2)} USD*. Favor confirmar disponibilidad para despacho.`;
+        const waUrl = phoneClean 
+          ? `https://wa.me/${phoneClean.startsWith('58') ? phoneClean : '58' + phoneClean.replace(/^0+/, '')}?text=${encodeURIComponent(textMsg)}`
+          : `https://wa.me/?text=${encodeURIComponent(textMsg)}`;
+        
+        window.open(waUrl, '_blank');
+        window.open(blobUrl, '_blank');
+        toast.success('📲 Abriendo WhatsApp y Orden');
+      } else {
+        window.open(blobUrl, '_blank');
+        toast.success('👁️ Abriendo Orden de Compra');
+      }
+
+      setShowPurchaseOrderModal(false);
+    } catch (err: any) {
+      toast.error(err.message || 'Error al emitir orden de compra');
+    } finally {
+      setGeneratingPO(false);
+    }
+  };
+
   // Obtener la lista de divisiones únicas de los productos cargados
   const divisionsList = Array.from(new Set(products.map(p => p.division).filter(Boolean)));
 
@@ -494,6 +623,14 @@ export default function InventoryPage() {
           >
             <FileText size={18} className="text-emerald-400" />
             Lista de Precios (PDF)
+          </button>
+          <button 
+            onClick={() => openPurchaseOrderModal()}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-700 text-white rounded-lg hover:bg-blue-800 transition-colors shadow-sm font-medium"
+            title="Emitir Orden de Compra formal a Proveedores"
+          >
+            <Truck size={18} className="text-blue-300" />
+            Orden de Compra (OC)
           </button>
           <button 
             onClick={() => openTransferModal()}
@@ -1268,6 +1405,44 @@ export default function InventoryPage() {
                   />
                   <span className="absolute right-3 top-2.5 text-slate-400 font-extrabold">%</span>
                 </div>
+                <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                  <span className="text-[10px] text-slate-400 font-semibold">Presets de Flete / Despacho:</span>
+                  <button
+                    type="button"
+                    onClick={() => setPdfAdjustmentPercent(0)}
+                    className={`px-2 py-0.5 rounded-lg text-[11px] font-bold transition-all border ${pdfAdjustmentPercent === 0 ? 'bg-emerald-100 border-emerald-600 text-emerald-900' : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'}`}
+                  >
+                    0% (Base Fábrica)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPdfAdjustmentPercent(5)}
+                    className={`px-2 py-0.5 rounded-lg text-[11px] font-bold transition-all border ${pdfAdjustmentPercent === 5 ? 'bg-emerald-100 border-emerald-600 text-emerald-900' : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'}`}
+                  >
+                    +5% (Aragua)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPdfAdjustmentPercent(12)}
+                    className={`px-2 py-0.5 rounded-lg text-[11px] font-bold transition-all border ${pdfAdjustmentPercent === 12 ? 'bg-emerald-100 border-emerald-600 text-emerald-900' : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'}`}
+                  >
+                    +12% (Caracas)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPdfAdjustmentPercent(15)}
+                    className={`px-2 py-0.5 rounded-lg text-[11px] font-bold transition-all border ${pdfAdjustmentPercent === 15 ? 'bg-emerald-100 border-emerald-600 text-emerald-900' : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'}`}
+                  >
+                    +15% (Valencia / Estándar)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPdfAdjustmentPercent(18)}
+                    className={`px-2 py-0.5 rounded-lg text-[11px] font-bold transition-all border ${pdfAdjustmentPercent === 18 ? 'bg-emerald-100 border-emerald-600 text-emerald-900' : 'bg-slate-50 border-slate-200 text-slate-600 hover:bg-slate-100'}`}
+                  >
+                    +18% (Lara)
+                  </button>
+                </div>
                 <p className="text-[11px] mt-1.5 font-medium">
                   {pdfAdjustmentPercent > 0 && <span className="text-emerald-600 font-bold">↑ Incremento del +{pdfAdjustmentPercent}% aplicado a todos los precios de venta</span>}
                   {pdfAdjustmentPercent < 0 && <span className="text-amber-600 font-bold">↓ Descuento del {pdfAdjustmentPercent}% aplicado a todos los precios de venta</span>}
@@ -1460,6 +1635,315 @@ export default function InventoryPage() {
                 ⬇️ {pdfGenerating ? 'Generando...' : 'Descargar PDF'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: EMITIR ORDEN DE COMPRA A PROVEEDORES */}
+      {showPurchaseOrderModal && (
+        <div 
+          onClick={(e) => { if (e.target === e.currentTarget) setShowPurchaseOrderModal(false); }}
+          className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+        >
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl max-w-4xl w-full p-5 space-y-4 text-white shadow-2xl max-h-[92vh] flex flex-col my-auto animate-in fade-in zoom-in duration-200">
+            
+            {/* Header */}
+            <div className="flex justify-between items-center pb-3 border-b border-slate-800 shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-500/20 text-blue-400 rounded-2xl flex items-center justify-center font-bold shrink-0">
+                  <Truck size={22} />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-base text-white">Emitir Orden de Compra a Proveedor</h3>
+                  <p className="text-[11px] text-slate-400">Genera la orden formal a Costo Real para reposición de stock</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowPurchaseOrderModal(false)}
+                className="p-1.5 hover:bg-slate-800 rounded-xl text-slate-400 hover:text-white transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="space-y-4 text-xs overflow-y-auto flex-1 pr-1">
+              
+              {/* Datos del Proveedor y Despacho */}
+              <div className="bg-slate-950/80 p-3.5 rounded-2xl border border-slate-800 space-y-3">
+                <span className="font-bold text-blue-400 text-xs flex items-center gap-1.5">
+                  <Truck size={14} /> 🏢 Datos del Proveedor y Condiciones de Entrega:
+                </span>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  <div>
+                    <label className="block text-[10px] text-slate-300 font-bold mb-1">Proveedor / Razón Social *</label>
+                    <input
+                      type="text"
+                      value={poSupplierName}
+                      onChange={(e) => setPoSupplierName(e.target.value)}
+                      placeholder="Ej: SOLO MAYOR"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2 text-white font-semibold outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-300 font-bold mb-1">RIF del Proveedor</label>
+                    <input
+                      type="text"
+                      value={poSupplierTaxId}
+                      onChange={(e) => setPoSupplierTaxId(e.target.value)}
+                      placeholder="J-12345678-0"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2 text-white font-mono outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-300 font-bold mb-1">Teléfono (WhatsApp)</label>
+                    <input
+                      type="text"
+                      value={poSupplierPhone}
+                      onChange={(e) => setPoSupplierPhone(e.target.value)}
+                      placeholder="0412-271-1859"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2 text-white font-mono outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                  <div>
+                    <label className="block text-[10px] text-slate-300 font-bold mb-1">Lugar de Recepción</label>
+                    <input
+                      type="text"
+                      value={poDeliveryAddress}
+                      onChange={(e) => setPoDeliveryAddress(e.target.value)}
+                      placeholder="Almacén Principal La Victoria"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2 text-white outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-300 font-bold mb-1">Tiempo de Entrega</label>
+                    <input
+                      type="text"
+                      value={poExpectedDate}
+                      onChange={(e) => setPoExpectedDate(e.target.value)}
+                      placeholder="Inmediata / 24-48 horas"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2 text-white outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] text-slate-300 font-bold mb-1">Condición de Pago</label>
+                    <input
+                      type="text"
+                      value={poPaymentTerms}
+                      onChange={(e) => setPoPaymentTerms(e.target.value)}
+                      placeholder="Contado / Transferencia"
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2 text-white outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Búsqueda y Selección de Productos */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-3">
+                
+                {/* Columna Izquierda: Catálogo para agregar */}
+                <div className="lg:col-span-5 bg-slate-950 p-3 rounded-2xl border border-slate-800 flex flex-col h-[280px]">
+                  <span className="font-bold text-slate-300 text-xs mb-2 block">🔍 Buscar y Agregar Productos:</span>
+                  <div className="relative mb-2">
+                    <Search className="absolute left-2.5 top-2.5 text-slate-400" size={14} />
+                    <input
+                      type="text"
+                      value={poSearch}
+                      onChange={(e) => setPoSearch(e.target.value)}
+                      placeholder="Buscar por nombre o SKU..."
+                      className="w-full pl-8 pr-3 py-1.5 bg-slate-900 border border-slate-700 rounded-xl text-white outline-none text-xs focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div className="overflow-y-auto flex-1 space-y-1.5 pr-1">
+                    {products
+                      .filter(p => {
+                        if (!poSearch) return true;
+                        const s = poSearch.toLowerCase();
+                        return p.name.toLowerCase().includes(s) || (p.sku && p.sku.toLowerCase().includes(s));
+                      })
+                      .slice(0, 30)
+                      .map(prod => {
+                        const unitCost = prod.costPrice && prod.costPrice > 0 ? prod.costPrice : (prod.unitPrice * 0.88);
+                        const isAdded = poItems.some(i => i.product.id === prod.id);
+                        return (
+                          <div 
+                            key={prod.id} 
+                            onClick={() => handleAddProductToPO(prod)}
+                            className={`p-2 rounded-xl border flex items-center justify-between cursor-pointer transition-all ${
+                              isAdded 
+                                ? 'bg-blue-950/40 border-blue-700/60 text-blue-200' 
+                                : 'bg-slate-900 border-slate-800 text-slate-300 hover:border-slate-600 hover:bg-slate-850'
+                            }`}
+                          >
+                            <div className="min-w-0 pr-2">
+                              <p className="font-semibold text-xs truncate">{prod.name}</p>
+                              <p className="text-[10px] text-slate-400 font-mono">
+                                SKU: {prod.sku || 'N/A'} | Costo: <span className="text-blue-400 font-bold">${unitCost.toFixed(2)}</span>
+                              </p>
+                            </div>
+                            <button
+                              type="button"
+                              className="px-2 py-1 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-bold text-[10px] shrink-0"
+                            >
+                              {isAdded ? '➕ +' : '➕ Pedir'}
+                            </button>
+                          </div>
+                        );
+                      })}
+                  </div>
+                </div>
+
+                {/* Columna Derecha: Renglones en la Orden de Compra */}
+                <div className="lg:col-span-7 bg-slate-950 p-3 rounded-2xl border border-slate-800 flex flex-col h-[280px]">
+                  <div className="flex justify-between items-center mb-2">
+                    <span className="font-bold text-blue-400 text-xs">
+                      📋 Renglones a Solicitar ({poItems.length}):
+                    </span>
+                    {poItems.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setPoItems([])}
+                        className="text-[10px] text-red-400 hover:underline font-bold"
+                      >
+                        Vaciar lista
+                      </button>
+                    )}
+                  </div>
+
+                  {poItems.length === 0 ? (
+                    <div className="flex-1 flex flex-col items-center justify-center text-slate-500 text-xs">
+                      <Truck size={32} className="mb-2 opacity-30" />
+                      <span>Haz clic en los productos a la izquierda para agregarlos a la orden</span>
+                    </div>
+                  ) : (
+                    <div className="overflow-y-auto flex-1 space-y-2 pr-1">
+                      {poItems.map((item, idx) => {
+                        const rowTotal = item.costPrice * item.quantity;
+                        return (
+                          <div key={item.product.id} className="p-2.5 bg-slate-900 border border-slate-800 rounded-xl flex items-center justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <p className="font-bold text-xs truncate text-white">{item.product.name}</p>
+                              <div className="flex items-center gap-3 text-[10px] text-slate-400 mt-1">
+                                <span>SKU: {item.product.sku || 'N/A'}</span>
+                                <div className="flex items-center gap-1">
+                                  <span>Costo: $</span>
+                                  <input
+                                    type="number"
+                                    step="0.01"
+                                    value={item.costPrice}
+                                    onChange={(e) => handleUpdatePOCost(item.product.id, parseFloat(e.target.value) || 0)}
+                                    className="w-16 bg-slate-950 border border-slate-700 rounded px-1 text-blue-400 font-bold text-[10px]"
+                                  />
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Controles de Cantidad */}
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => handleUpdatePOQuantity(item.product.id, item.quantity - 1)}
+                                className="w-6 h-6 bg-slate-800 hover:bg-slate-700 rounded text-slate-300 font-bold flex items-center justify-center text-xs"
+                              >
+                                -
+                              </button>
+                              <input
+                                type="number"
+                                min="1"
+                                value={item.quantity}
+                                onChange={(e) => handleUpdatePOQuantity(item.product.id, parseInt(e.target.value) || 1)}
+                                className="w-12 text-center bg-slate-950 border border-slate-700 rounded text-white font-bold text-xs py-0.5"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleUpdatePOQuantity(item.product.id, item.quantity + 1)}
+                                className="w-6 h-6 bg-slate-800 hover:bg-slate-700 rounded text-slate-300 font-bold flex items-center justify-center text-xs"
+                              >
+                                +
+                              </button>
+                            </div>
+
+                            {/* Subtotal y Eliminar */}
+                            <div className="text-right shrink-0 min-w-[65px]">
+                              <span className="font-extrabold text-xs text-blue-400 block">${rowTotal.toFixed(2)}</span>
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveFromPO(item.product.id)}
+                                className="text-[10px] text-red-400 hover:underline"
+                              >
+                                Quitar
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+              </div>
+
+              {/* Barra de Totales */}
+              {(() => {
+                const totalCostUSD = poItems.reduce((acc, i) => acc + (i.costPrice * i.quantity), 0);
+                const totalCostBS = totalCostUSD * (exchangeRate?.usdToBs || 1);
+                return (
+                  <div className="bg-slate-950 p-3.5 rounded-2xl border border-slate-800 flex justify-between items-center">
+                    <div>
+                      <span className="text-[10px] text-slate-400 uppercase font-bold block">Resumen de Orden</span>
+                      <span className="text-xs font-bold text-slate-300 font-mono">
+                        {poItems.length} renglones | {poItems.reduce((a, b) => a + b.quantity, 0)} unidades en total
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[10px] text-slate-400 uppercase font-bold block">Costo Total de Compra</span>
+                      <div className="text-base font-extrabold font-mono text-blue-400">${totalCostUSD.toFixed(2)} USD</div>
+                      <div className="text-xs font-bold font-mono text-amber-400">Bs. {totalCostBS.toFixed(2)}</div>
+                    </div>
+                  </div>
+                );
+              })()}
+
+            </div>
+
+            {/* Footer Actions */}
+            <div className="pt-3 border-t border-slate-800 shrink-0 space-y-2">
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleExecutePurchaseOrderPDF('view')}
+                  disabled={poGenerating || poItems.length === 0}
+                  className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white rounded-xl text-xs font-extrabold shadow-lg flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-95"
+                >
+                  👁️ {poGenerating ? 'Generando...' : 'Ver / Imprimir Orden (PDF)'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleExecutePurchaseOrderPDF('download')}
+                  disabled={poGenerating || poItems.length === 0}
+                  className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-white rounded-xl text-xs font-extrabold shadow-lg flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-95"
+                >
+                  ⬇️ {poGenerating ? 'Generando...' : 'Descargar PDF'}
+                </button>
+              </div>
+
+              {poSupplierPhone && (
+                <button
+                  type="button"
+                  onClick={() => handleExecutePurchaseOrderPDF('whatsapp')}
+                  disabled={poGenerating || poItems.length === 0}
+                  className="w-full py-2.5 bg-green-600 hover:bg-green-500 disabled:opacity-40 text-white rounded-xl text-xs font-extrabold shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer"
+                >
+                  📲 Enviar al WhatsApp del Proveedor ({poSupplierPhone})
+                </button>
+              )}
+            </div>
+
           </div>
         </div>
       )}
