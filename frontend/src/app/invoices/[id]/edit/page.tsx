@@ -3,7 +3,8 @@ import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import api from '@/lib/api';
 import Link from 'next/link';
-import { ArrowLeft, Save, Building, Calendar, FileText, DollarSign, AlertCircle, User, Percent, Plus, Trash2, Box, Package } from 'lucide-react';
+import { ArrowLeft, Save, Building, Calendar, FileText, DollarSign, AlertCircle, User, CreditCard, Wallet, Percent, Plus, Trash2, Box, Package } from 'lucide-react';
+import ProductAutocomplete from '@/components/ProductAutocomplete';
 
 export default function EditInvoicePage() {
   const router = useRouter();
@@ -146,7 +147,7 @@ export default function EditInvoicePage() {
         try {
             const [resContacts, resProducts] = await Promise.all([
                 api.contacts.getAll({ projectId }),
-                api.products.getAll({ projectId, limit: 100 })
+                api.products.getAll({ projectId, limit: 3000 })
             ]);
             setContacts(resContacts.data.data || []);
             setProducts(resProducts.data.data || []);
@@ -513,27 +514,29 @@ export default function EditInvoicePage() {
                                 </div>
                                 {lines.map((line) => (
                                     <div key={line.id} className="grid grid-cols-12 gap-2 items-start group">
-                                        <div className="col-span-5">
-                                            <select 
-                                                className="w-full p-2 text-sm bg-slate-50 border border-slate-200 rounded-lg outline-none focus:bg-white focus:ring-2 focus:ring-blue-100 transition-all"
+                                        <div className="col-span-5 space-y-1">
+                                            <ProductAutocomplete
+                                                products={products}
                                                 value={line.productId}
-                                                onChange={(e) => updateLine(line.id, 'productId', e.target.value)}
-                                            >
-                                                <option value="">-- Seleccionar --</option>
-                                                {products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-                                                <option value="CUSTOM">Otro / Personalizado</option>
-                                            </select>
-                                            {(!line.productId || line.productId === 'CUSTOM') && (
-                                                <input 
-                                                    className="w-full mt-1 p-1 text-xs border-b border-slate-200 focus:border-blue-500 outline-none bg-transparent placeholder:text-slate-300"
-                                                    placeholder="Descripción..."
-                                                    value={line.name}
-                                                    onChange={(e) => updateLine(line.id, 'name', e.target.value)}
-                                                />
-                                            )}
+                                                customName={line.name}
+                                                onSelect={(prod) => {
+                                                    if (prod) {
+                                                        updateLine(line.id, 'productId', prod.id);
+                                                        updateLine(line.id, 'name', prod.name);
+                                                        updateLine(line.id, 'price', prod.unitPrice || 0);
+                                                    } else {
+                                                        updateLine(line.id, 'productId', 'CUSTOM');
+                                                    }
+                                                }}
+                                                onCustomChange={(custom) => {
+                                                    updateLine(line.id, 'productId', 'CUSTOM');
+                                                    updateLine(line.id, 'name', custom);
+                                                }}
+                                                placeholder="Buscar por nombre, SKU, código..."
+                                            />
                                             <input 
                                                 className="w-full mt-1 p-1 text-[11px] border-b border-dashed border-slate-200 focus:border-blue-300 outline-none bg-transparent text-gray-500 placeholder:text-slate-300"
-                                                placeholder="Anotación/Comentario de línea..."
+                                                placeholder="Anotación / Comentario opcional de línea..."
                                                 value={line.notes || ''}
                                                 onChange={(e) => updateLine(line.id, 'notes', e.target.value)}
                                             />
