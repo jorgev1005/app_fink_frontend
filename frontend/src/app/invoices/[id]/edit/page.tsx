@@ -168,28 +168,46 @@ export default function EditInvoicePage() {
   }, [lines, useItemsMode]);
 
   const addLine = () => {
-    setLines([...lines, { id: Date.now(), productId: '', name: '', quantity: 1, price: 0, total: 0, notes: '' }]);
+    setLines(prev => [...prev, { id: Date.now(), productId: '', name: '', quantity: 1, price: 0, total: 0, notes: '' }]);
   };
 
   const removeLine = (id: number) => {
-      if (lines.length === 1) return;
-      setLines(lines.filter(l => l.id !== id));
+      setLines(prev => {
+          if (prev.length === 1) return prev;
+          return prev.filter(l => l.id !== id);
+      });
   };
 
   const updateLine = (id: number, field: string, value: any) => {
-      setLines(lines.map(line => {
+      setLines(prev => prev.map(line => {
           if (line.id === id) {
               const updated = { ...line, [field]: value };
-              // Auto-fill from product if productId changes
-              if (field === 'productId') {
+              if (field === 'productId' && value !== 'CUSTOM') {
                   const prod = products.find(p => p.id === value);
                   if (prod) {
                       updated.name = prod.name;
                       updated.price = prod.unitPrice || 0;
                   }
               }
-              // Recalculate line total based on new quant/price
-              updated.total = updated.quantity * updated.price;
+              updated.total = (Number(updated.quantity) || 0) * (Number(updated.price) || 0);
+              return updated;
+          }
+          return line;
+      }));
+  };
+
+  const updateLineMultiple = (id: number, values: Record<string, any>) => {
+      setLines(prev => prev.map(line => {
+          if (line.id === id) {
+              const updated = { ...line, ...values };
+              if (values.productId && values.productId !== 'CUSTOM') {
+                  const prod = products.find(p => p.id === values.productId);
+                  if (prod) {
+                      if (values.name === undefined) updated.name = prod.name;
+                      if (values.price === undefined) updated.price = prod.unitPrice || 0;
+                  }
+              }
+              updated.total = (Number(updated.quantity) || 0) * (Number(updated.price) || 0);
               return updated;
           }
           return line;
@@ -521,16 +539,22 @@ export default function EditInvoicePage() {
                                                 customName={line.name}
                                                 onSelect={(prod) => {
                                                     if (prod) {
-                                                        updateLine(line.id, 'productId', prod.id);
-                                                        updateLine(line.id, 'name', prod.name);
-                                                        updateLine(line.id, 'price', prod.unitPrice || 0);
+                                                        updateLineMultiple(line.id, {
+                                                            productId: prod.id,
+                                                            name: prod.name,
+                                                            price: prod.unitPrice || 0
+                                                        });
                                                     } else {
-                                                        updateLine(line.id, 'productId', 'CUSTOM');
+                                                        updateLineMultiple(line.id, {
+                                                            productId: 'CUSTOM'
+                                                        });
                                                     }
                                                 }}
                                                 onCustomChange={(custom) => {
-                                                    updateLine(line.id, 'productId', 'CUSTOM');
-                                                    updateLine(line.id, 'name', custom);
+                                                    updateLineMultiple(line.id, {
+                                                        productId: 'CUSTOM',
+                                                        name: custom
+                                                    });
                                                 }}
                                                 placeholder="Buscar por nombre, SKU, código..."
                                             />
