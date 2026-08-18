@@ -128,6 +128,9 @@ export default function InventoryPage() {
   // Estado para Modal de Orden de Compra (OC) a Proveedores
   const [showPurchaseOrderModal, setShowPurchaseOrderModal] = useState(false);
   const [poGenerating, setGeneratingPO] = useState(false);
+  const [suppliers, setSuppliers] = useState<any[]>([]);
+  const [selectedSupplierId, setSelectedSupplierId] = useState<string>('');
+  const [poProjectId, setPoProjectId] = useState<string>('');
   const [poSupplierName, setPoSupplierName] = useState('SOLO MAYOR');
   const [poSupplierTaxId, setPoSupplierTaxId] = useState('J-12345678-0');
   const [poSupplierPhone, setPoSupplierPhone] = useState('0412-271-1859');
@@ -179,11 +182,21 @@ export default function InventoryPage() {
   useEffect(() => {
     loadProjects();
     loadExchangeRate();
+    loadSuppliers();
   }, []);
 
   useEffect(() => {
     loadProducts();
   }, [selectedProject, search]);
+
+  const loadSuppliers = async () => {
+    try {
+      const res = await api.contacts.getAll();
+      setSuppliers(res.data.data || []);
+    } catch (error) {
+      console.error("Error loading suppliers", error);
+    }
+  };
 
   const loadProjects = async () => {
     try {
@@ -449,7 +462,20 @@ export default function InventoryPage() {
 
   // ── MANEJO DE ORDEN DE COMPRA (PROVEEDORES) ───────────────────
   const openPurchaseOrderModal = () => {
+    setPoProjectId(selectedProject || (projects.length > 0 ? projects[0].id : ''));
     setShowPurchaseOrderModal(true);
+  };
+
+  const handleSelectSupplier = (id: string) => {
+    setSelectedSupplierId(id);
+    if (!id) return;
+    const supp = suppliers.find(s => s.id === id);
+    if (supp) {
+      setPoSupplierName(supp.name);
+      setPoSupplierTaxId(supp.taxId || '');
+      setPoSupplierPhone(supp.phone || '');
+      if (supp.address) setPoDeliveryAddress(supp.address);
+    }
   };
 
   const handleAddProductToPO = (product: Product) => {
@@ -497,7 +523,7 @@ export default function InventoryPage() {
         deliveryAddress: poDeliveryAddress.trim() || undefined,
         expectedDate: poExpectedDate.trim() || undefined,
         paymentTerms: poPaymentTerms.trim() || undefined,
-        projectId: selectedProject || undefined,
+        projectId: poProjectId || selectedProject || undefined,
         tasaOverride: exchangeRate?.usdToBs || undefined,
         notes: poNotes.trim() || undefined,
         items: poItems.map(item => ({
@@ -597,96 +623,29 @@ export default function InventoryPage() {
 
   return (
     <div className="p-6 space-y-6 bg-slate-50 min-h-screen">
-      {/* Header */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <div className="flex items-center gap-4">
-          <button 
-            onClick={() => router.back()}
-            className="p-2 hover:bg-slate-200 rounded-full transition-colors"
-          >
-            <ArrowLeft size={24} className="text-slate-600" />
-          </button>
-          <div>
-            <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-              <Package className="text-blue-600" />
-              Inventario de Productos
-            </h1>
-            <p className="text-slate-500 text-sm">Gestiona tu catálogo de productos y servicios</p>
-          </div>
-        </div>
-        
-        <div className="flex flex-wrap items-center gap-2">
-          <button 
-            onClick={() => setShowPdfModal(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-slate-800 text-white rounded-lg hover:bg-slate-900 transition-colors shadow-sm font-medium"
-            title="Generar e imprimir Lista de Precios en PDF"
-          >
-            <FileText size={18} className="text-emerald-400" />
-            Lista de Precios (PDF)
-          </button>
-          <button 
-            onClick={() => openPurchaseOrderModal()}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-700 text-white rounded-lg hover:bg-blue-800 transition-colors shadow-sm font-medium"
-            title="Emitir Orden de Compra formal a Proveedores"
-          >
-            <Truck size={18} className="text-blue-300" />
-            Orden de Compra (OC)
-          </button>
-          <button 
-            onClick={() => openTransferModal()}
-            className="flex items-center gap-2 px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors shadow-sm font-medium"
-            title="Traspasar inventario entre proyectos"
-          >
-            <ArrowRightLeft size={18} />
-            Traspaso de Almacén
-          </button>
-          <button 
-            onClick={syncBot}
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors shadow-sm font-medium"
-          >
-            <RefreshCw size={18} />
-            Sincronizar Bot
-          </button>
-          <label 
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm font-medium cursor-pointer"
-          >
-            <Upload size={18} />
-            Importar Costos
-            <input 
-              type="file" 
-              accept=".json" 
-              className="hidden" 
-              onChange={handleJsonUpload}
-            />
-          </label>
-          <button 
-            onClick={() => openModal()}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm font-medium"
-          >
-            <Plus size={18} />
-            Nuevo Producto
-          </button>
+      {/* 1. Header (Título) */}
+      <div className="flex items-center gap-4">
+        <button 
+          onClick={() => router.back()}
+          className="p-2 hover:bg-slate-200 rounded-full transition-colors"
+        >
+          <ArrowLeft size={24} className="text-slate-600" />
+        </button>
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+            <Package className="text-blue-600" />
+            Inventario de Productos
+          </h1>
+          <p className="text-slate-500 text-sm">Gestiona tu catálogo de productos y servicios</p>
         </div>
       </div>
 
-
-      {/* Filters */}
-      <div className="bg-white p-4 rounded-xl shadow-sm flex flex-wrap gap-4 items-center">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
-          <input 
-            type="text" 
-            placeholder="Buscar por nombre o SKU..." 
-            className="w-full pl-10 pr-4 py-2 border border-slate-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-
-        <div className="flex items-center gap-2 min-w-[200px]">
-          <Filter size={18} className="text-slate-400" />
+      {/* 2. Filtros de Proyectos y Divisiones */}
+      <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-wrap gap-3 items-center">
+        <div className="flex items-center gap-2 flex-1 min-w-[240px]">
+          <Filter size={18} className="text-slate-400 shrink-0" />
           <select 
-            className="w-full border border-slate-200 rounded-lg py-2 px-3 focus:ring-2 focus:ring-blue-500 outline-none"
+            className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none text-xs font-semibold text-slate-700 transition-all"
             value={selectedProject}
             onChange={(e) => setSelectedProject(e.target.value)}
           >
@@ -697,10 +656,10 @@ export default function InventoryPage() {
           </select>
         </div>
 
-        <div className="flex items-center gap-2 min-w-[200px]">
-          <Filter size={18} className="text-slate-400" />
+        <div className="flex items-center gap-2 flex-1 min-w-[240px]">
+          <Filter size={18} className="text-slate-400 shrink-0" />
           <select 
-            className="w-full border border-slate-200 rounded-lg py-2 px-3 focus:ring-2 focus:ring-blue-500 outline-none"
+            className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none text-xs font-semibold text-slate-700 transition-all"
             value={selectedDivision}
             onChange={(e) => setSelectedDivision(e.target.value)}
           >
@@ -709,6 +668,79 @@ export default function InventoryPage() {
               <option key={div} value={div}>{div}</option>
             ))}
           </select>
+        </div>
+      </div>
+
+      {/* 3. Botones de Acción */}
+      <div className="flex flex-wrap items-center gap-2.5">
+        <button 
+          onClick={() => setShowPdfModal(true)}
+          className="flex items-center gap-2 px-4 py-2.5 bg-slate-800 text-white rounded-xl hover:bg-slate-900 transition-all shadow-sm font-semibold text-xs cursor-pointer"
+          title="Generar e imprimir Lista de Precios en PDF"
+        >
+          <FileText size={16} className="text-emerald-400" />
+          Lista de Precios (PDF)
+        </button>
+
+        <button 
+          onClick={() => openPurchaseOrderModal()}
+          className="flex items-center gap-2 px-4 py-2.5 bg-blue-700 text-white rounded-xl hover:bg-blue-800 transition-all shadow-sm font-semibold text-xs cursor-pointer"
+          title="Emitir Orden de Compra formal a Proveedores"
+        >
+          <Truck size={16} className="text-blue-300" />
+          Orden de Compra (OC)
+        </button>
+
+        <button 
+          onClick={() => openTransferModal()}
+          className="flex items-center gap-2 px-4 py-2.5 bg-amber-600 text-white rounded-xl hover:bg-amber-700 transition-all shadow-sm font-semibold text-xs cursor-pointer"
+          title="Traspasar inventario entre proyectos"
+        >
+          <ArrowRightLeft size={16} />
+          Traspaso de Almacén
+        </button>
+
+        <button 
+          onClick={syncBot}
+          className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-all shadow-sm font-semibold text-xs cursor-pointer"
+        >
+          <RefreshCw size={16} />
+          Sincronizar Bot
+        </button>
+
+        <label 
+          className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-all shadow-sm font-semibold text-xs cursor-pointer"
+        >
+          <Upload size={16} />
+          Importar Costos
+          <input 
+            type="file" 
+            accept=".json" 
+            className="hidden" 
+            onChange={handleJsonUpload}
+          />
+        </label>
+
+        <button 
+          onClick={() => openModal()}
+          className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-all shadow-sm font-semibold text-xs cursor-pointer"
+        >
+          <Plus size={16} />
+          Nuevo Producto
+        </button>
+      </div>
+
+      {/* 4. Buscador de Productos */}
+      <div className="bg-white p-3 rounded-2xl border border-slate-200/80 shadow-xs">
+        <div className="relative">
+          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
+          <input 
+            type="text" 
+            placeholder="Buscar por nombre o SKU..." 
+            className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white focus:border-transparent outline-none transition-all text-xs font-semibold text-slate-800 placeholder:text-slate-400"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
         </div>
       </div>
 
@@ -1675,7 +1707,43 @@ export default function InventoryPage() {
                   <Truck size={14} /> 🏢 Datos del Proveedor y Condiciones de Entrega:
                 </span>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+                {/* Selectores desde Maestro de Proveedores y Proyecto */}
+                <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
+                  <div className="sm:col-span-7">
+                    <label className="block text-[10px] text-blue-300 font-bold mb-1">
+                      🏢 Proveedor desde el Maestro de Contactos:
+                    </label>
+                    <select
+                      value={selectedSupplierId}
+                      onChange={(e) => handleSelectSupplier(e.target.value)}
+                      className="w-full bg-slate-900 border border-blue-500/60 rounded-xl p-2 text-white font-semibold text-xs outline-none focus:ring-2 focus:ring-blue-400"
+                    >
+                      <option value="">-- Seleccionar Proveedor del Maestro o escribir manual --</option>
+                      {suppliers.map(s => (
+                        <option key={s.id} value={s.id}>
+                          {s.name} {s.taxId ? `(${s.taxId})` : ''} {s.phone ? `- Tel: ${s.phone}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="sm:col-span-5">
+                    <label className="block text-[10px] text-slate-300 font-bold mb-1">
+                      📁 Proyecto Asignado a la Orden:
+                    </label>
+                    <select
+                      value={poProjectId}
+                      onChange={(e) => setPoProjectId(e.target.value)}
+                      className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2 text-white font-semibold text-xs outline-none focus:ring-2 focus:ring-blue-500"
+                    >
+                      <option value="">Seleccione Proyecto...</option>
+                      {projects.map(p => (
+                        <option key={p.id} value={p.id}>{p.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
                   <div>
                     <label className="block text-[10px] text-slate-300 font-bold mb-1">Proveedor / Razón Social *</label>
                     <input
