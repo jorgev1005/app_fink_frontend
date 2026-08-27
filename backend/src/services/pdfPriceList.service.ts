@@ -12,6 +12,7 @@ export interface ProductForPDF {
     medidas?: string;
     medidasEmpaque?: string;
     pedidoMinimo?: string;
+    descuentoDivisasValor?: number;
 }
 
 export interface PriceListPDFOptions {
@@ -207,12 +208,25 @@ export async function generatePriceListPDFBuffer(options: PriceListPDFOptions): 
                 if (prodIdx % 2 === 0) doc.rect(LEFT, y, W, rowH).fill(LGRAY);
                 else doc.rect(LEFT, y, W, rowH).fill('white');
 
-                // Cálculo estricto de ambos precios:
-                // 1. Precio de Contado en Moneda Extranjera (Efectivo/Zelle/Binance) -> unitPrice
-                // 2. Precio de Lista Oficial para pagos en Bolívares (Tasa BCV) -> priceList
+                // Cálculo estricto y garantizado de ambos precios:
+                // Regla de Negocio Grupo Aludra: 
+                // 1. P. BCV ($) SIEMPRE es el precio más alto (empleado para liquidar en Bolívares a tasa oficial BCV).
+                // 2. P. DIVISAS ($) SIEMPRE es el precio más bajo (con descuento de contado en Efectivo USD / Zelle / Binance).
                 const factor = 1 + (adjustmentPercentage / 100);
-                const precioDivisas = prod.unitPrice * factor;
-                const precioBcvUsd = (prod.priceList && prod.priceList > 0 ? prod.priceList : prod.unitPrice) * factor;
+
+                const rawPriceA = Number(prod.unitPrice) || 0;
+                const rawPriceB = (prod.priceList && Number(prod.priceList) > 0) ? Number(prod.priceList) : rawPriceA;
+
+                let baseBcv = Math.max(rawPriceA, rawPriceB);
+                let baseDivisas = Math.min(rawPriceA, rawPriceB);
+
+                // Si ambos precios son idénticos y tiene un porcentaje de descuento en divisas configurado
+                if (baseBcv === baseDivisas && prod.descuentoDivisasValor && prod.descuentoDivisasValor > 0) {
+                    baseDivisas = Number((baseBcv * (1 - (prod.descuentoDivisasValor / 100))).toFixed(2));
+                }
+
+                const precioBcvUsd = baseBcv * factor;
+                const precioDivisas = baseDivisas * factor;
                 const totalBs = precioBcvUsd * tasaBCV;
 
                 const pBsFormatted = totalBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -232,7 +246,7 @@ export async function generatePriceListPDFBuffer(options: PriceListPDFOptions): 
                     doc.text(extraTextStr, cols.nombre + 3, extraY, { width: colWidths.nombre, lineBreak: false });
                 }
 
-                // Precios en columnas separadas (Precio 1 BCV a la izquierda, Precio 2 Divisas al centro)
+                // Precios en columnas separadas (P. BCV más alto a la izquierda, P. Divisas más bajo al centro)
                 doc.fontSize(7.5).fillColor(DARK).font('Helvetica');
                 doc.text(`$${precioBcvUsd.toFixed(2)}`, cols.pBcvUsd, middleY, { width: colWidths.pBcvUsd, align: 'right', lineBreak: false });
                 doc.text(`$${precioDivisas.toFixed(2)}`, cols.pDivisas, middleY, { width: colWidths.pDivisas, align: 'right', lineBreak: false });

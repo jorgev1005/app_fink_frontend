@@ -569,6 +569,8 @@ export const exportPriceListPDF = async (req: Request, res: Response) => {
         division: p.division || undefined,
         unit: p.unit || undefined,
         empaqueCantidad: p.empaqueCantidad || undefined,
+        medidas: p.medidas || undefined,
+        descuentoDivisasValor: p.descuentoDivisasValor || undefined,
       })),
       tasaBCV,
       tasaParalelo,

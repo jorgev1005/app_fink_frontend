@@ -157,14 +157,22 @@ export async function generateQuotationPDFBuffer(options: QuotationPDFOptions): 
 
         // ── 3. BANNER DE FLETE Y CONDICIONES DE DESTINO ──────────
         y += 48;
-        if (destinationCity && destinationCity !== 'RETIRO') {
+        const isPickup = !destinationCity || 
+            destinationCity.toUpperCase().includes('RETIRO') || 
+            destinationCity.toUpperCase().includes('GALPON') || 
+            destinationCity.toUpperCase().includes('GALPÓN') || 
+            destinationCity.toUpperCase().includes('PLANTA') || 
+            destinationCity.toUpperCase().includes('TIENDA') ||
+            destinationCity.toUpperCase().includes('MOSTRADOR');
+
+        if (!isPickup && destinationCity) {
             doc.rect(LEFT, y, W, 20).fill(isFreeFreight ? '#ecfdf5' : '#fffbeb');
             doc.rect(LEFT, y, 3, 20).fill(isFreeFreight ? GREEN : '#f59e0b');
             
             doc.fontSize(7.5).fillColor(isFreeFreight ? '#065f46' : '#92400e').font('Helvetica-Bold');
             const cityText = isFreeFreight 
-                ? `🚚 CONDICIÓN DE DESPACHO: ¡FLETE 100% INCLUIDO Y BONIFICADO HASTA ${destinationCity.toUpperCase()}! (Sin costo de envío)`
-                : `🚚 CONDICIÓN DE DESPACHO: Entrega en ${destinationCity.toUpperCase()} (Envío Gratuito disponible a partir de $${(minOrderForFreeFreight || 1000).toFixed(2)} USD)`;
+                ? `CONDICIÓN DE DESPACHO: ¡FLETE 100% INCLUIDO Y BONIFICADO HASTA ${destinationCity.toUpperCase()}! (Sin costo de envío)`
+                : `CONDICIÓN DE DESPACHO: Entrega en ${destinationCity.toUpperCase()} (Envío Gratuito disponible a partir de $${(minOrderForFreeFreight || 1000).toFixed(2)} USD)`;
             doc.text(cityText, LEFT + 10, y + 5, { width: W - 20, lineBreak: false });
             y += 24;
         }
@@ -218,8 +226,18 @@ export async function generateQuotationPDFBuffer(options: QuotationPDFOptions): 
 
         items.forEach((item, itemIdx) => {
             const qty = item.quantity || 1;
-            const puDivisas = (item.unitPrice || 0) * freightFactor;
-            const puBcvUsd = (item.priceList && item.priceList > 0 ? item.priceList : item.unitPrice) * freightFactor;
+            const rawA = Number(item.unitPrice) || 0;
+            const rawB = (item.priceList && Number(item.priceList) > 0) ? Number(item.priceList) : rawA;
+
+            let baseBcv = Math.max(rawA, rawB);
+            let baseDivisas = Math.min(rawA, rawB);
+
+            if (baseBcv === baseDivisas && item.discountPercent && item.discountPercent > 0) {
+                baseDivisas = Number((baseBcv * (1 - (item.discountPercent / 100))).toFixed(2));
+            }
+
+            const puBcvUsd = baseBcv * freightFactor;
+            const puDivisas = baseDivisas * freightFactor;
 
             const lineTotDivisas = puDivisas * qty;
             const lineTotBcvUsd = puBcvUsd * qty;
@@ -327,7 +345,7 @@ export async function generateQuotationPDFBuffer(options: QuotationPDFOptions): 
         doc.rect(LEFT, totY, bankW, 58).strokeColor('#cbd5e1').lineWidth(0.5).stroke();
         
         doc.fontSize(7.5).fillColor(DARK).font('Helvetica-Bold')
-           .text('💳 Cuentas Bancarias / Métodos de Pago:', LEFT + 10, totY + 6, { lineBreak: false });
+           .text('Cuentas Bancarias / Métodos de Pago:', LEFT + 10, totY + 6, { lineBreak: false });
 
         doc.fontSize(6.5).fillColor(GRAY).font('Helvetica')
            .text('• Bolívares: Banesco Pago Móvil / Transferencia (J-40500250-6 | 0134 | 0412-271-1859)', LEFT + 10, totY + 18, { width: bankW - 15, lineBreak: false })
