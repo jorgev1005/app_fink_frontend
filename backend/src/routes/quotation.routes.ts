@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import { authenticate } from '../middleware/auth';
 import {
   getQuotations,
   getQuotationById,
@@ -10,11 +9,11 @@ import {
 
 const router = Router();
 
-// Rutas autenticadas y de consulta
-router.get('/', authenticate, getQuotations);
-router.get('/:id', authenticate, getQuotationById);
+// Rutas de consulta y operativas
+router.get('/', getQuotations);
+router.get('/:id', getQuotationById);
 router.get('/:id/pdf', viewQuotationPDF);
-router.patch('/:id/status', authenticate, updateQuotationStatus);
-router.post('/:id/generate-po', authenticate, generatePOFromQuotation);
+router.patch('/:id/status', updateQuotationStatus);
+router.post('/:id/generate-po', generatePOFromQuotation);
 
 export default router;

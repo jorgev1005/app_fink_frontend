@@ -8,9 +8,15 @@ import { generateQuotationPDFBuffer } from '../services/quotationPdf.service';
 function getHistoryPaths(): string[] {
   const root = process.cwd();
   return [
+    path.join(root, 'data', 'cotizaciones_historial.json'),
+    path.join(root, 'uploads', 'cotizaciones_historial.json'),
+    path.join(root, '..', 'data', 'cotizaciones_historial.json'),
     path.join(root, '..', '..', 'asistente', 'cotizaciones_historial.json'),
     path.join(root, '..', '..', 'pagina web de tools', 'catalogo_aludra', 'src', 'data', 'cotizaciones_historial.json'),
-    path.join(root, 'uploads', 'cotizaciones_historial.json')
+    path.join('/home/fink', 'cotizaciones_historial.json'),
+    path.join('/home/fink/app_fink', 'cotizaciones_historial.json'),
+    path.join('/home/fink/app_fink/backend/data', 'cotizaciones_historial.json'),
+    path.join('/home/fink/asistente', 'cotizaciones_historial.json')
   ];
 }
 
@@ -22,9 +28,11 @@ function loadAllQuotes(): any[] {
         const raw = fs.readFileSync(p, 'utf8');
         const data = JSON.parse(raw);
         if (Array.isArray(data)) {
-          return data;
+          return data.filter(item => item && typeof item === 'object');
         }
-      } catch (_) {}
+      } catch (err) {
+        console.warn('Error reading quote file from ' + p, err);
+      }
     }
   }
   return [];
@@ -38,7 +46,7 @@ function saveAllQuotes(quotes: any[]): void {
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
       fs.writeFileSync(filePath, JSON.stringify(quotes, null, 2), 'utf8');
     } catch (e) {
-      console.warn('Could not save quotes to ' + filePath + ':', e);
+      // Ignored for non-writable paths
     }
   });
 }
@@ -49,12 +57,14 @@ export const getQuotations = async (req: Request, res: Response) => {
     const { status, channel, search, limit = '100', offset = '0' } = req.query;
     let quotes = loadAllQuotes();
 
-    // Normalizar status si viene ausente
-    quotes = quotes.map(q => ({
-      ...q,
-      status: q.status || 'PENDING',
-      channel: q.channel || (q.correlative?.startsWith('COT-') ? 'CATALOGO_WEB' : 'FINK_POS'),
-    }));
+    // Normalizar status si viene ausente y filtrar elementos nulos
+    quotes = quotes
+      .filter(q => q && typeof q === 'object')
+      .map(q => ({
+        ...q,
+        status: q.status || 'PENDING',
+        channel: q.channel || (q.correlative?.startsWith('COT-') ? 'CATALOGO_WEB' : 'FINK_POS'),
+      }));
 
     if (status && status !== 'ALL') {
       quotes = quotes.filter(q => q.status === status);

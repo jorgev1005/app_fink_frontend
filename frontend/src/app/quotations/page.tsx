@@ -137,9 +137,13 @@ export default function QuotationsPage() {
         if (res.data.stats) {
           setStats(res.data.stats);
         }
+      } else if (Array.isArray(res.data)) {
+        setQuotations(res.data);
       }
     } catch (err: any) {
-      toast.error('Error al cargar cotizaciones');
+      console.error('Error al cargar cotizaciones:', err);
+      const msg = err.response?.data?.error?.message || err.message || 'Error al cargar cotizaciones';
+      toast.error(msg);
     } finally {
       setLoading(false);
     }

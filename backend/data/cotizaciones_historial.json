@@ -1,0 +1,267 @@
+[
+  {
+    "id": "COT-20260825-2166",
+    "correlative": "COT-20260825-2166",
+    "createdAt": "2026-08-26T00:26:42.926Z",
+    "channel": "CATALOGO_WEB",
+    "customer": {
+      "name": "carlos mario",
+      "taxId": "J-45564543",
+      "phone": "04144924702",
+      "email": "jorge.verenzuela@gmail.com",
+      "city": "Valencia / Guacara / Naguanagua (Carabobo)",
+      "seller": "Andres carillo",
+      "gpsCoordinates": "10.304702, -67.321480",
+      "gpsMapsUrl": "https://maps.google.com/?q=10.304702,-67.321480",
+      "emissionPlace": "Ubicación GPS: 10.304702, -67.321480"
+    },
+    "paymentMethod": "bcv_bs",
+    "rates": {
+      "bcv": 785.0693,
+      "paralelo": 929.8,
+      "eur": 916.03
+    },
+    "items": [
+      {
+        "sku": "LUC-ALU-MAR-NEG-002",
+        "name": "cajas apilables medianas negra",
+        "quantity": 110,
+        "unit": "UNIDAD",
+        "unitPriceUSD": 2.0124999999999997,
+        "unitPriceBs": 1579.9519662499997,
+        "subtotalUSD": 221.37499999999997,
+        "subtotalBs": 173794.71628749996,
+        "medidas": "26 x 14 x 12,5 cm"
+      },
+      {
+        "sku": "LUC-ALU-MAR-NEG-001",
+        "name": "cajas apilables pequeñas negras",
+        "quantity": 100,
+        "unit": "UNIDAD",
+        "unitPriceUSD": 1.4375,
+        "unitPriceBs": 1128.53711875,
+        "subtotalUSD": 143.75,
+        "subtotalBs": 112853.711875,
+        "medidas": "18,5 x 11 x 7,5 cm"
+      },
+      {
+        "sku": "LUC-DEM-ERN-GOM-002",
+        "name": "Cono vial con base de goma",
+        "quantity": 6,
+        "unit": "UNIDAD",
+        "unitPriceUSD": 51.016875,
+        "unitPriceBs": 40051.7823444375,
+        "subtotalUSD": 306.10125,
+        "subtotalBs": 240310.694066625,
+        "medidas": "Medidas estándar"
+      },
+      {
+        "sku": "LUC-FER-MAR-AZU-004",
+        "name": "caja apilable mediana azul",
+        "quantity": 60,
+        "unit": "UNIDAD",
+        "unitPriceUSD": 1.6099999999999999,
+        "unitPriceBs": 1263.9615729999998,
+        "subtotalUSD": 96.6,
+        "subtotalBs": 75837.69438,
+        "medidas": "26 x 14 x 12,5 cm"
+      },
+      {
+        "sku": "LUC-FER-MAR-AZU-002",
+        "name": "caja apilable grande reducida azul",
+        "quantity": 50,
+        "unit": "UNIDAD",
+        "unitPriceUSD": 2.875,
+        "unitPriceBs": 2257.0742375,
+        "subtotalUSD": 143.75,
+        "subtotalBs": 112853.711875,
+        "medidas": "30,5 x 20 x 15 cm"
+      },
+      {
+        "sku": "LUC-FER-MAR-ROJ-004",
+        "name": "caja apilable pequeña roja",
+        "quantity": 80,
+        "unit": "UNIDAD",
+        "unitPriceUSD": 1.4375,
+        "unitPriceBs": 1128.53711875,
+        "subtotalUSD": 115,
+        "subtotalBs": 90282.9695,
+        "medidas": "18,5 x 11 x 7,5 cm"
+      },
+      {
+        "sku": "FER-SOL-POL-TUB-0323",
+        "name": "TUBERIA AGUA BLANCA POLIETILENO COLOR AZUL 1\" X 3 METROS (ROSCADA)",
+        "quantity": 27,
+        "unit": "UNIDAD",
+        "unitPriceUSD": 11.246999999999998,
+        "unitPriceBs": 8829.6744171,
+        "subtotalUSD": 303.6689999999999,
+        "subtotalBs": 238401.20926169993,
+        "medidas": ""
+      }
+    ],
+    "totalUSD": 1330.2452499999997,
+    "totalBs": 1044334.7072458247,
+    "notes": "entrega de 8 a 12 de la mañana"
+  },
+  {
+    "id": "COT-20260825-9160",
+    "correlative": "COT-20260825-9160",
+    "createdAt": "2026-08-25T23:11:54.663Z",
+    "channel": "CATALOGO_WEB",
+    "customer": {
+      "name": "jose manuel",
+      "taxId": "J-455543322",
+      "phone": "04144924702",
+      "email": "jorge.verenzuela@gmail.com",
+      "city": "La Victoria, Aragua (Sede Principal)",
+      "seller": "Oficina",
+      "gpsCoordinates": "10.304702, -67.321480",
+      "gpsMapsUrl": "https://maps.google.com/?q=10.304702,-67.321480",
+      "emissionPlace": "GPS: 10.304702, -67.321480"
+    },
+    "paymentMethod": "bcv_bs",
+    "rates": {
+      "bcv": 785.0693,
+      "paralelo": 929.8,
+      "eur": 916.03
+    },
+    "items": [
+      {
+        "sku": "LUC-CAR-RAF-H1-004",
+        "name": "Caja de carton de premiación H1",
+        "quantity": 200,
+        "unit": "UNIDAD",
+        "unitPriceUSD": 0.84,
+        "unitPriceBs": 659.458212,
+        "subtotalUSD": 168,
+        "subtotalBs": 131891.6424,
+        "medidas": "H1"
+      },
+      {
+        "sku": "LUC-CAR-RAF-H2-005",
+        "name": "Caja de carton de premiación H2",
+        "quantity": 200,
+        "unit": "UNIDAD",
+        "unitPriceUSD": 0.84,
+        "unitPriceBs": 659.458212,
+        "subtotalUSD": 168,
+        "subtotalBs": 131891.6424,
+        "medidas": "H2"
+      },
+      {
+        "sku": "LUC-CAR-RAF-H21-006",
+        "name": "Caja de carton de premiación H2 1/2",
+        "quantity": 200,
+        "unit": "UNIDAD",
+        "unitPriceUSD": 0.96,
+        "unitPriceBs": 753.666528,
+        "subtotalUSD": 192,
+        "subtotalBs": 150733.3056,
+        "medidas": "H2 1/2"
+      },
+      {
+        "sku": "LUC-CAR-RAF-H3-007",
+        "name": "Caja de carton de premiación H3",
+        "quantity": 200,
+        "unit": "UNIDAD",
+        "unitPriceUSD": 1.04,
+        "unitPriceBs": 816.472072,
+        "subtotalUSD": 208,
+        "subtotalBs": 163294.4144,
+        "medidas": "H3"
+      },
+      {
+        "sku": "LUC-CAR-RAF-H4-008",
+        "name": "Caja de carton de premiación H4",
+        "quantity": 150,
+        "unit": "UNIDAD",
+        "unitPriceUSD": 1.38,
+        "unitPriceBs": 1083.395634,
+        "subtotalUSD": 207,
+        "subtotalBs": 162509.3451,
+        "medidas": "H4"
+      },
+      {
+        "sku": "LUC-CAR-RAF-H5-009",
+        "name": "Caja de carton de premiación H5",
+        "quantity": 150,
+        "unit": "UNIDAD",
+        "unitPriceUSD": 1.5,
+        "unitPriceBs": 1177.60395,
+        "subtotalUSD": 225,
+        "subtotalBs": 176640.5925,
+        "medidas": "H5"
+      },
+      {
+        "sku": "LUC-CAR-RAF-H1T-010",
+        "name": "Troquel doble para cajas H1",
+        "quantity": 1,
+        "unit": "UNIDAD",
+        "unitPriceUSD": 100,
+        "unitPriceBs": 78506.93,
+        "subtotalUSD": 100,
+        "subtotalBs": 78506.93,
+        "medidas": "H1"
+      },
+      {
+        "sku": "LUC-CAR-RAF-H2T-011",
+        "name": "Troquel doble para cajas H2",
+        "quantity": 1,
+        "unit": "UNIDAD",
+        "unitPriceUSD": 100,
+        "unitPriceBs": 78506.93,
+        "subtotalUSD": 100,
+        "subtotalBs": 78506.93,
+        "medidas": "H2"
+      },
+      {
+        "sku": "LUC-CAR-RAF-HXT-012",
+        "name": "Troquel doble para cajas H2 1/2",
+        "quantity": 1,
+        "unit": "UNIDAD",
+        "unitPriceUSD": 100,
+        "unitPriceBs": 78506.93,
+        "subtotalUSD": 100,
+        "subtotalBs": 78506.93,
+        "medidas": "H2 1/2"
+      },
+      {
+        "sku": "LUC-CAR-RAF-H3T-013",
+        "name": "Troquel doble para cajas H3",
+        "quantity": 1,
+        "unit": "UNIDAD",
+        "unitPriceUSD": 100,
+        "unitPriceBs": 78506.93,
+        "subtotalUSD": 100,
+        "subtotalBs": 78506.93,
+        "medidas": "H3"
+      },
+      {
+        "sku": "LUC-CAR-RAF-H4T-014",
+        "name": "Troquel doble para cajas H4",
+        "quantity": 1,
+        "unit": "UNIDAD",
+        "unitPriceUSD": 100,
+        "unitPriceBs": 78506.93,
+        "subtotalUSD": 100,
+        "subtotalBs": 78506.93,
+        "medidas": "H4"
+      },
+      {
+        "sku": "LUC-CAR-RAF-H5T-015",
+        "name": "Troquel doble para cajas H5",
+        "quantity": 1,
+        "unit": "UNIDAD",
+        "unitPriceUSD": 100,
+        "unitPriceBs": 78506.93,
+        "subtotalUSD": 100,
+        "subtotalBs": 78506.93,
+        "medidas": "H5"
+      }
+    ],
+    "totalUSD": 1768,
+    "totalBs": 1388002.5224,
+    "notes": "entregado en el galpon"
+  }
+]
