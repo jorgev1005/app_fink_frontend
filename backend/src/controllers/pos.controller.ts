@@ -640,6 +640,61 @@ export const exportQuotationPDF = async (req: Request, res: Response) => {
       notes
     });
 
+    // Save to persistent quote history
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const asisQuotesPath = path.join(process.cwd(), '..', '..', 'asistente', 'cotizaciones_historial.json');
+      const catalogQuotesPath = path.join(process.cwd(), '..', '..', 'pagina web de tools', 'catalogo_aludra', 'src', 'data', 'cotizaciones_historial.json');
+      
+      const totalUSD = items.reduce((acc: number, it: any) => acc + (parseFloat(it.unitPrice || 0) * parseFloat(it.quantity || 1)), 0);
+      const quoteRecord = {
+        id: quotationNumber,
+        correlative: quotationNumber,
+        createdAt: new Date().toISOString(),
+        channel: 'FINK_POS',
+        customer: {
+          name: clientName,
+          taxId: clientTaxId || '',
+          phone: clientPhone || '',
+          email: clientEmail || '',
+          city: destinationCity || 'Retiro en Galpón (La Victoria)',
+          seller: req.user ? `${(req.user as any).firstName || ''} ${(req.user as any).lastName || ''}`.trim() : 'Oficina'
+        },
+        rates: { bcv: tasaBCV, paralelo: tasaParalelo, eur: tasaEUR },
+        items: items.map((it: any) => ({
+          sku: it.sku || 'N/A',
+          name: it.name,
+          quantity: it.quantity,
+          unitPriceUSD: it.unitPrice,
+          subtotalUSD: (parseFloat(it.unitPrice || 0) * parseFloat(it.quantity || 1))
+        })),
+        totalUSD,
+        totalBs: totalUSD * tasaBCV,
+        notes
+      };
+
+      [asisQuotesPath, catalogQuotesPath].forEach(filePath => {
+        try {
+          const dir = path.dirname(filePath);
+          if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+          let list = [];
+          if (fs.existsSync(filePath)) {
+            list = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+          }
+          const existingIdx = list.findIndex((q: any) => q.id === quotationNumber);
+          if (existingIdx >= 0) {
+            list[existingIdx] = quoteRecord;
+          } else {
+            list.unshift(quoteRecord);
+          }
+          fs.writeFileSync(filePath, JSON.stringify(list, null, 2), 'utf8');
+        } catch (_) {}
+      });
+    } catch (err) {
+      console.warn('Error saving POS quote to history:', err);
+    }
+
     const safeClient = clientName.replace(/[^a-zA-Z0-9]/g, '_');
     const filename = `${quotationNumber}_${safeClient}.pdf`;
     res.setHeader('Content-Type', 'application/pdf');

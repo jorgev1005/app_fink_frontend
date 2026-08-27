@@ -2,7 +2,7 @@
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useEffect, useState, useRef, useCallback } from "react";
-import { RefreshCw, Calculator, LogOut, Zap, Plus, FileText, Users, BarChart3, Wallet, ArrowRight, Info, ChevronDown, ChevronUp, Layers, Tag, FileClock, Eye, EyeOff, Package, ArrowRightLeft, HardDrive, Banknote, Settings, ShoppingCart } from 'lucide-react';
+import { RefreshCw, Calculator, LogOut, Zap, Plus, FileText, Users, BarChart3, Wallet, ArrowRight, Info, ChevronDown, ChevronUp, Layers, Tag, FileClock, Eye, EyeOff, Package, ArrowRightLeft, HardDrive, Banknote, Settings, ShoppingCart, FileCheck } from 'lucide-react';
 
 import NotificationBell from "@/components/NotificationBell";
 import ExchangeRatesPanel from '@/components/ExchangeRatesPanel';
@@ -774,6 +774,7 @@ export default function DashboardPage() {
             <Zap size={20} className="text-slate-400" /> Accesos Rápidos
           </h2>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-8 gap-4">
+            <QuickAction icon={FileCheck} label="Cotizaciones" path="/quotations" color="blue" />
             <QuickAction icon={Calculator} label="Presupuesto Pagos" path="/payment-budget" color="blue" />
             <QuickAction icon={Users} label="Contactos" path="/contacts" color="cyan" />
             <QuickAction icon={Zap} label="Registro de Operaciones" path="/transactions/quick" color="indigo" />

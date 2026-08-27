@@ -334,6 +334,15 @@ export const cfoAPI = {
   getDetailedReport: (projectId: string) => apiClient.get('/api/cfo/report', { params: { projectId } }),
 };
 
+export const quotationsAPI = {
+  getAll: (params?: any) => apiClient.get('/api/quotations', { params }),
+  getById: (id: string) => apiClient.get(`/api/quotations/${id}`),
+  updateStatus: (id: string, data: { status: string; notes?: string; rejectionReason?: string; orderNumber?: string }) =>
+    apiClient.patch(`/api/quotations/${id}/status`, data),
+  generatePO: (id: string, data: any) =>
+    apiClient.post(`/api/quotations/${id}/generate-po`, data, { responseType: 'blob' }),
+};
+
 const api = {
   auth: authAPI,
   projects: projectsAPI,
@@ -360,6 +369,7 @@ const api = {
   cfo: cfoAPI,
   loans: loansAPI,
   pos: posAPI,
+  quotations: quotationsAPI,
 }
 
 export default api

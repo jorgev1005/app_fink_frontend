@@ -292,8 +292,8 @@ export async function generatePurchaseOrderPDFBuffer(options: PurchaseOrderPDFOp
         doc.rect(LEFT, totY, noteW, 52).fill('#f8fafc');
         doc.rect(LEFT, totY, noteW, 52).strokeColor('#cbd5e1').lineWidth(0.5).stroke();
 
-        doc.fontSize(7).fillColor(DARK).font('Helvetica-Bold')
-           .text('📝 Observaciones e Instrucciones de Despacho:', LEFT + 8, totY + 6, { lineBreak: false });
+        doc.fontSize(7.5).fillColor(DARK).font('Helvetica-Bold')
+           .text('Observaciones e Instrucciones de Despacho:', LEFT + 8, totY + 6, { lineBreak: false });
         doc.fontSize(6.5).fillColor(GRAY).font('Helvetica')
            .text(notes || 'Favor confirmar recepción de la orden y fecha estimada de despacho.', LEFT + 8, totY + 18, { width: noteW - 15, lineBreak: false })
            .text(`Total Unidades Solicitadas: ${totalItemsCount} unidades en ${items.length} renglones.`, LEFT + 8, totY + 36, { lineBreak: false });

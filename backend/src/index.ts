@@ -34,6 +34,7 @@ import settingsRoutes from './routes/settings.routes';
 import transactionTemplateRoutes from './routes/transaction-template.routes';
 import backupRoutes from './routes/backup.routes';
 import publicRoutes from './routes/public.routes';
+import quotationRoutes from './routes/quotation.routes';
 
 // Middlewares
 import { errorHandler } from './middleware/errorHandler';
@@ -131,6 +132,7 @@ import auditRoutes from './routes/audit.routes';
 import posRoutes from './routes/pos.routes';
 app.use('/api/recurring', recurringRoutes);
 app.use('/api/pos', posRoutes);
+app.use('/api/quotations', quotationRoutes);
 app.use('/api', auditRoutes);
 
 app.use('/api/entries', entryRoutes);
