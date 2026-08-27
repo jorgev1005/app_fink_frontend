@@ -85,9 +85,9 @@ export async function generateQuotationPDFBuffer(options: QuotationPDFOptions): 
         });
 
         const buffers: Buffer[] = [];
-        doc.on('data', (chunk) => buffers.push(chunk));
+        doc.on('data', (chunk: any) => buffers.push(chunk));
         doc.on('end', () => resolve({ buffer: Buffer.concat(buffers), quotationNumber }));
-        doc.on('error', (err) => reject(err));
+        doc.on('error', (err: any) => reject(err));
 
         const GREEN  = '#10b981';
         const DARK   = '#1f2937';

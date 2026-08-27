@@ -43,9 +43,9 @@ export async function generatePriceListPDFBuffer(options: PriceListPDFOptions): 
         });
 
         const buffers: Buffer[] = [];
-        doc.on('data', (chunk) => buffers.push(chunk));
+        doc.on('data', (chunk: any) => buffers.push(chunk));
         doc.on('end', () => resolve(Buffer.concat(buffers)));
-        doc.on('error', (err) => reject(err));
+        doc.on('error', (err: any) => reject(err));
 
         const GREEN  = '#10b981';
         const DARK   = '#1f2937';

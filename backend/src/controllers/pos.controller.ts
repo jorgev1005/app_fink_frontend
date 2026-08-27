@@ -172,11 +172,11 @@ export const getSessionSummary = async (req: Request, res: Response) => {
 
     const paymentTotalsByMethod: Record<string, { amountUsd: number; amountBs: number }> = {};
 
-    session.invoices.forEach(inv => {
+    session.invoices.forEach((inv: any) => {
       if (inv.currency === 'USD') totalSalesUsd += inv.total;
       else if (inv.currency === 'BS') totalSalesBs += inv.total;
 
-      inv.payments.forEach(alloc => {
+      inv.payments.forEach((alloc: any) => {
         const p = alloc.payment;
         const methodKey = `${p.method} (${p.currency})`;
         if (!paymentTotalsByMethod[methodKey]) {

@@ -76,9 +76,9 @@ export async function generatePurchaseOrderPDFBuffer(options: PurchaseOrderPDFOp
         });
 
         const buffers: Buffer[] = [];
-        doc.on('data', (chunk) => buffers.push(chunk));
+        doc.on('data', (chunk: any) => buffers.push(chunk));
         doc.on('end', () => resolve({ buffer: Buffer.concat(buffers), orderNumber }));
-        doc.on('error', (err) => reject(err));
+        doc.on('error', (err: any) => reject(err));
 
         const BLUE   = '#2563eb';
         const DARK   = '#0f172a';
