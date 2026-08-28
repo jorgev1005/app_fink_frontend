@@ -133,6 +133,7 @@ import posRoutes from './routes/pos.routes';
 app.use('/api/recurring', recurringRoutes);
 app.use('/api/pos', posRoutes);
 app.use('/api/quotations', quotationRoutes);
+app.use('/api/cotizaciones', quotationRoutes);
 app.use('/api', auditRoutes);
 
 app.use('/api/entries', entryRoutes);
