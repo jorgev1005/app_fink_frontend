@@ -2,11 +2,12 @@ import { Request, Response } from 'express';
 import prisma from '../config/database';
 import OpenAI from 'openai';
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-  // Para pruebas puedes usar baseURL de OpenRouter si no tienes openai directa
-  baseURL: process.env.OPENAI_BASE_URL || "https://openrouter.ai/api/v1"
-});
+const getOpenAIClient = () => {
+  return new OpenAI({
+    apiKey: process.env.OPENAI_API_KEY || 'dummy_api_key',
+    baseURL: process.env.OPENAI_BASE_URL || "https://openrouter.ai/api/v1"
+  });
+};
 
 export const getPublicCatalog = async (req: Request, res: Response) => {
   try {
@@ -199,6 +200,7 @@ export const generateAiDescription = async (req: Request, res: Response) => {
 
     const prompt = `Eres un experto redactor de marketing. Redacta una descripción comercial muy atractiva, persuasiva y concisa (máximo 2 párrafos cortos) para un producto llamado "${productName}" de la categoría "${category || 'General'}". Resalta sus beneficios y usa lenguaje que invite a la compra.`;
 
+    const openai = getOpenAIClient();
     const completion = await openai.chat.completions.create({
       model: "openai/gpt-4o-mini", 
       messages: [{ role: "user", content: prompt }],
