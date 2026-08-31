@@ -51,6 +51,77 @@ function saveAllQuotes(quotes: any[]): void {
   });
 }
 
+// POST /api/quotations — Registra una cotización emitida desde el Catálogo Web o POS
+export const createQuotation = async (req: Request, res: Response) => {
+  try {
+    const body = req.body;
+    if (!body) {
+      return res.status(400).json({ success: false, error: { message: 'Datos de cotización requeridos' } });
+    }
+
+    const quotes = loadAllQuotes();
+    const correlative = body.correlative || body.id || `COT-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}-${Math.floor(1000 + Math.random() * 9000)}`;
+
+    const quoteRecord = {
+      id: correlative,
+      correlative,
+      createdAt: body.createdAt || new Date().toISOString(),
+      channel: body.channel || 'CATALOGO_WEB',
+      customer: {
+        name: body.customer?.name || body.clientName || 'Cliente Particular',
+        taxId: body.customer?.taxId || body.clientTaxId || '',
+        phone: body.customer?.phone || body.clientPhone || '',
+        email: body.customer?.email || body.clientEmail || '',
+        city: body.customer?.city || body.destinationCity || 'La Victoria, Aragua',
+        seller: body.customer?.seller || body.seller || 'Oficina',
+        gpsCoordinates: body.customer?.gpsCoordinates || '',
+        gpsMapsUrl: body.customer?.gpsMapsUrl || '',
+        emissionPlace: body.customer?.emissionPlace || ''
+      },
+      paymentMethod: body.paymentMethod || 'bcv_bs',
+      rates: {
+        bcv: Number(body.rates?.bcv || body.tasaBCV || 785.07),
+        paralelo: Number(body.rates?.paralelo || 929.80),
+        eur: Number(body.rates?.eur || 916.03)
+      },
+      items: Array.isArray(body.items) ? body.items.map((i: any) => ({
+        sku: i.sku || i.product?.sku || 'N/A',
+        name: i.name || i.product?.name || '',
+        quantity: Number(i.quantity || 1),
+        unit: i.unit || i.product?.unit || 'UNIDAD',
+        unitPriceUSD: Number(i.unitPriceUSD || i.unitPrice || 0),
+        unitPriceBs: Number(i.unitPriceBs || (Number(i.unitPriceUSD || i.unitPrice || 0) * Number(body.rates?.bcv || 785.07))),
+        subtotalUSD: Number(i.subtotalUSD || (Number(i.unitPriceUSD || i.unitPrice || 0) * Number(i.quantity || 1))),
+        subtotalBs: Number(i.subtotalBs || (Number(i.subtotalUSD || 0) * Number(body.rates?.bcv || 785.07))),
+        medidas: i.medidas || i.product?.medidas || ''
+      })) : [],
+      totalUSD: Number(body.totalUSD || 0),
+      totalBs: Number(body.totalBs || (Number(body.totalUSD || 0) * Number(body.rates?.bcv || 785.07))),
+      notes: body.notes || '',
+      status: body.status || 'PENDING'
+    };
+
+    const idx = quotes.findIndex((q: any) => q.id === correlative || q.correlative === correlative);
+    if (idx >= 0) {
+      quotes[idx] = { ...quotes[idx], ...quoteRecord };
+    } else {
+      quotes.unshift(quoteRecord);
+    }
+
+    saveAllQuotes(quotes);
+
+    console.log(`[FINK] Cotización registrada exitosamente: ${correlative} para ${quoteRecord.customer.name}`);
+
+    res.status(201).json({
+      success: true,
+      message: 'Cotización guardada exitosamente',
+      data: quoteRecord
+    });
+  } catch (error: any) {
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
 // GET /api/quotations
 export const getQuotations = async (req: Request, res: Response) => {
   try {

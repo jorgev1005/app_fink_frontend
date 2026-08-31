@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
   getQuotations,
   getQuotationById,
+  createQuotation,
   updateQuotationStatus,
   generatePOFromQuotation,
   viewQuotationPDF
@@ -11,6 +12,7 @@ const router = Router();
 
 // Rutas de consulta y operativas
 router.get('/', getQuotations);
+router.post('/', createQuotation);
 router.get('/:id', getQuotationById);
 router.get('/:id/pdf', viewQuotationPDF);
 router.patch('/:id/status', updateQuotationStatus);
