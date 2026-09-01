@@ -178,7 +178,7 @@ export default function InvoicesPage() {
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200 text-sm">
                                 {filtered.map(inv => {
-                                    const isPos = inv.code?.startsWith('POS-');
+                                    const isPos = Boolean(inv.posSessionId);
                                     const isNE = inv.code?.startsWith('NE');
                                     const projectName = inv.project?.name || projects.find(p => p.id === inv.projectId)?.name || 'General';
 

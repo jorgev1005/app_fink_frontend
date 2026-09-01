@@ -37,7 +37,14 @@ async function getNextInvoiceCode(projectId: string, isDeliveryNote: boolean = f
       where: {
         projectId,
         type: 'INVOICE',
-        code: isDeliveryNote ? { startsWith: 'NE' } : { not: { startsWith: 'NE' } }
+        ...(isDeliveryNote ? {
+          code: { startsWith: 'NE' }
+        } : {
+          AND: [
+            { code: { not: { startsWith: 'NE' } } },
+            { code: { not: { startsWith: 'POS-' } } }
+          ]
+        })
       },
       orderBy: {
         createdAt: 'desc'
