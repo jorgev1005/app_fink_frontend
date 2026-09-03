@@ -175,6 +175,83 @@ export const getQuotations = async (req: Request, res: Response) => {
     const end = start + (parseInt(limit as string) || 100);
     const paginated = quotes.slice(start, end);
 
+    // Buscar todas las facturas y notas asociadas a cotizaciones en Prisma
+    const cotInvoices = await prisma.invoice.findMany({
+      where: {
+        purchaseOrder: { startsWith: 'COT-' },
+        status: { not: 'CANCELLED' }
+      },
+      select: {
+        id: true,
+        code: true,
+        purchaseOrder: true,
+        total: true,
+        currency: true,
+        status: true,
+        issueDate: true,
+        lines: true,
+        createdAt: true
+      }
+    });
+
+    const invoiceByPO = new Map<string, any[]>();
+    cotInvoices.forEach(inv => {
+      if (inv.purchaseOrder) {
+        const list = invoiceByPO.get(inv.purchaseOrder) || [];
+        list.push(inv);
+        invoiceByPO.set(inv.purchaseOrder, list);
+      }
+    });
+
+    const enrichedPaginated = paginated.map((q: any) => {
+      const related = invoiceByPO.get(q.correlative) || invoiceByPO.get(q.id) || [];
+      const totalQuoted = Array.isArray(q.items) ? q.items.reduce((acc: number, it: any) => acc + (Number(it.quantity) || 0), 0) : 0;
+      let totalDispatched = 0;
+
+      related.forEach(inv => {
+        try {
+          if (inv.lines) {
+            const parsed = typeof inv.lines === 'string' ? JSON.parse(inv.lines) : inv.lines;
+            const lineItems = Array.isArray(parsed) ? parsed : (parsed?.items || []);
+            lineItems.forEach((li: any) => {
+              totalDispatched += Number(li.quantity || 0);
+            });
+          }
+        } catch (_) {}
+      });
+
+      let dispatchStatus = q.status;
+      if (related.length > 0) {
+        if (totalQuoted > 0 && totalDispatched >= totalQuoted) {
+          dispatchStatus = 'FULLY_INVOICED';
+        } else if (totalDispatched > 0) {
+          dispatchStatus = 'PARTIALLY_INVOICED';
+        } else {
+          dispatchStatus = 'INVOICED';
+        }
+      }
+
+      return {
+        ...q,
+        status: dispatchStatus,
+        relatedInvoices: related.map(inv => ({
+          id: inv.id,
+          code: inv.code,
+          total: inv.total,
+          currency: inv.currency,
+          status: inv.status,
+          issueDate: inv.issueDate,
+          createdAt: inv.createdAt
+        })),
+        dispatchMetrics: {
+          totalQuotedUnits: totalQuoted,
+          totalDispatchedUnits: totalDispatched,
+          totalPendingUnits: Math.max(0, totalQuoted - totalDispatched),
+          relatedInvoicesCount: related.length
+        }
+      };
+    });
+
     // Calcular estadísticas globales
     const allQuotes = loadAllQuotes();
     const stats = {
@@ -182,13 +259,13 @@ export const getQuotations = async (req: Request, res: Response) => {
       pending: allQuotes.filter(q => !q.status || q.status === 'PENDING').length,
       approved: allQuotes.filter(q => q.status === 'APPROVED').length,
       poGenerated: allQuotes.filter(q => q.status === 'PO_GENERATED').length,
-      invoiced: allQuotes.filter(q => q.status === 'INVOICED').length,
+      invoiced: allQuotes.filter(q => q.status === 'INVOICED' || q.status === 'FULLY_INVOICED' || q.status === 'PARTIALLY_INVOICED').length,
       rejected: allQuotes.filter(q => q.status === 'REJECTED').length,
     };
 
     res.json({
       success: true,
-      data: paginated,
+      data: enrichedPaginated,
       total,
       stats
     });
@@ -208,7 +285,58 @@ export const getQuotationById = async (req: Request, res: Response) => {
       return res.status(404).json({ success: false, error: { message: 'Cotización no encontrada' } });
     }
 
-    // Enriquecer ítems con datos de costo del inventario FINK
+    const corr = quote.correlative || quote.id;
+
+    // Buscar facturas y notas de entrega asociadas a esta cotización en la base de datos
+    const relatedInvoices = await prisma.invoice.findMany({
+      where: {
+        purchaseOrder: corr,
+        status: { not: 'CANCELLED' }
+      },
+      orderBy: { createdAt: 'desc' },
+      select: {
+        id: true,
+        code: true,
+        type: true,
+        issueDate: true,
+        dueDate: true,
+        currency: true,
+        total: true,
+        status: true,
+        lines: true,
+        notes: true,
+        createdAt: true
+      }
+    });
+
+    // Mapear cantidades ya despachadas por SKU, ID de producto o nombre
+    const dispatchedMap: { [key: string]: number } = {};
+    relatedInvoices.forEach(inv => {
+      try {
+        if (inv.lines) {
+          const parsed = typeof inv.lines === 'string' ? JSON.parse(inv.lines) : inv.lines;
+          const lineItems = Array.isArray(parsed) ? parsed : (parsed?.items || []);
+          lineItems.forEach((li: any) => {
+            const qty = Number(li.quantity || 0);
+            if (li.productId && li.productId !== 'CUSTOM') {
+              dispatchedMap[`id_${li.productId}`] = (dispatchedMap[`id_${li.productId}`] || 0) + qty;
+            }
+            if (li.sku) {
+              dispatchedMap[`sku_${li.sku.toLowerCase()}`] = (dispatchedMap[`sku_${li.sku.toLowerCase()}`] || 0) + qty;
+            }
+            const desc = li.description || li.name;
+            if (desc) {
+              dispatchedMap[`name_${desc.toLowerCase().trim()}`] = (dispatchedMap[`name_${desc.toLowerCase().trim()}`] || 0) + qty;
+            }
+          });
+        }
+      } catch (e) {}
+    });
+
+    let totalQuotedUnits = 0;
+    let totalDispatchedUnits = 0;
+
+    // Enriquecer ítems con datos de costo, stock y saldos despachados/pendientes
     const items = quote.items || [];
     const enrichedItems = await Promise.all(items.map(async (it: any) => {
       let product: any = null;
@@ -223,6 +351,22 @@ export const getQuotationById = async (req: Request, res: Response) => {
         ? product.costPrice 
         : (it.unitPriceUSD ? Number((it.unitPriceUSD * 0.85).toFixed(2)) : 0);
 
+      const quotedQty = Number(it.quantity || 0);
+      totalQuotedUnits += quotedQty;
+
+      // Calcular cantidad ya despachada previamente en otras notas/facturas
+      let dispatchedQty = 0;
+      if (product?.id && dispatchedMap[`id_${product.id}`] !== undefined) {
+        dispatchedQty = dispatchedMap[`id_${product.id}`];
+      } else if (it.sku && dispatchedMap[`sku_${it.sku.toLowerCase()}`] !== undefined) {
+        dispatchedQty = dispatchedMap[`sku_${it.sku.toLowerCase()}`];
+      } else if (it.name && dispatchedMap[`name_${it.name.toLowerCase().trim()}`] !== undefined) {
+        dispatchedQty = dispatchedMap[`name_${it.name.toLowerCase().trim()}`];
+      }
+
+      totalDispatchedUnits += dispatchedQty;
+      const pendingQty = Math.max(0, quotedQty - dispatchedQty);
+
       return {
         ...it,
         costPrice,
@@ -230,17 +374,51 @@ export const getQuotationById = async (req: Request, res: Response) => {
         empaqueCantidad: product?.empaqueCantidad || it.empaqueCantidad || 1,
         medidas: product?.medidas || it.medidas || '',
         division: product?.division || it.division || '',
-        matchedProductId: product?.id || null
+        matchedProductId: product?.id || null,
+        quotedQuantity: quotedQty,
+        dispatchedQuantity: dispatchedQty,
+        pendingQuantity: pendingQty
       };
     }));
+
+    const totalPendingUnits = Math.max(0, totalQuotedUnits - totalDispatchedUnits);
+
+    // Calcular estado dinámico de despacho
+    let dispatchStatus = quote.status || 'PENDING';
+    if (relatedInvoices.length > 0) {
+      if (totalPendingUnits === 0 && totalQuotedUnits > 0) {
+        dispatchStatus = 'FULLY_INVOICED';
+      } else if (totalDispatchedUnits > 0) {
+        dispatchStatus = 'PARTIALLY_INVOICED';
+      } else {
+        dispatchStatus = 'INVOICED';
+      }
+    }
 
     res.json({
       success: true,
       data: {
         ...quote,
-        status: quote.status || 'PENDING',
+        status: dispatchStatus,
         channel: quote.channel || (quote.correlative?.startsWith('COT-') ? 'CATALOGO_WEB' : 'FINK_POS'),
-        items: enrichedItems
+        items: enrichedItems,
+        relatedInvoices: relatedInvoices.map(inv => ({
+          id: inv.id,
+          code: inv.code,
+          type: inv.type,
+          issueDate: inv.issueDate,
+          dueDate: inv.dueDate,
+          currency: inv.currency,
+          total: inv.total,
+          status: inv.status,
+          createdAt: inv.createdAt
+        })),
+        dispatchMetrics: {
+          totalQuotedUnits,
+          totalDispatchedUnits,
+          totalPendingUnits,
+          relatedInvoicesCount: relatedInvoices.length
+        }
       }
     });
   } catch (error: any) {

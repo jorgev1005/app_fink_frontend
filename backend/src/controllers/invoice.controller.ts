@@ -635,7 +635,7 @@ export const deleteInvoice = async (req: Request, res: Response) => {
 
 export const getInvoices = async (req: Request, res: Response) => {
   try {
-    const { projectId, status, page = 1, limit = 50 } = req.query;
+    const { projectId, status, purchaseOrder, search, page = 1, limit = 50 } = req.query;
     const skip = (Number(page) - 1) * Number(limit);
     const user = (req as any).user;
     const where: any = {
@@ -643,6 +643,15 @@ export const getInvoices = async (req: Request, res: Response) => {
     };
     if (projectId) where.projectId = projectId as string;
     if (status) where.status = status as string;
+    if (purchaseOrder) where.purchaseOrder = purchaseOrder as string;
+    if (search && typeof search === 'string') {
+      const s = search.trim();
+      where.OR = [
+        { code: { contains: s, mode: 'insensitive' } },
+        { purchaseOrder: { contains: s, mode: 'insensitive' } },
+        { notes: { contains: s, mode: 'insensitive' } }
+      ];
+    }
 
     const [invoices, total] = await Promise.all([
       prisma.invoice.findMany({ where, orderBy: { createdAt: 'desc' }, skip, take: Number(limit) }),
