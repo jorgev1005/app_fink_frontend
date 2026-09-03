@@ -676,7 +676,41 @@ export const getInvoiceById = async (req: Request, res: Response) => {
     const { id } = req.params;
     const invoice = await prisma.invoice.findUnique({ 
       where: { id },
-      include: { project: true }
+      include: { 
+        project: true,
+        payments: {
+          include: {
+            payment: {
+              include: {
+                account: {
+                  select: {
+                    id: true,
+                    name: true,
+                    code: true,
+                    currency: true,
+                  }
+                },
+                user: {
+                  select: {
+                    id: true,
+                    firstName: true,
+                    lastName: true,
+                    email: true
+                  }
+                },
+                transaction: {
+                  select: {
+                    id: true,
+                    code: true,
+                    description: true
+                  }
+                }
+              }
+            }
+          },
+          orderBy: { createdAt: 'desc' }
+        }
+      }
     });
     
     if (!invoice) return res.status(404).json({ success: false, error: { message: 'Invoice not found' } });

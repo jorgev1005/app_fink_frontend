@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import api from '@/lib/api';
-import { Printer, ArrowLeft, Download, Edit, CreditCard, CheckCircle, FileText, Copy, Play } from 'lucide-react';
+import { Printer, ArrowLeft, Download, Edit, CreditCard, CheckCircle, FileText, Copy, Play, MessageCircle } from 'lucide-react';
 
 interface InvoiceItem {
   id: string;
@@ -15,6 +15,40 @@ interface InvoiceItem {
   total: number;
   productId?: string;
   notes?: string;
+}
+
+interface PaymentAllocationData {
+  id: string;
+  paymentId: string;
+  allocatedAmount: number;
+  createdAt: string;
+  payment?: {
+    id: string;
+    code: string;
+    date: string;
+    currency: string;
+    amount: number;
+    exchangeRate?: number;
+    method: string;
+    reference?: string;
+    status: string;
+    account?: {
+      id: string;
+      name: string;
+      code: string;
+      currency: string;
+    };
+    user?: {
+      firstName?: string;
+      lastName?: string;
+      email?: string;
+    };
+    transaction?: {
+      id: string;
+      code: string;
+      description?: string;
+    };
+  };
 }
 
 interface Invoice {
@@ -50,6 +84,7 @@ interface Invoice {
   vendorName?: string; // Fallback
   items: InvoiceItem[];
   outstanding: number;
+  payments?: PaymentAllocationData[];
   totalCost?: number;
   netProfit?: number;
   purchaseOrder?: string;
@@ -300,6 +335,148 @@ export default function InvoiceDetailsPage() {
      }
   };
 
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+
+  const formatPaymentMethod = (method?: string | null) => {
+    switch (method) {
+      case 'BANK_TRANSFER': return 'Transferencia';
+      case 'MOBILE_PAYMENT': return 'Pago Móvil';
+      case 'CASH': return 'Efectivo';
+      case 'CARD': return 'Tarjeta';
+      case 'CHEQUE': return 'Cheque';
+      case 'ZELLE': return 'Zelle';
+      case 'OTHER': return 'Otro';
+      default: return method || 'Otro';
+    }
+  };
+
+  const getPaymentAmountInInvoiceCurrency = (alloc: PaymentAllocationData) => {
+    const p = alloc.payment;
+    if (!p) return alloc.allocatedAmount;
+    const pCurr = p.currency === 'VES' ? 'BS' : p.currency;
+    const invCurr = invoice?.currency === 'VES' ? 'BS' : (invoice?.currency || 'USD');
+    
+    if (pCurr === invCurr) {
+      return p.amount || alloc.allocatedAmount;
+    }
+    
+    const rate = p.exchangeRate || 1;
+    if (pCurr === 'BS' && invCurr === 'USD') {
+      return rate > 0 ? (p.amount || alloc.allocatedAmount) / rate : alloc.allocatedAmount;
+    }
+    if (pCurr === 'USD' && invCurr === 'BS') {
+      return (p.amount || alloc.allocatedAmount) * rate;
+    }
+    return alloc.allocatedAmount;
+  };
+
+  const shareViaWhatsApp = () => {
+    if (!invoice) return;
+    const isSale = invoice.type === 'INVOICE';
+    const header = isSale ? 'FACTURA / NOTA DE VENTA' : 'FACTURA DE COMPRA';
+    const partyLabel = isSale ? 'Cliente' : 'Proveedor';
+    const partyName = contactName || 'Sin nombre';
+    const totalStr = formatCurrency(totals.total * conversionFactor, displayCurrency);
+    const outstandingStr = formatCurrency(totals.outstanding * conversionFactor, displayCurrency);
+    
+    // Calculate total paid
+    const totalPaid = Math.max(0, totals.total - totals.outstanding);
+    const totalPaidStr = formatCurrency(totalPaid * conversionFactor, displayCurrency);
+
+    let msg = `*${invoice.project?.name || 'FINK'}*\n`;
+    msg += `*${header}:* #${invoice.code}\n`;
+    msg += `*${partyLabel}:* ${partyName}\n`;
+    if (contact?.taxId) msg += `*RIF/NIT:* ${contact.taxId}\n`;
+    msg += `*Fecha de Emisión:* ${formatDate(invoice.issueDate)}\n`;
+    if (invoice.dueDate) msg += `*Vencimiento:* ${formatDate(invoice.dueDate)}\n`;
+    msg += `\n*RESUMEN DE ITEMS:*\n`;
+
+    (invoice.items || []).forEach((item) => {
+      const itemTotal = formatCurrency(item.total * conversionFactor, displayCurrency);
+      msg += `• ${item.quantity}x ${item.description || item.name} - ${itemTotal}\n`;
+    });
+
+    msg += `\n*Total Factura:* ${totalStr}\n`;
+    if (totalPaid > 0) {
+      msg += `*Total Abonado:* ${totalPaidStr}\n`;
+    }
+    msg += `*Saldo Pendiente:* ${outstandingStr}\n`;
+
+    // Include payment breakdown if any
+    if (invoice.payments && invoice.payments.length > 0) {
+      msg += `\n*HISTORIAL DE ABONOS:*\n`;
+      invoice.payments.forEach((p, i) => {
+        const pDate = formatDate(p.payment?.date || p.createdAt);
+        const pAmount = formatCurrency(getPaymentAmountInInvoiceCurrency(p) * conversionFactor, displayCurrency);
+        const pMethod = formatPaymentMethod(p.payment?.method);
+        const pRef = p.payment?.reference ? ` (Ref: ${p.payment.reference})` : '';
+        const pOrig = p.payment?.currency && p.payment.currency !== invoice.currency ? ` [Orig: ${formatCurrency(p.payment.amount, p.payment.currency)}]` : '';
+        msg += `${i + 1}. ${pDate} - ${pAmount}${pOrig} via ${pMethod}${pRef}\n`;
+      });
+    }
+
+    const phone = contact?.phone ? contact.phone.replace(/[^0-9]/g, '') : '';
+    const url = phone 
+      ? `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`
+      : `https://wa.me/?text=${encodeURIComponent(msg)}`;
+
+    window.open(url, '_blank');
+  };
+
+  const handleDownloadPdf = async () => {
+    if (!invoice) return;
+    try {
+      setDownloadingPdf(true);
+      const element = document.getElementById('invoice-paper-printable');
+      if (!element) {
+        window.print();
+        return;
+      }
+
+      const html2canvas = (await import('html2canvas')).default;
+      const { jsPDF } = await import('jspdf');
+
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+        backgroundColor: '#ffffff'
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({
+        orientation: 'portrait',
+        unit: 'mm',
+        format: 'a4'
+      });
+
+      const imgWidth = 210; // A4 width in mm
+      const pageHeight = 297; // A4 height in mm
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
+      const filename = `${invoice.type === 'INVOICE' ? 'Factura' : 'Factura_Compra'}_${invoice.code}.pdf`;
+      pdf.save(filename);
+    } catch (error) {
+      console.error('Error generando PDF:', error);
+      window.print();
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
+
   const formatCurrency = (amount: number, currency: string) => {
     return new Intl.NumberFormat('es-VE', { 
       style: 'currency', 
@@ -327,6 +504,9 @@ export default function InvoiceDetailsPage() {
     } else if (status === 'PAID') {
        label = 'PAGADA';
        color = 'bg-green-100 text-green-800';
+    } else if (status === 'PARTIALLY_PAID') {
+       label = 'ABONADA / PARCIAL';
+       color = 'bg-amber-100 text-amber-800 border border-amber-300';
     } else if (status === 'DRAFT' || status === 'OPEN') {
        label = 'BORRADOR';
        color = 'bg-gray-100 text-gray-800';
@@ -544,10 +724,28 @@ export default function InvoiceDetailsPage() {
                 </button>
              )}
 
-             {/* Print Button */}
+             {/* Print, WhatsApp & PDF Buttons */}
+             <button 
+                onClick={shareViaWhatsApp}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-medium transition shadow-sm"
+                title="Compartir resumen y abonos por WhatsApp"
+             >
+                <MessageCircle size={13} /> WhatsApp
+             </button>
+
+             <button 
+                onClick={handleDownloadPdf}
+                disabled={downloadingPdf}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded text-xs font-medium transition shadow-sm disabled:opacity-50"
+                title="Convertir y descargar factura en PDF"
+             >
+                <Download size={13} /> {downloadingPdf ? 'Generando...' : 'PDF'}
+             </button>
+
              <button 
                 onClick={() => window.print()}
-                className="flex items-center gap-1.5 px-3 py-1.5 hover:bg-gray-50 rounded text-gray-700 text-xs font-medium transition border border-gray-100"
+                className="flex items-center gap-1.5 px-3 py-1.5 hover:bg-gray-50 rounded text-gray-700 text-xs font-medium transition border border-gray-200 shadow-sm"
+                title="Imprimir documento"
              >
                 <Printer size={13} /> Imprimir
              </button>
@@ -555,7 +753,7 @@ export default function InvoiceDetailsPage() {
       </div>
 
       {/* Invoice Paper */}
-      <div className={`max-w-4xl mx-auto bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden print:shadow-none print:border-none print:rounded-none print:max-w-full print:my-0 print-no-shadow print-wrapper`}>
+      <div id="invoice-paper-printable" className={`max-w-4xl mx-auto bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden print:shadow-none print:border-none print:rounded-none print:max-w-full print:my-0 print-no-shadow print-wrapper`}>
            
            {/* Header */}
            <div className={`${printLayout === 'FREE_FORM' ? 'p-4 print:p-0 print:pb-2' : 'p-8 md:p-12 print:p-4'} border-b border-gray-100`}>
@@ -757,7 +955,7 @@ export default function InvoiceDetailsPage() {
 
               {(viewMode !== 'DELIVERY_NOTE' || showPricesInDeliveryNote) && (
                  <div className="mt-8 flex justify-end">
-                     <div className="w-full md:w-1/3 space-y-3">
+                     <div className="w-full md:w-5/12 space-y-3">
                          <div className="flex justify-between text-sm text-gray-600">
                              <span>Subtotal</span>
                              <span className="font-mono">{formatCurrency(totals.subtotal * conversionFactor, displayCurrency)}</span>
@@ -772,14 +970,103 @@ export default function InvoiceDetailsPage() {
                              <span>Total</span>
                              <span className="font-mono">{formatCurrency(totals.total * conversionFactor, displayCurrency)}</span>
                          </div>
-                         {totals.outstanding < totals.total && totals.outstanding > 0 && (
-                             <div className="flex justify-between text-sm font-semibold text-orange-600">
-                                 <span>Pendiente</span>
+                         {invoice.payments && invoice.payments.length > 0 && (
+                             <div className="flex justify-between text-sm font-semibold text-emerald-600">
+                                 <span>Total Abonado</span>
+                                 <span className="font-mono">
+                                   - {formatCurrency(invoice.payments.reduce((acc, curr) => acc + getPaymentAmountInInvoiceCurrency(curr), 0) * conversionFactor, displayCurrency)}
+                                 </span>
+                             </div>
+                         )}
+                         {totals.outstanding > 0 ? (
+                             <div className="flex justify-between text-sm font-bold text-orange-600 bg-orange-50/80 px-3 py-1.5 rounded-lg border border-orange-200">
+                                 <span>Saldo Pendiente</span>
                                  <span className="font-mono">{formatCurrency(totals.outstanding * conversionFactor, displayCurrency)}</span>
+                             </div>
+                         ) : (
+                             <div className="flex justify-between text-xs font-bold text-green-700 bg-green-50 px-3 py-1.5 rounded-lg border border-green-200">
+                                 <span>Estado de Pago</span>
+                                 <span className="uppercase">PAGADA TOTALMENTE</span>
                              </div>
                          )}
                      </div>
                  </div>
+              )}
+
+              {/* Historial de Abonos / Pagos Realizados */}
+              {invoice.payments && invoice.payments.length > 0 && (
+                <div className="mt-8 pt-6 border-t border-gray-200">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                      <span>Historial de Abonos / Pagos</span>
+                      <span className="bg-emerald-100 text-emerald-800 text-[10px] font-semibold px-2 py-0.5 rounded-full">
+                        {invoice.payments.length} {invoice.payments.length === 1 ? 'abono registrado' : 'abonos registrados'}
+                      </span>
+                    </h3>
+                  </div>
+                  
+                  <div className="overflow-x-auto rounded-lg border border-gray-200">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-gray-50 text-gray-600 font-semibold border-b border-gray-200">
+                        <tr>
+                          <th className="py-2.5 px-3">Fecha</th>
+                          <th className="py-2.5 px-3">Nro. Pago</th>
+                          <th className="py-2.5 px-3">Método</th>
+                          <th className="py-2.5 px-3">Referencia</th>
+                          <th className="py-2.5 px-3">Cuenta (Caja/Banco)</th>
+                          <th className="py-2.5 px-3 text-right">Monto Abonado</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 bg-white">
+                        {invoice.payments.map((alloc) => {
+                          const p = alloc.payment;
+                          return (
+                            <tr key={alloc.id} className="hover:bg-gray-50/50">
+                              <td className="py-2 px-3 text-gray-700 whitespace-nowrap">
+                                {formatDate(p?.date || alloc.createdAt)}
+                              </td>
+                              <td className="py-2 px-3 font-mono text-gray-600 font-medium">
+                                {p?.code || '-'}
+                              </td>
+                              <td className="py-2 px-3 text-gray-700">
+                                <span className="inline-flex items-center gap-1 font-medium">
+                                  {formatPaymentMethod(p?.method)}
+                                </span>
+                              </td>
+                              <td className="py-2 px-3 text-gray-600 font-mono">
+                                {p?.reference ? p.reference : <span className="text-gray-400 italic">Sin ref.</span>}
+                              </td>
+                              <td className="py-2 px-3 text-gray-700">
+                                {p?.account ? `${p.account.name} (${p.account.code})` : '-'}
+                              </td>
+                              <td className="py-2 px-3 text-right font-mono font-bold text-emerald-700 whitespace-nowrap">
+                                {formatCurrency(getPaymentAmountInInvoiceCurrency(alloc) * conversionFactor, displayCurrency)}
+                                {p?.currency && p.currency !== invoice.currency && (
+                                  <div className="text-[10px] text-gray-400 font-normal">
+                                    Orig: {formatCurrency(p.amount, p.currency)} {p.exchangeRate ? `(Tasa: ${Number(p.exchangeRate).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 4 })})` : ''}
+                                  </div>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                      <tfoot className="bg-gray-50/80 border-t border-gray-200 font-semibold">
+                        <tr>
+                          <td colSpan={5} className="py-2 px-3 text-gray-600 text-right uppercase text-[10px]">
+                            Total Abonado
+                          </td>
+                          <td className="py-2 px-3 text-right font-mono text-emerald-700 font-bold">
+                            {formatCurrency(
+                              invoice.payments.reduce((acc, curr) => acc + getPaymentAmountInInvoiceCurrency(curr), 0) * conversionFactor,
+                              displayCurrency
+                            )}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
               )}
 
               {/* Delivery Note Summary: grouped by product code */}
