@@ -381,7 +381,7 @@ export default function QuotationsPage() {
     }
   };
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: string, quote?: Quotation) => {
     switch (status) {
       case 'APPROVED':
         return (
@@ -405,13 +405,16 @@ export default function QuotationsPage() {
           </span>
         );
       case 'FULLY_INVOICED':
-      case 'INVOICED':
+      case 'INVOICED': {
+        const related = quote?.relatedInvoices || [];
+        const isOnlyDelivery = related.length > 0 && related.every((inv: any) => (inv.code || '').startsWith('NE-'));
         return (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-purple-100 text-purple-800 border border-purple-200">
-            <FileText size={13} className="text-purple-600" />
-            FACTURADA TOTAL
+            {isOnlyDelivery ? <Truck size={13} className="text-purple-600" /> : <FileText size={13} className="text-purple-600" />}
+            {isOnlyDelivery ? 'DESPACHADA TOTAL' : 'FACTURADA TOTAL'}
           </span>
         );
+      }
       case 'REJECTED':
         return (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-rose-100 text-rose-800 border border-rose-200">
@@ -533,10 +536,10 @@ export default function QuotationsPage() {
           className={`bg-white p-4 rounded-2xl border transition-all cursor-pointer shadow-xs hover:shadow-md ${statusFilter === 'INVOICED' ? 'border-purple-500 ring-2 ring-purple-500/20' : 'border-slate-200/80'}`}
         >
           <div className="text-[11px] font-bold text-purple-600 uppercase tracking-wider flex items-center gap-1">
-            <FileText size={12} /> Facturadas
+            <FileText size={12} /> Facturadas / Despachadas
           </div>
           <div className="text-2xl font-extrabold text-purple-700 mt-1">{stats.invoiced}</div>
-          <div className="text-[10px] text-purple-600/80 mt-0.5">Procesadas en caja</div>
+          <div className="text-[10px] text-purple-600/80 mt-0.5">Notas o facturas emitidas</div>
         </div>
       </div>
 
@@ -549,7 +552,7 @@ export default function QuotationsPage() {
             { id: 'PENDING', label: 'Pendientes' },
             { id: 'APPROVED', label: 'Aprobadas' },
             { id: 'PO_GENERATED', label: 'En Compras (OC)' },
-            { id: 'INVOICED', label: 'Facturadas' },
+            { id: 'INVOICED', label: 'Facturadas / Despachadas' },
             { id: 'REJECTED', label: 'Rechazadas' },
           ].map(tab => (
             <button
@@ -701,7 +704,7 @@ export default function QuotationsPage() {
                       {/* Estado */}
                       <td className="p-3.5 text-center">
                         <div className="flex flex-col items-center gap-1">
-                          {getStatusBadge(q.status)}
+                          {getStatusBadge(q.status, q)}
                           {Boolean(q.dispatchMetrics && q.dispatchMetrics.relatedInvoicesCount > 0) && (
                             <span className="text-[9.5px] font-bold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
                               {q.dispatchMetrics!.totalDispatchedUnits}/{q.dispatchMetrics!.totalQuotedUnits} despachadas
@@ -831,7 +834,7 @@ export default function QuotationsPage() {
                   <h3 className="text-xl font-black font-mono tracking-tight text-white">
                     {selectedQuote.correlative || selectedQuote.id}
                   </h3>
-                  {getStatusBadge(selectedQuote.status)}
+                  {getStatusBadge(selectedQuote.status, selectedQuote)}
                 </div>
                 <p className="text-xs text-slate-400 mt-0.5">
                   Emitida el {new Date(selectedQuote.createdAt).toLocaleString('es-VE')} ({selectedQuote.channel === 'CATALOGO_WEB' ? 'Catálogo Web' : 'FINK POS'})
