@@ -127,6 +127,40 @@ export const createContact = async (req: Request, res: Response) => {
       return res.status(403).json({ success: false, error: { message: 'No tienes permisos para crear contactos en este proyecto' } });
     }
 
+    // Validar duplicados en el mismo proyecto por RIF (taxId) o por Nombre
+    const cleanTaxId = taxId && typeof taxId === 'string' ? taxId.trim().toUpperCase() : null;
+    const cleanName = name.trim();
+
+    if (cleanTaxId) {
+      const existingTax = await prisma.contactPerson.findFirst({
+        where: {
+          projectId,
+          isActive: true,
+          taxId: { equals: cleanTaxId, mode: 'insensitive' }
+        }
+      });
+      if (existingTax) {
+        return res.status(400).json({
+          success: false,
+          error: { message: `Ya existe un contacto con este RIF/Identificación (${cleanTaxId}) en este proyecto: "${existingTax.name}".` }
+        });
+      }
+    }
+
+    const existingName = await prisma.contactPerson.findFirst({
+      where: {
+        projectId,
+        isActive: true,
+        name: { equals: cleanName, mode: 'insensitive' }
+      }
+    });
+    if (existingName) {
+      return res.status(400).json({
+        success: false,
+        error: { message: `Ya existe un contacto con este nombre en este proyecto: "${existingName.name}".` }
+      });
+    }
+
     const contact = await prisma.contactPerson.create({
       data: {
         name,
@@ -173,6 +207,42 @@ export const updateContact = async (req: Request, res: Response) => {
     const hasAccess = await checkProjectWriteAccess(req.user!, existing.projectId);
     if (!hasAccess) {
       return res.status(403).json({ success: false, error: { message: 'No tienes permisos para modificar este contacto' } });
+    }
+
+    if (taxId && typeof taxId === 'string') {
+      const cleanTaxId = taxId.trim().toUpperCase();
+      const existingTax = await prisma.contactPerson.findFirst({
+        where: {
+          id: { not: id },
+          projectId: existing.projectId,
+          isActive: true,
+          taxId: { equals: cleanTaxId, mode: 'insensitive' }
+        }
+      });
+      if (existingTax) {
+        return res.status(400).json({
+          success: false,
+          error: { message: `Ya existe otro contacto con este RIF/Identificación (${cleanTaxId}) en este proyecto: "${existingTax.name}".` }
+        });
+      }
+    }
+
+    if (name && typeof name === 'string') {
+      const cleanName = name.trim();
+      const existingName = await prisma.contactPerson.findFirst({
+        where: {
+          id: { not: id },
+          projectId: existing.projectId,
+          isActive: true,
+          name: { equals: cleanName, mode: 'insensitive' }
+        }
+      });
+      if (existingName) {
+        return res.status(400).json({
+          success: false,
+          error: { message: `Ya existe otro contacto con este nombre en este proyecto: "${existingName.name}".` }
+        });
+      }
     }
 
     const contact = await prisma.contactPerson.update({
