@@ -1,6 +1,7 @@
 "use client";
 import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { 
   FileText, CheckCircle2, Clock, XCircle, ShoppingBag, Truck, Search, 
   Filter, Eye, ArrowLeft, RefreshCw, MessageSquare, Phone, MapPin, 
@@ -25,6 +26,9 @@ interface QuotationItem {
   medidas?: string;
   division?: string;
   notes?: string;
+  quotedQuantity?: number;
+  dispatchedQuantity?: number;
+  pendingQuantity?: number;
 }
 
 interface Quotation {
@@ -32,7 +36,7 @@ interface Quotation {
   correlative: string;
   createdAt: string;
   channel: 'CATALOGO_WEB' | 'FINK_POS' | string;
-  status: 'PENDING' | 'APPROVED' | 'PO_GENERATED' | 'INVOICED' | 'REJECTED' | string;
+  status: 'PENDING' | 'APPROVED' | 'PO_GENERATED' | 'INVOICED' | 'PARTIALLY_INVOICED' | 'FULLY_INVOICED' | 'REJECTED' | string;
   customer: {
     name: string;
     taxId?: string;
@@ -60,6 +64,13 @@ interface Quotation {
   purchaseOrderNumber?: string;
   supplierName?: string;
   rejectionReason?: string;
+  relatedInvoices?: any[];
+  dispatchMetrics?: {
+    totalQuotedUnits: number;
+    totalDispatchedUnits: number;
+    totalPendingUnits: number;
+    relatedInvoicesCount: number;
+  };
 }
 
 export default function QuotationsPage() {
@@ -386,11 +397,19 @@ export default function QuotationsPage() {
             EN COMPRAS (OC)
           </span>
         );
+      case 'PARTIALLY_INVOICED':
+        return (
+          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-100 text-amber-900 border border-amber-300">
+            <Clock size={13} className="text-amber-700" />
+            DESPACHO PARCIAL
+          </span>
+        );
+      case 'FULLY_INVOICED':
       case 'INVOICED':
         return (
           <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold bg-purple-100 text-purple-800 border border-purple-200">
             <FileText size={13} className="text-purple-600" />
-            FACTURADA
+            FACTURADA TOTAL
           </span>
         );
       case 'REJECTED':
@@ -681,12 +700,33 @@ export default function QuotationsPage() {
 
                       {/* Estado */}
                       <td className="p-3.5 text-center">
-                        {getStatusBadge(q.status)}
-                        {q.purchaseOrderNumber && (
-                          <div className="text-[9px] font-mono text-blue-700 mt-1 font-bold">
-                            OC: {q.purchaseOrderNumber}
-                          </div>
-                        )}
+                        <div className="flex flex-col items-center gap-1">
+                          {getStatusBadge(q.status)}
+                          {Boolean(q.dispatchMetrics && q.dispatchMetrics.relatedInvoicesCount > 0) && (
+                            <span className="text-[9.5px] font-bold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded">
+                              {q.dispatchMetrics!.totalDispatchedUnits}/{q.dispatchMetrics!.totalQuotedUnits} despachadas
+                            </span>
+                          )}
+                          {Array.isArray(q.relatedInvoices) && q.relatedInvoices.length > 0 && (
+                            <div className="flex flex-wrap items-center justify-center gap-1 max-w-[150px]">
+                              {q.relatedInvoices.map((inv: any) => (
+                                <Link
+                                  key={inv.id || inv.code}
+                                  href={`/invoices?search=${encodeURIComponent(inv.code)}`}
+                                  className="text-[9px] font-mono font-bold text-indigo-700 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 px-1 py-0.5 rounded transition"
+                                  title={`Ver documento emitido ${inv.code}`}
+                                >
+                                  {inv.code}
+                                </Link>
+                              ))}
+                            </div>
+                          )}
+                          {q.purchaseOrderNumber && (
+                            <div className="text-[9px] font-mono text-blue-700 font-bold">
+                              OC: {q.purchaseOrderNumber}
+                            </div>
+                          )}
+                        </div>
                       </td>
 
                       {/* Acciones */}
@@ -836,6 +876,58 @@ export default function QuotationsPage() {
                 </div>
               </div>
 
+              {/* Documentos Emitidos (Notas de Entrega y Facturas) */}
+              {Array.isArray(selectedQuote.relatedInvoices) && selectedQuote.relatedInvoices.length > 0 && (
+                <div className="bg-indigo-50/60 border border-indigo-200 rounded-2xl p-4 space-y-3">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <h4 className="font-bold text-indigo-950 text-sm flex items-center gap-2">
+                      <FileText size={16} className="text-indigo-600" />
+                      Documentos Emitidos para esta Cotización ({selectedQuote.relatedInvoices.length})
+                    </h4>
+                    {selectedQuote.dispatchMetrics && (
+                      <span className="text-xs font-bold text-indigo-800 bg-indigo-100/90 border border-indigo-200 px-3 py-1 rounded-full w-fit">
+                        📦 {selectedQuote.dispatchMetrics.totalDispatchedUnits} de {selectedQuote.dispatchMetrics.totalQuotedUnits} unds despachadas ({selectedQuote.dispatchMetrics.totalPendingUnits} pendientes)
+                      </span>
+                    )}
+                  </div>
+                  <div className="divide-y divide-indigo-100 bg-white rounded-xl border border-indigo-200/80 overflow-hidden shadow-2xs">
+                    {selectedQuote.relatedInvoices.map((inv: any) => (
+                      <div key={inv.id || inv.code} className="p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-indigo-50/30 transition">
+                        <div className="flex flex-wrap items-center gap-2.5">
+                          <span className="font-mono font-bold text-xs text-indigo-900 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200">
+                            {inv.code}
+                          </span>
+                          <span className="text-xs font-bold text-slate-800">
+                            {inv.code?.startsWith('NE') ? 'Nota de Entrega' : 'Factura de Venta'}
+                          </span>
+                          <span className="text-[11px] text-slate-400">
+                            {new Date(inv.issueDate || inv.createdAt).toLocaleDateString('es-VE')}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-3 justify-between sm:justify-end">
+                          <span className="font-mono font-bold text-xs text-slate-900">
+                            ${Number(inv.total || 0).toFixed(2)} {inv.currency || 'USD'}
+                          </span>
+                          <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                            inv.status === 'PAID' ? 'bg-emerald-100 text-emerald-800' :
+                            inv.status === 'CANCELLED' ? 'bg-rose-100 text-rose-800' :
+                            'bg-amber-100 text-amber-800'
+                          }`}>
+                            {inv.status === 'PAID' ? 'PAGADA' : inv.status === 'CANCELLED' ? 'ANULADA' : 'POR COBRAR'}
+                          </span>
+                          <Link
+                            href={`/invoices?search=${encodeURIComponent(inv.code)}`}
+                            className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-bold transition shadow-2xs"
+                          >
+                            Ver en Facturación
+                          </Link>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Tabla de Productos Cotizados */}
               <div>
                 <h4 className="font-bold text-slate-800 mb-2 flex items-center gap-2 text-sm">
@@ -848,22 +940,39 @@ export default function QuotationsPage() {
                       <tr className="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
                         <th className="p-3">SKU</th>
                         <th className="p-3">Descripción</th>
-                        <th className="p-3 text-center">Cant.</th>
+                        <th className="p-3 text-center">Cant. Cotizada</th>
+                        <th className="p-3 text-center">Despachado Previo</th>
+                        <th className="p-3 text-center">Saldo Pendiente</th>
                         <th className="p-3 text-right">P. Venta ($)</th>
-                        <th className="p-3 text-right">Costo Estim. ($)</th>
                         <th className="p-3 text-right">Subtotal ($)</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {selectedQuote.items?.map((it, idx) => {
-                        const cost = it.costPrice && it.costPrice > 0 ? it.costPrice : (it.unitPriceUSD * 0.85);
+                        const quoted = it.quotedQuantity !== undefined ? it.quotedQuantity : it.quantity;
+                        const dispatched = it.dispatchedQuantity || 0;
+                        const pending = it.pendingQuantity !== undefined ? it.pendingQuantity : Math.max(0, quoted - dispatched);
+
                         return (
                           <tr key={idx} className="hover:bg-slate-50">
                             <td className="p-3 font-mono text-slate-500">{it.sku || 'N/A'}</td>
                             <td className="p-3 font-medium text-slate-900">{it.name}</td>
-                            <td className="p-3 text-center font-bold">{it.quantity} {it.unit || 'u'}</td>
+                            <td className="p-3 text-center font-bold text-slate-800">{quoted} {it.unit || 'u'}</td>
+                            <td className="p-3 text-center">
+                              <span className={`font-mono font-bold ${dispatched > 0 ? 'text-indigo-600' : 'text-slate-400'}`}>
+                                {dispatched}
+                              </span>
+                            </td>
+                            <td className="p-3 text-center">
+                              <span className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold ${
+                                pending === 0 && quoted > 0 ? 'bg-emerald-100 text-emerald-800' :
+                                pending < quoted && pending > 0 ? 'bg-amber-100 text-amber-800 border border-amber-300' :
+                                'bg-slate-100 text-slate-700'
+                              }`}>
+                                {pending === 0 && quoted > 0 ? '✅ 0 (Listo)' : `${pending} pend.`}
+                              </span>
+                            </td>
                             <td className="p-3 text-right font-mono">${Number(it.unitPriceUSD || 0).toFixed(2)}</td>
-                            <td className="p-3 text-right font-mono text-slate-500">${Number(cost).toFixed(2)}</td>
                             <td className="p-3 text-right font-mono font-bold text-slate-900">
                               ${Number((it.unitPriceUSD || 0) * (it.quantity || 1)).toFixed(2)}
                             </td>

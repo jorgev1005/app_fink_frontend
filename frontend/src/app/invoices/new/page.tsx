@@ -137,6 +137,24 @@ function NewInvoiceContent() {
   const [quoteFilterStatus, setQuoteFilterStatus] = useState('ALL');
   const [quoteLoading, setQuoteLoading] = useState(false);
 
+  // Helper para asignar días de crédito rápidamente
+  const setCreditDays = (days: number) => {
+    const base = issueDate ? new Date(issueDate + 'T12:00:00') : new Date();
+    base.setDate(base.getDate() + days);
+    const yyyy = base.getFullYear();
+    const mm = String(base.getMonth() + 1).padStart(2, '0');
+    const dd = String(base.getDate()).padStart(2, '0');
+    setDueDate(`${yyyy}-${mm}-${dd}`);
+  };
+
+  const getCreditDaysDiff = () => {
+    if (!issueDate || !dueDate) return null;
+    const d1 = new Date(issueDate + 'T12:00:00');
+    const d2 = new Date(dueDate + 'T12:00:00');
+    const diff = Math.round((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
+    return diff;
+  };
+
   const loadAvailableQuotes = async () => {
     setQuoteLoading(true);
     try {
@@ -157,32 +175,66 @@ function NewInvoiceContent() {
     setIsDeliveryNote(isDeliv);
     setPurchaseOrder(quote.correlative || quote.id);
     if (quote.createdAt) setPurchaseOrderDate(quote.createdAt.slice(0, 10));
-    setDescription(`Venta / Despacho s/Cotización ${quote.correlative || quote.id} - ${quote.customer?.name || 'Cliente'}`);
     setCurrency('USD');
 
-    // Mapear ítems
-    if (Array.isArray(quote.items) && quote.items.length > 0) {
-      const mappedLines = quote.items.map((item: any, idx: number) => {
-        const matchedProd = products.find(p => 
-          (p.sku && item.sku && p.sku.toLowerCase() === item.sku.toLowerCase()) ||
-          (p.name && item.name && p.name.toLowerCase() === item.name.toLowerCase()) ||
-          p.id === item.matchedProductId
-        );
+    const previousDocs = quote.relatedInvoices || [];
+    const hasPriorDeliveries = previousDocs.length > 0;
+    const deliveryNumber = previousDocs.length + 1;
 
-        return {
-          id: Date.now() + idx,
-          productId: matchedProd ? matchedProd.id : 'CUSTOM',
-          name: item.name || (matchedProd ? matchedProd.name : 'Producto'),
-          quantity: Number(item.quantity || 1),
-          price: Number(item.unitPriceUSD || item.unitPrice || 0),
-          total: Number(item.subtotalUSD || (Number(item.quantity || 1) * Number(item.unitPriceUSD || item.unitPrice || 0))),
-          notes: item.medidas || item.notes || ''
-        };
-      });
+    setDescription(
+      hasPriorDeliveries
+        ? `Despacho (Entrega #${deliveryNumber}) s/Cotización ${quote.correlative || quote.id} - ${quote.customer?.name || 'Cliente'}`
+        : `Venta / Despacho s/Cotización ${quote.correlative || quote.id} - ${quote.customer?.name || 'Cliente'}`
+    );
+
+    // Mapear ítems considerando saldos pendientes si ya hubo despachos previos
+    if (Array.isArray(quote.items) && quote.items.length > 0) {
+      let runningTotal = 0;
+
+      const mappedLines = quote.items
+        .map((item: any, idx: number) => {
+          const matchedProd = products.find(p => 
+            (p.sku && item.sku && p.sku.toLowerCase() === item.sku.toLowerCase()) ||
+            (p.name && item.name && p.name.toLowerCase() === item.name.toLowerCase()) ||
+            p.id === item.matchedProductId
+          );
+
+          // Si la cotización tiene desglose de pendientes, usar pendingQuantity; sino, item.quantity
+          let qtyToDispatch = Number(item.quantity || 1);
+          if (hasPriorDeliveries && item.pendingQuantity !== undefined) {
+            qtyToDispatch = Number(item.pendingQuantity);
+          }
+
+          const unitPrice = Number(item.unitPriceUSD || item.unitPrice || 0);
+          const lineTotal = Number(qtyToDispatch) * unitPrice;
+          runningTotal += lineTotal;
+
+          let noteText = item.medidas || item.notes || '';
+          if (hasPriorDeliveries && item.dispatchedQuantity !== undefined && item.dispatchedQuantity > 0) {
+            noteText = `[Cotizado: ${item.quotedQuantity || item.quantity} | Previo: ${item.dispatchedQuantity} | Por despachar: ${qtyToDispatch}] ${noteText}`.trim();
+          }
+
+          return {
+            id: Date.now() + idx,
+            productId: matchedProd ? matchedProd.id : 'CUSTOM',
+            name: item.name || (matchedProd ? matchedProd.name : 'Producto'),
+            quantity: Number(qtyToDispatch),
+            price: unitPrice,
+            total: lineTotal,
+            notes: noteText
+          };
+        })
+        .filter((line: any, _: number, arr: any[]) => {
+          const anyPending = arr.some(l => l.quantity > 0);
+          if (anyPending) {
+            return line.quantity > 0;
+          }
+          return true;
+        });
 
       setLines(mappedLines);
       setUseItemsMode(true);
-      setTotal(String(quote.totalUSD || 0));
+      setTotal(String(runningTotal > 0 ? runningTotal.toFixed(2) : (quote.totalUSD || 0)));
     }
 
     // Buscar si el cliente ya existe en el maestro de contactos
@@ -202,7 +254,11 @@ function NewInvoiceContent() {
     }
 
     setShowQuoteModal(false);
-    toast.success(`Cotización ${quote.correlative || quote.id} cargada exitosamente`);
+    if (hasPriorDeliveries) {
+      toast.success(`Cotización ${quote.correlative || quote.id}: Se cargó el saldo pendiente por despachar (Entrega #${deliveryNumber})`);
+    } else {
+      toast.success(`Cotización ${quote.correlative || quote.id} cargada exitosamente`);
+    }
   };
 
   // Cargar automáticamente si viene el parámetro ?fromQuotation=
@@ -618,25 +674,77 @@ function NewInvoiceContent() {
                          <p className="text-xs text-gray-400 mt-1">Opcional (se genera auto si vacío)</p>
                     </div>
 
-                    {/* Dates */}
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Emisión</label>
-                            <input 
-                                type="date"
-                                className="w-full p-2.5 bg-white border border-gray-200 focus:ring-2 focus:ring-blue-100 rounded-xl outline-none"
-                                value={issueDate}
-                                onChange={(e) => setIssueDate(e.target.value)}
-                            />
+                    {/* Dates & Quick Credit Terms */}
+                    <div className="md:col-span-2 space-y-3 bg-slate-50/80 p-4 rounded-2xl border border-slate-200">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5">
+                                    <Calendar className="w-4 h-4 text-blue-600" />
+                                    Fecha de Emisión
+                                </label>
+                                <input 
+                                    type="date"
+                                    className="w-full p-2.5 bg-white border border-gray-200 focus:ring-2 focus:ring-blue-100 rounded-xl outline-none font-medium"
+                                    value={issueDate}
+                                    onChange={(e) => setIssueDate(e.target.value)}
+                                />
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center justify-between">
+                                    <span className="flex items-center gap-1.5">
+                                        <Clock className="w-4 h-4 text-amber-600" />
+                                        Fecha de Vencimiento
+                                    </span>
+                                    {dueDate && (
+                                        <span className="text-[11px] font-bold text-blue-700 bg-blue-100/90 px-2 py-0.5 rounded-full">
+                                            {getCreditDaysDiff() !== null ? (
+                                                getCreditDaysDiff() === 0 ? 'Contado (0 días)' :
+                                                (getCreditDaysDiff()! > 0 ? `${getCreditDaysDiff()} días de crédito` : `Vencida (${Math.abs(getCreditDaysDiff()!)}d antes)`)
+                                            ) : ''}
+                                        </span>
+                                    )}
+                                </label>
+                                <input 
+                                    type="date"
+                                    className="w-full p-2.5 bg-white border border-gray-200 focus:ring-2 focus:ring-blue-100 rounded-xl outline-none font-medium"
+                                    value={dueDate}
+                                    onChange={(e) => setDueDate(e.target.value)}
+                                />
+                            </div>
                         </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Vencimiento</label>
-                            <input 
-                                type="date"
-                                className="w-full p-2.5 bg-white border border-gray-200 focus:ring-2 focus:ring-blue-100 rounded-xl outline-none"
-                                value={dueDate}
-                                onChange={(e) => setDueDate(e.target.value)}
-                            />
+
+                        {/* Atajos Rápidos de Días de Crédito */}
+                        <div className="pt-1.5 border-t border-slate-200/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <span className="text-xs font-bold text-slate-600 flex items-center gap-1 shrink-0">
+                                ⚡ Atajos de Crédito:
+                            </span>
+                            <div className="flex flex-wrap gap-1.5">
+                                {[
+                                    { label: 'Contado (0d)', days: 0 },
+                                    { label: '7 días', days: 7 },
+                                    { label: '15 días', days: 15 },
+                                    { label: '20 días', days: 20 },
+                                    { label: '30 días', days: 30 },
+                                    { label: '45 días', days: 45 },
+                                    { label: '60 días', days: 60 }
+                                ].map((term) => {
+                                    const isSelected = getCreditDaysDiff() === term.days;
+                                    return (
+                                        <button
+                                            key={term.days}
+                                            type="button"
+                                            onClick={() => setCreditDays(term.days)}
+                                            className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer border ${
+                                                isSelected 
+                                                    ? 'bg-blue-600 text-white border-blue-600 shadow-2xs' 
+                                                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100 hover:border-slate-300'
+                                            }`}
+                                        >
+                                            {term.label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
                         </div>
                     </div>
 
@@ -1012,21 +1120,27 @@ function NewInvoiceContent() {
                   .map(q => {
                     const itemsCount = Array.isArray(q.items) ? q.items.length : 0;
                     const totalUnits = Array.isArray(q.items) ? q.items.reduce((acc: number, i: any) => acc + (Number(i.quantity) || 0), 0) : 0;
+                    const metrics = q.dispatchMetrics;
+                    const hasPrior = metrics?.relatedInvoicesCount > 0;
+                    const isPartially = q.status === 'PARTIALLY_INVOICED' || (hasPrior && metrics?.totalPendingUnits > 0);
+                    const isFully = q.status === 'FULLY_INVOICED' || (hasPrior && metrics?.totalPendingUnits === 0);
                     const isPending = !q.status || q.status === 'PENDING';
                     const isApproved = q.status === 'APPROVED';
-                    const isInvoiced = q.status === 'INVOICED';
 
                     return (
                       <div key={q.id || q.correlative} className="pt-2.5 first:pt-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 hover:bg-slate-50 rounded-xl transition-all border border-transparent hover:border-slate-200">
                         <div className="space-y-1">
-                          <div className="flex items-center gap-2">
+                          <div className="flex flex-wrap items-center gap-2">
                             <span className="font-mono font-bold text-slate-900 text-xs">{q.correlative || q.id}</span>
                             <span className={`px-1.5 py-0.5 rounded text-[9.5px] font-extrabold uppercase ${
-                              isInvoiced ? 'bg-purple-100 text-purple-800' :
+                              isFully ? 'bg-purple-100 text-purple-800' :
+                              isPartially ? 'bg-amber-100 text-amber-900 border border-amber-300' :
                               isApproved ? 'bg-emerald-100 text-emerald-800' :
-                              'bg-amber-100 text-amber-800'
+                              'bg-slate-100 text-slate-700'
                             }`}>
-                              {isInvoiced ? 'Facturada / Despachada' : isApproved ? 'Aprobada' : 'Pendiente'}
+                              {isFully ? 'Despachada Total' :
+                               isPartially ? `Despacho Parcial (${metrics?.totalDispatchedUnits || 0}/${metrics?.totalQuotedUnits || totalUnits} unds)` :
+                               isApproved ? 'Aprobada' : 'Pendiente'}
                             </span>
                             <span className="text-[10px] text-slate-400 font-mono">
                               {new Date(q.createdAt).toLocaleDateString('es-VE')}
@@ -1036,33 +1150,45 @@ function NewInvoiceContent() {
                             {q.customer?.name || 'Cliente Particular'}
                             {q.customer?.taxId && <span className="text-xs text-slate-500 font-mono ml-2 font-normal">({q.customer.taxId})</span>}
                           </div>
-                          <div className="text-[11px] text-slate-500 flex items-center gap-3">
-                            <span>📦 {itemsCount} productos ({totalUnits} unds)</span>
+                          <div className="text-[11px] text-slate-500 flex flex-wrap items-center gap-2">
+                            <span>📦 {itemsCount} productos ({totalUnits} unds cotizadas)</span>
                             <span>•</span>
                             <span className="font-bold text-slate-900">${Number(q.totalUSD || 0).toFixed(2)} USD</span>
                             {q.totalBs && <span className="font-mono text-slate-400">(Bs. {Number(q.totalBs).toLocaleString('es-VE', { minimumFractionDigits: 2 })})</span>}
                           </div>
+
+                          {/* Documentos emitidos previamente */}
+                          {hasPrior && Array.isArray(q.relatedInvoices) && q.relatedInvoices.length > 0 && (
+                            <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                              <span className="text-[10px] text-indigo-700 font-semibold">Docs emitidos:</span>
+                              {q.relatedInvoices.map((inv: any) => (
+                                <span key={inv.id || inv.code} className="text-[10px] font-mono font-bold bg-indigo-50 text-indigo-800 border border-indigo-200 px-1.5 py-0.5 rounded">
+                                  {inv.code} (${Number(inv.total || 0).toFixed(2)})
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </div>
 
                         {/* Botones de acción directa */}
-                        <div className="flex items-center gap-2 shrink-0">
+                        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0">
                           <button
                             type="button"
                             onClick={() => applyQuotationToForm(q, true)}
-                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-all shadow-2xs cursor-pointer flex items-center gap-1"
-                            title="Cargar como Nota de Entrega"
+                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-all shadow-2xs cursor-pointer flex items-center justify-center gap-1"
+                            title="Cargar saldo a Nota de Entrega"
                           >
                             <FileText size={12} />
-                            Como Nota de Entrega
+                            {isPartially ? `Saldo (${metrics?.totalPendingUnits} unds) a Nota` : 'Como Nota de Entrega'}
                           </button>
                           <button
                             type="button"
                             onClick={() => applyQuotationToForm(q, false)}
-                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-all shadow-2xs cursor-pointer flex items-center gap-1"
-                            title="Cargar como Factura de Venta"
+                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-all shadow-2xs cursor-pointer flex items-center justify-center gap-1"
+                            title="Cargar saldo a Factura"
                           >
                             <DollarSign size={12} />
-                            Como Factura
+                            {isPartially ? `Saldo (${metrics?.totalPendingUnits} unds) a Factura` : 'Como Factura'}
                           </button>
                         </div>
                       </div>

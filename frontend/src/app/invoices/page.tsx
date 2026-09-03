@@ -4,6 +4,46 @@ import { useState, useEffect } from 'react';
 import api, { projectsAPI } from '@/lib/api';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { Clock, AlertCircle, Calendar, CheckCircle2, Search, X } from 'lucide-react';
+
+const calculateDueStatus = (dueDateStr?: string, status?: string) => {
+    if (!dueDateStr) return null;
+    if (status === 'PAID') {
+        return { label: 'Pagada', badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+    }
+    if (status === 'CANCELLED') {
+        return { label: 'Anulada', badgeClass: 'bg-slate-100 text-slate-500 border-slate-200' };
+    }
+    const due = new Date(dueDateStr);
+    const today = new Date();
+    due.setHours(0, 0, 0, 0);
+    today.setHours(0, 0, 0, 0);
+    const diffTime = due.getTime() - today.getTime();
+    const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
+
+    if (diffDays < 0) {
+        return { 
+            label: `Vencida hace ${Math.abs(diffDays)}d`, 
+            diffDays, 
+            isOverdue: true, 
+            badgeClass: 'bg-rose-100 text-rose-800 border-rose-300 font-bold' 
+        };
+    } else if (diffDays === 0) {
+        return { 
+            label: 'Vence hoy', 
+            diffDays, 
+            isToday: true, 
+            badgeClass: 'bg-amber-100 text-amber-800 border-amber-300 font-bold' 
+        };
+    } else {
+        return { 
+            label: `Vence en ${diffDays}d`, 
+            diffDays, 
+            isPending: true, 
+            badgeClass: 'bg-blue-50 text-blue-700 border-blue-200 font-medium' 
+        };
+    }
+};
 
 export default function InvoicesPage() {
     const [invoices, setInvoices] = useState<any[]>([]);
@@ -12,6 +52,7 @@ export default function InvoicesPage() {
     const [projectFilter, setProjectFilter] = useState('');
     const [statusFilter, setStatusFilter] = useState('');
     const [originFilter, setOriginFilter] = useState('');
+    const [dueFilter, setDueFilter] = useState('');
     const [search, setSearch] = useState('');
 
     useEffect(() => {
@@ -61,13 +102,23 @@ export default function InvoicesPage() {
         if (originFilter === 'DELIVERY_NOTE' && !inv.code?.startsWith('NE')) return false;
         if (originFilter === 'STANDARD' && (inv.code?.startsWith('POS-') || inv.code?.startsWith('NE') || inv.type === 'BILL' || inv.code?.startsWith('OC-'))) return false;
 
+        if (dueFilter) {
+            const dueInfo = calculateDueStatus(inv.dueDate, inv.status);
+            if (dueFilter === 'OVERDUE' && !dueInfo?.isOverdue) return false;
+            if (dueFilter === 'TODAY' && !dueInfo?.isToday) return false;
+            if (dueFilter === 'UPCOMING' && (!dueInfo?.isPending || (dueInfo?.diffDays !== undefined && dueInfo.diffDays > 7))) return false;
+            if (dueFilter === 'PAID' && inv.status !== 'PAID') return false;
+        }
+
         if (search) {
              const term = search.toLowerCase();
              const codeMatch = inv.code?.toLowerCase().includes(term);
+             const poMatch = inv.purchaseOrder?.toLowerCase().includes(term);
+             const notesMatch = inv.notes?.toLowerCase().includes(term);
              const name = inv.clientName || inv.contact?.name || inv.vendor?.name || inv.contactName || '';
              const nameMatch = name.toLowerCase().includes(term);
              const projectMatch = (inv.project?.name || '').toLowerCase().includes(term);
-             return codeMatch || nameMatch || projectMatch;
+             return codeMatch || poMatch || notesMatch || nameMatch || projectMatch;
         }
         return true;
     });
@@ -101,18 +152,26 @@ export default function InvoicesPage() {
             
             {/* BARRA DE FILTROS AVANZADOS */}
             <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 mb-6 flex flex-col md:flex-row gap-3">
-                <div className="flex-1">
+                <div className="flex-1 relative">
                     <input 
-                        placeholder="Buscar por código, cliente, proveedor o proyecto..." 
-                        className="w-full border border-gray-300 px-4 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
+                        placeholder="Buscar por código, cotización (COT-), cliente, proveedor o proyecto..." 
+                        className="w-full border border-gray-300 pl-4 pr-8 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
                         value={search}
                         onChange={e => setSearch(e.target.value)}
                     />
+                    {search && (
+                        <button
+                            onClick={() => setSearch('')}
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-1 cursor-pointer"
+                        >
+                            <X className="w-3.5 h-3.5" />
+                        </button>
+                    )}
                 </div>
 
                 {/* Filtro de Proyecto */}
                 <select 
-                    className="border border-gray-300 px-3 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium text-sm text-gray-700 min-w-[200px]"
+                    className="border border-gray-300 px-3 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium text-sm text-gray-700 min-w-[180px]"
                     value={projectFilter}
                     onChange={e => setProjectFilter(e.target.value)}
                 >
@@ -133,6 +192,19 @@ export default function InvoicesPage() {
                     <option value="STANDARD">📄 Facturas de Venta</option>
                     <option value="DELIVERY_NOTE">📦 Notas de Entrega</option>
                     <option value="POS">🛒 Ventas POS (Caja)</option>
+                </select>
+
+                {/* Filtro de Vencimiento */}
+                <select 
+                    className="border border-gray-300 px-3 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium text-sm text-gray-700"
+                    value={dueFilter}
+                    onChange={e => setDueFilter(e.target.value)}
+                >
+                    <option value="">Plazo de vencimiento</option>
+                    <option value="OVERDUE">⚠️ Facturas Vencidas</option>
+                    <option value="TODAY">⏰ Vencen Hoy</option>
+                    <option value="UPCOMING">⏳ Por Vencer (próximos 7 días)</option>
+                    <option value="PAID">✅ Pagadas al día</option>
                 </select>
 
                 {/* Filtro de Estado */}
@@ -174,7 +246,7 @@ export default function InvoicesPage() {
                                     <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Código</th>
                                     <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Proyecto</th>
                                     <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Cliente / Proveedor</th>
-                                    <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Fecha</th>
+                                    <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Emisión / Vencimiento</th>
                                     <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Total</th>
                                     <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Detalle / Margen</th>
                                     <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Estado</th>
@@ -192,27 +264,42 @@ export default function InvoicesPage() {
                                     return (
                                         <tr key={inv.id} className="hover:bg-gray-50/80 transition">
                                             <td className="px-5 py-3.5 whitespace-nowrap">
-                                                <div className="flex items-center gap-1.5">
-                                                    <span className="font-semibold text-gray-900 font-mono text-xs sm:text-sm">{inv.code}</span>
-                                                    {isOC && (
-                                                        <span className="text-[10px] bg-indigo-100 text-indigo-800 font-bold px-1.5 py-0.5 rounded border border-indigo-200">
-                                                            OC
-                                                        </span>
-                                                    )}
-                                                    {isPurchase && !isOC && (
-                                                        <span className="text-[10px] bg-orange-100 text-orange-800 font-bold px-1.5 py-0.5 rounded border border-orange-200">
-                                                            COMPRA
-                                                        </span>
-                                                    )}
-                                                    {isPos && (
-                                                        <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded border border-emerald-200">
-                                                            POS
-                                                        </span>
-                                                    )}
-                                                    {isNE && (
-                                                        <span className="text-[10px] bg-purple-100 text-purple-800 font-bold px-1.5 py-0.5 rounded border border-purple-200">
-                                                            NE
-                                                        </span>
+                                                <div className="flex flex-col gap-1">
+                                                    <div className="flex items-center gap-1.5">
+                                                        <span className="font-semibold text-gray-900 font-mono text-xs sm:text-sm">{inv.code}</span>
+                                                        {isOC && !inv.purchaseOrder?.startsWith('COT-') && (
+                                                            <span className="text-[10px] bg-indigo-100 text-indigo-800 font-bold px-1.5 py-0.5 rounded border border-indigo-200">
+                                                                OC
+                                                            </span>
+                                                        )}
+                                                        {isPurchase && !isOC && (
+                                                            <span className="text-[10px] bg-orange-100 text-orange-800 font-bold px-1.5 py-0.5 rounded border border-orange-200">
+                                                                COMPRA
+                                                            </span>
+                                                        )}
+                                                        {isPos && (
+                                                            <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded border border-emerald-200">
+                                                                POS
+                                                            </span>
+                                                        )}
+                                                        {isNE && (
+                                                            <span className="text-[10px] bg-purple-100 text-purple-800 font-bold px-1.5 py-0.5 rounded border border-purple-200">
+                                                                NE
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                    {inv.purchaseOrder && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={(e) => {
+                                                                e.stopPropagation();
+                                                                setSearch(inv.purchaseOrder);
+                                                            }}
+                                                            className="text-[9.5px] bg-blue-50 hover:bg-blue-100 text-blue-700 font-mono font-bold px-1.5 py-0.5 rounded border border-blue-200 transition cursor-pointer w-fit flex items-center gap-1"
+                                                            title={`Filtrar todos los documentos de la cotización: ${inv.purchaseOrder}`}
+                                                        >
+                                                            <span>📋</span> {inv.purchaseOrder}
+                                                        </button>
                                                     )}
                                                 </div>
                                             </td>
@@ -230,8 +317,30 @@ export default function InvoicesPage() {
                                                     <div className="text-[10px] text-gray-400 font-mono">{inv.contact.taxId}</div>
                                                 )}
                                             </td>
-                                            <td className="px-5 py-3.5 whitespace-nowrap text-gray-500 text-xs">
-                                                {inv.issueDate ? new Date(inv.issueDate).toLocaleDateString() : '-'}
+                                            <td className="px-5 py-3.5 whitespace-nowrap text-gray-600 text-xs">
+                                                <div className="flex flex-col gap-0.5">
+                                                    <div className="flex items-center gap-1 font-medium text-gray-900">
+                                                        <span className="text-[10px] text-gray-400">Emis:</span>
+                                                        {inv.issueDate ? new Date(inv.issueDate).toLocaleDateString('es-VE') : '-'}
+                                                    </div>
+                                                    {inv.dueDate ? (
+                                                        <div className="flex items-center gap-1">
+                                                            <span className="text-[10px] text-gray-400">Venc:</span>
+                                                            <span className="font-medium text-gray-700">{new Date(inv.dueDate).toLocaleDateString('es-VE')}</span>
+                                                        </div>
+                                                    ) : null}
+                                                    {(() => {
+                                                        const dueInfo = calculateDueStatus(inv.dueDate, inv.status);
+                                                        if (!dueInfo) return null;
+                                                        return (
+                                                            <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] border w-fit mt-0.5 ${dueInfo.badgeClass}`}>
+                                                                {dueInfo.isOverdue && <AlertCircle className="w-2.5 h-2.5 shrink-0" />}
+                                                                {dueInfo.isToday && <Clock className="w-2.5 h-2.5 shrink-0" />}
+                                                                {dueInfo.label}
+                                                            </span>
+                                                        );
+                                                    })()}
+                                                </div>
                                             </td>
                                             <td className="px-5 py-3.5 whitespace-nowrap text-right font-mono font-bold text-gray-900">
                                                 {Number(inv.total || 0).toLocaleString('es-VE', { minimumFractionDigits: 2 })} {inv.currency}
