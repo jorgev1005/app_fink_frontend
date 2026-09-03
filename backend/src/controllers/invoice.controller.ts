@@ -1,4 +1,6 @@
 import { Request, Response } from 'express';
+import fs from 'fs';
+import path from 'path';
 import prisma from '../config/database';
 import { updateAccountBalance } from '../services/account.service';
 import { getLatestExchangeRate } from '../services/exchangeRate.service';
@@ -94,7 +96,7 @@ export const createInvoice = async (req: Request, res: Response) => {
       projectId, type, issueDate, dueDate, currency, total, code,
       vendorId, customerId, description, taxAmount,
       isPaid, paymentAccountId, paymentMethod, paymentReference, lines,
-      status, isDeliveryNote, purchaseOrder, purchaseOrderDate
+      status, isDeliveryNote, purchaseOrder, purchaseOrderDate, notes
     } = req.body;
     
     const user = (req as any).user;
@@ -193,6 +195,7 @@ export const createInvoice = async (req: Request, res: Response) => {
           createdBy: user.id,
           purchaseOrder: purchaseOrder || null,
           purchaseOrderDate: purchaseOrderDate || null,
+          notes: notes || null,
         }
       });
 
@@ -289,6 +292,42 @@ export const createInvoice = async (req: Request, res: Response) => {
                 operation
             ); 
         } catch(e) { console.error('Error updating balance:', e); }
+    }
+
+    // Si la factura/nota proviene de una cotización (COT-...), actualizar el estado de la cotización a INVOICED
+    if (purchaseOrder && typeof purchaseOrder === 'string' && purchaseOrder.startsWith('COT-')) {
+      try {
+        const root = process.cwd();
+        const paths = [
+          path.join(root, 'data', 'cotizaciones_historial.json'),
+          path.join(root, 'uploads', 'cotizaciones_historial.json'),
+          path.join(root, '..', 'data', 'cotizaciones_historial.json'),
+          path.join('/home/fink', 'cotizaciones_historial.json'),
+          path.join('/home/fink/app_fink', 'cotizaciones_historial.json'),
+          path.join('/home/fink/app_fink/backend/data', 'cotizaciones_historial.json'),
+          path.join('/home/fink/asistente', 'cotizaciones_historial.json')
+        ];
+        paths.forEach(filePath => {
+          if (fs.existsSync(filePath)) {
+            try {
+              const list = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+              if (Array.isArray(list)) {
+                const qIdx = list.findIndex((q: any) => q && (q.id === purchaseOrder || q.correlative === purchaseOrder));
+                if (qIdx >= 0) {
+                  list[qIdx].status = 'INVOICED';
+                  list[qIdx].invoiceCode = result.code;
+                  list[qIdx].invoiceId = result.id;
+                  list[qIdx].invoicedAt = new Date().toISOString();
+                  fs.writeFileSync(filePath, JSON.stringify(list, null, 2), 'utf8');
+                  console.log(`[FINK] Cotización ${purchaseOrder} vinculada a documento ${result.code}`);
+                }
+              }
+            } catch (_) {}
+          }
+        });
+      } catch (e) {
+        console.warn('Error updating quotation to INVOICED:', e);
+      }
     }
 
     // === LOG DE ACTIVIDAD ===

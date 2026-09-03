@@ -103,14 +103,23 @@ export const createQuotation = async (req: Request, res: Response) => {
 
     const idx = quotes.findIndex((q: any) => q.id === correlative || q.correlative === correlative);
     if (idx >= 0) {
-      quotes[idx] = { ...quotes[idx], ...quoteRecord };
+      const existing = quotes[idx];
+      quotes[idx] = {
+        ...existing,
+        ...quoteRecord,
+        status: existing.status || quoteRecord.status || 'PENDING',
+        purchaseOrderNumber: (existing as any)?.purchaseOrderNumber || (body as any)?.purchaseOrderNumber,
+        invoiceCode: (existing as any)?.invoiceCode || (body as any)?.invoiceCode,
+        invoiceId: (existing as any)?.invoiceId || (body as any)?.invoiceId,
+        updatedAt: new Date().toISOString()
+      };
+      console.log(`[FINK] Cotización actualizada exitosamente: ${correlative} para ${quoteRecord.customer.name}`);
     } else {
       quotes.unshift(quoteRecord);
+      console.log(`[FINK] Cotización registrada exitosamente: ${correlative} para ${quoteRecord.customer.name}`);
     }
 
     saveAllQuotes(quotes);
-
-    console.log(`[FINK] Cotización registrada exitosamente: ${correlative} para ${quoteRecord.customer.name}`);
 
     res.status(201).json({
       success: true,
