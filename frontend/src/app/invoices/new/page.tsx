@@ -3,7 +3,8 @@ import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import api from '@/lib/api';
 import Link from 'next/link';
-import { ArrowLeft, Save, Building, Calendar, FileText, DollarSign, AlertCircle, User, CreditCard, Wallet, Percent, Plus, Trash2, Box, Package } from 'lucide-react';
+import { ArrowLeft, Save, Building, Calendar, FileText, DollarSign, AlertCircle, User, CreditCard, Wallet, Percent, Plus, Trash2, Box, Package, Search, X, Check, Clock, ChevronRight, Sparkles, ExternalLink, RefreshCw } from 'lucide-react';
+import { toast } from 'sonner';
 import ProductAutocomplete from '@/components/ProductAutocomplete';
 
 function NewInvoiceContent() {
@@ -128,6 +129,105 @@ function NewInvoiceContent() {
 
     loadSourceInvoice();
   }, [searchParams]);
+
+  // Quotation Import State
+  const [showQuoteModal, setShowQuoteModal] = useState(false);
+  const [quoteList, setQuoteList] = useState<any[]>([]);
+  const [quoteSearch, setQuoteSearch] = useState('');
+  const [quoteFilterStatus, setQuoteFilterStatus] = useState('ALL');
+  const [quoteLoading, setQuoteLoading] = useState(false);
+
+  const loadAvailableQuotes = async () => {
+    setQuoteLoading(true);
+    try {
+      const res = await (api as any).quotations.getAll();
+      if (res.data?.success && Array.isArray(res.data.data)) {
+        setQuoteList(res.data.data);
+      }
+    } catch (err) {
+      console.warn('Error loading quotations for invoice import:', err);
+    } finally {
+      setQuoteLoading(false);
+    }
+  };
+
+  const applyQuotationToForm = (quote: any, forceDeliveryNote?: boolean) => {
+    setType('INVOICE');
+    const isDeliv = forceDeliveryNote !== undefined ? forceDeliveryNote : isDeliveryNote;
+    setIsDeliveryNote(isDeliv);
+    setPurchaseOrder(quote.correlative || quote.id);
+    if (quote.createdAt) setPurchaseOrderDate(quote.createdAt.slice(0, 10));
+    setDescription(`Venta / Despacho s/Cotización ${quote.correlative || quote.id} - ${quote.customer?.name || 'Cliente'}`);
+    setCurrency('USD');
+
+    // Mapear ítems
+    if (Array.isArray(quote.items) && quote.items.length > 0) {
+      const mappedLines = quote.items.map((item: any, idx: number) => {
+        const matchedProd = products.find(p => 
+          (p.sku && item.sku && p.sku.toLowerCase() === item.sku.toLowerCase()) ||
+          (p.name && item.name && p.name.toLowerCase() === item.name.toLowerCase()) ||
+          p.id === item.matchedProductId
+        );
+
+        return {
+          id: Date.now() + idx,
+          productId: matchedProd ? matchedProd.id : 'CUSTOM',
+          name: item.name || (matchedProd ? matchedProd.name : 'Producto'),
+          quantity: Number(item.quantity || 1),
+          price: Number(item.unitPriceUSD || item.unitPrice || 0),
+          total: Number(item.subtotalUSD || (Number(item.quantity || 1) * Number(item.unitPriceUSD || item.unitPrice || 0))),
+          notes: item.medidas || item.notes || ''
+        };
+      });
+
+      setLines(mappedLines);
+      setUseItemsMode(true);
+      setTotal(String(quote.totalUSD || 0));
+    }
+
+    // Buscar si el cliente ya existe en el maestro de contactos
+    if (quote.customer) {
+      const custName = (quote.customer.name || '').toLowerCase().trim();
+      const custTaxId = (quote.customer.taxId || '').toLowerCase().trim();
+      
+      const foundContact = contacts.find(c => {
+        const cName = (c.name || '').toLowerCase().trim();
+        const cTaxId = (c.taxId || c.rif || '').toLowerCase().trim();
+        return (custTaxId && cTaxId === custTaxId) || (custName && cName.includes(custName)) || (custName && custName.includes(cName));
+      });
+
+      if (foundContact) {
+        setContactId(foundContact.id);
+      }
+    }
+
+    setShowQuoteModal(false);
+    toast.success(`Cotización ${quote.correlative || quote.id} cargada exitosamente`);
+  };
+
+  // Cargar automáticamente si viene el parámetro ?fromQuotation=
+  useEffect(() => {
+    const fromQuoteId = searchParams.get('fromQuotation');
+    const isDeliveryParam = searchParams.get('isDeliveryNote');
+    if (!fromQuoteId) return;
+
+    const loadQuotation = async () => {
+      try {
+        setLoading(true);
+        const res = await (api as any).quotations.getById(fromQuoteId);
+        const quote = res.data?.data;
+        if (quote) {
+          applyQuotationToForm(quote, isDeliveryParam === 'true');
+        }
+      } catch (err: any) {
+        console.warn('Error loading quotation for invoice:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadQuotation();
+  }, [searchParams, products.length, contacts.length]);
 
   // Initial Load: Projects
   useEffect(() => {
@@ -353,6 +453,30 @@ function NewInvoiceContent() {
             <p className="text-sm font-medium">{error}</p>
         </div>
       )}
+
+      {/* Banner: Importar desde Cotización Previa */}
+      <div className="mb-6 p-4 bg-gradient-to-r from-blue-50 via-indigo-50 to-slate-50 border border-blue-200/80 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-xs">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+            <FileText className="w-5 h-5" />
+          </div>
+          <div>
+            <h4 className="text-sm font-bold text-slate-900 flex items-center gap-2">
+              ¿El cliente tiene una Cotización previa?
+              <span className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-[10px] font-extrabold uppercase">Catálogo / POS</span>
+            </h4>
+            <p className="text-xs text-slate-500">Carga automáticamente los productos, cantidades, precios y cliente en esta Nota de Entrega o Factura con un clic.</p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={() => { setShowQuoteModal(true); loadAvailableQuotes(); }}
+          className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-xs transition-all flex items-center gap-2 cursor-pointer shrink-0"
+        >
+          <Search className="w-3.5 h-3.5" />
+          Revisar Cotizaciones Previas
+        </button>
+      </div>
 
       <form onSubmit={submit} className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden">
         
@@ -797,6 +921,169 @@ function NewInvoiceContent() {
             </button>
         </div>
       </form>
+
+      {/* Modal: Selector de Cotización Previa */}
+      {showQuoteModal && (
+        <div className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl border border-slate-200 w-full max-w-3xl overflow-hidden flex flex-col max-h-[85vh] animate-in fade-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="p-4 md:p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50/50">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-blue-600 text-white rounded-xl shadow-xs">
+                  <FileText size={18} />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-base">Seleccionar Cotización Previa</h3>
+                  <p className="text-xs text-slate-500">Elige la cotización para importar sus productos a la Nota de Entrega o Factura</p>
+                </div>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setShowQuoteModal(false)}
+                className="p-1.5 hover:bg-slate-200/70 text-slate-400 hover:text-slate-600 rounded-lg transition-colors cursor-pointer"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Modal Search & Filters */}
+            <div className="p-4 border-b border-slate-100 flex flex-col sm:flex-row items-center gap-3">
+              <div className="relative flex-1 w-full">
+                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                <input
+                  type="text"
+                  placeholder="Buscar por cliente, RIF, número COT- o producto..."
+                  value={quoteSearch}
+                  onChange={(e) => setQuoteSearch(e.target.value)}
+                  className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                />
+              </div>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setQuoteFilterStatus('ALL')}
+                  className={`px-2.5 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${quoteFilterStatus === 'ALL' ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                >
+                  Todas
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setQuoteFilterStatus('PENDING')}
+                  className={`px-2.5 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${quoteFilterStatus === 'PENDING' ? 'bg-amber-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                >
+                  Pendientes
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setQuoteFilterStatus('APPROVED')}
+                  className={`px-2.5 py-1.5 text-xs font-bold rounded-lg transition-colors cursor-pointer ${quoteFilterStatus === 'APPROVED' ? 'bg-emerald-600 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}
+                >
+                  Aprobadas
+                </button>
+                <button
+                  type="button"
+                  onClick={loadAvailableQuotes}
+                  className="p-1.5 hover:bg-slate-100 text-slate-500 rounded-lg cursor-pointer"
+                  title="Recargar"
+                >
+                  <RefreshCw size={15} className={quoteLoading ? "animate-spin" : ""} />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body: List of Quotes */}
+            <div className="p-4 overflow-y-auto flex-1 space-y-2.5 divide-y divide-slate-100">
+              {quoteLoading ? (
+                <div className="p-8 text-center text-xs text-slate-400">Cargando cotizaciones del sistema...</div>
+              ) : quoteList.length === 0 ? (
+                <div className="p-8 text-center text-xs text-slate-400">No se encontraron cotizaciones registradas.</div>
+              ) : (
+                quoteList
+                  .filter(q => {
+                    if (quoteFilterStatus !== 'ALL' && q.status !== quoteFilterStatus) return false;
+                    if (!quoteSearch.trim()) return true;
+                    const s = quoteSearch.toLowerCase().trim();
+                    const corr = (q.correlative || q.id || '').toLowerCase();
+                    const cName = (q.customer?.name || '').toLowerCase();
+                    const cTaxId = (q.customer?.taxId || '').toLowerCase();
+                    const itemsStr = Array.isArray(q.items) ? q.items.map((i: any) => i.name || '').join(' ').toLowerCase() : '';
+                    return corr.includes(s) || cName.includes(s) || cTaxId.includes(s) || itemsStr.includes(s);
+                  })
+                  .map(q => {
+                    const itemsCount = Array.isArray(q.items) ? q.items.length : 0;
+                    const totalUnits = Array.isArray(q.items) ? q.items.reduce((acc: number, i: any) => acc + (Number(i.quantity) || 0), 0) : 0;
+                    const isPending = !q.status || q.status === 'PENDING';
+                    const isApproved = q.status === 'APPROVED';
+                    const isInvoiced = q.status === 'INVOICED';
+
+                    return (
+                      <div key={q.id || q.correlative} className="pt-2.5 first:pt-0 flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3 hover:bg-slate-50 rounded-xl transition-all border border-transparent hover:border-slate-200">
+                        <div className="space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-mono font-bold text-slate-900 text-xs">{q.correlative || q.id}</span>
+                            <span className={`px-1.5 py-0.5 rounded text-[9.5px] font-extrabold uppercase ${
+                              isInvoiced ? 'bg-purple-100 text-purple-800' :
+                              isApproved ? 'bg-emerald-100 text-emerald-800' :
+                              'bg-amber-100 text-amber-800'
+                            }`}>
+                              {isInvoiced ? 'Facturada / Despachada' : isApproved ? 'Aprobada' : 'Pendiente'}
+                            </span>
+                            <span className="text-[10px] text-slate-400 font-mono">
+                              {new Date(q.createdAt).toLocaleDateString('es-VE')}
+                            </span>
+                          </div>
+                          <div className="font-bold text-sm text-slate-800">
+                            {q.customer?.name || 'Cliente Particular'}
+                            {q.customer?.taxId && <span className="text-xs text-slate-500 font-mono ml-2 font-normal">({q.customer.taxId})</span>}
+                          </div>
+                          <div className="text-[11px] text-slate-500 flex items-center gap-3">
+                            <span>📦 {itemsCount} productos ({totalUnits} unds)</span>
+                            <span>•</span>
+                            <span className="font-bold text-slate-900">${Number(q.totalUSD || 0).toFixed(2)} USD</span>
+                            {q.totalBs && <span className="font-mono text-slate-400">(Bs. {Number(q.totalBs).toLocaleString('es-VE', { minimumFractionDigits: 2 })})</span>}
+                          </div>
+                        </div>
+
+                        {/* Botones de acción directa */}
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => applyQuotationToForm(q, true)}
+                            className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-all shadow-2xs cursor-pointer flex items-center gap-1"
+                            title="Cargar como Nota de Entrega"
+                          >
+                            <FileText size={12} />
+                            Como Nota de Entrega
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => applyQuotationToForm(q, false)}
+                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-all shadow-2xs cursor-pointer flex items-center gap-1"
+                            title="Cargar como Factura de Venta"
+                          >
+                            <DollarSign size={12} />
+                            Como Factura
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-3 bg-slate-50 border-t border-slate-100 text-right">
+              <button
+                type="button"
+                onClick={() => setShowQuoteModal(false)}
+                className="px-4 py-1.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-100 rounded-xl text-xs font-semibold cursor-pointer"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
