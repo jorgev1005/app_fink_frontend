@@ -372,8 +372,9 @@ export default function InvoiceDetailsPage() {
 
   const shareViaWhatsApp = () => {
     if (!invoice) return;
+    const isDelivery = viewMode === 'DELIVERY_NOTE';
     const isSale = invoice.type === 'INVOICE';
-    const header = isSale ? 'FACTURA / NOTA DE VENTA' : 'FACTURA DE COMPRA';
+    const header = isDelivery ? 'NOTA DE ENTREGA' : (isSale ? 'FACTURA DE VENTA' : 'FACTURA DE COMPRA');
     const partyLabel = isSale ? 'Cliente' : 'Proveedor';
     const partyName = contactName || 'Sin nombre';
     const totalStr = formatCurrency(totals.total * conversionFactor, displayCurrency);
@@ -392,27 +393,33 @@ export default function InvoiceDetailsPage() {
     msg += `\n*RESUMEN DE ITEMS:*\n`;
 
     (invoice.items || []).forEach((item) => {
-      const itemTotal = formatCurrency(item.total * conversionFactor, displayCurrency);
-      msg += `• ${item.quantity}x ${item.description || item.name} - ${itemTotal}\n`;
+      if (isDelivery && !showPricesInDeliveryNote) {
+        msg += `• ${item.quantity}x ${item.description || item.name}\n`;
+      } else {
+        const itemTotal = formatCurrency(item.total * conversionFactor, displayCurrency);
+        msg += `• ${item.quantity}x ${item.description || item.name} - ${itemTotal}\n`;
+      }
     });
 
-    msg += `\n*Total Factura:* ${totalStr}\n`;
-    if (totalPaid > 0) {
-      msg += `*Total Abonado:* ${totalPaidStr}\n`;
-    }
-    msg += `*Saldo Pendiente:* ${outstandingStr}\n`;
+    if (!isDelivery || showPricesInDeliveryNote) {
+      msg += `\n*Total:* ${totalStr}\n`;
+      if (totalPaid > 0) {
+        msg += `*Total Abonado:* ${totalPaidStr}\n`;
+      }
+      msg += `*Saldo Pendiente:* ${outstandingStr}\n`;
 
-    // Include payment breakdown if any
-    if (invoice.payments && invoice.payments.length > 0) {
-      msg += `\n*HISTORIAL DE ABONOS:*\n`;
-      invoice.payments.forEach((p, i) => {
-        const pDate = formatDate(p.payment?.date || p.createdAt);
-        const pAmount = formatCurrency(getPaymentAmountInInvoiceCurrency(p) * conversionFactor, displayCurrency);
-        const pMethod = formatPaymentMethod(p.payment?.method);
-        const pRef = p.payment?.reference ? ` (Ref: ${p.payment.reference})` : '';
-        const pOrig = p.payment?.currency && p.payment.currency !== invoice.currency ? ` [Orig: ${formatCurrency(p.payment.amount, p.payment.currency)}]` : '';
-        msg += `${i + 1}. ${pDate} - ${pAmount}${pOrig} via ${pMethod}${pRef}\n`;
-      });
+      // Include payment breakdown if any
+      if (invoice.payments && invoice.payments.length > 0) {
+        msg += `\n*HISTORIAL DE ABONOS:*\n`;
+        invoice.payments.forEach((p, i) => {
+          const pDate = formatDate(p.payment?.date || p.createdAt);
+          const pAmount = formatCurrency(getPaymentAmountInInvoiceCurrency(p) * conversionFactor, displayCurrency);
+          const pMethod = formatPaymentMethod(p.payment?.method);
+          const pRef = p.payment?.reference ? ` (Ref: ${p.payment.reference})` : '';
+          const pOrig = p.payment?.currency && p.payment.currency !== invoice.currency ? ` [Orig: ${formatCurrency(p.payment.amount, p.payment.currency)}]` : '';
+          msg += `${i + 1}. ${pDate} - ${pAmount}${pOrig} via ${pMethod}${pRef}\n`;
+        });
+      }
     }
 
     const phone = contact?.phone ? contact.phone.replace(/[^0-9]/g, '') : '';
@@ -440,7 +447,10 @@ export default function InvoiceDetailsPage() {
         scale: 2,
         useCORS: true,
         logging: false,
-        backgroundColor: '#ffffff'
+        backgroundColor: '#ffffff',
+        ignoreElements: (el) => {
+          return el.hasAttribute('data-html2canvas-ignore') || el.classList.contains('print:hidden');
+        }
       });
 
       const imgData = canvas.toDataURL('image/png');
@@ -467,7 +477,9 @@ export default function InvoiceDetailsPage() {
         heightLeft -= pageHeight;
       }
 
-      const filename = `${invoice.type === 'INVOICE' ? 'Factura' : 'Factura_Compra'}_${invoice.code}.pdf`;
+      const isDelivery = viewMode === 'DELIVERY_NOTE';
+      const docPrefix = isDelivery ? 'Nota_Entrega' : (invoice.type === 'INVOICE' ? 'Factura' : 'Factura_Compra');
+      const filename = `${docPrefix}_${invoice.code}.pdf`;
       pdf.save(filename);
     } catch (error) {
       console.error('Error generando PDF:', error);
@@ -953,6 +965,94 @@ export default function InvoiceDetailsPage() {
                        })()}</tbody>
                </table>
 
+               {viewMode === 'DELIVERY_NOTE' && (() => {
+                 const itemsToSummarize = invoice.items || [];
+                 if (itemsToSummarize.length === 0) return null;
+
+                 // Build a map: productId → { description, totalQty, totalBultos, empaqueCantidad, unidadEmpaque }
+                 const summaryMap = new Map<string, {
+                   description: string;
+                   totalQty: number;
+                   empaqueCantidad: number;
+                   unidadEmpaque: string;
+                 }>();
+
+                 itemsToSummarize.forEach((item) => {
+                   const key = item.productId || `__no_product__${item.description || item.name || ''}`;
+                   const prod = products.find((p: any) => p.id === item.productId);
+                   const empaqQty = prod?.empaqueCantidad && prod.empaqueCantidad > 1 ? prod.empaqueCantidad : 0;
+                   const unidad = prod?.unidad_empaque || 'bulto';
+
+                   if (summaryMap.has(key)) {
+                     const entry = summaryMap.get(key)!;
+                     entry.totalQty += item.quantity;
+                   } else {
+                     summaryMap.set(key, {
+                       description: item.description || item.name || 'Sin nombre',
+                       totalQty: item.quantity,
+                       empaqueCantidad: empaqQty,
+                       unidadEmpaque: unidad,
+                     });
+                   }
+                 });
+
+                 const summaryRows = Array.from(summaryMap.values());
+                 const grandTotalQty = summaryRows.reduce((acc, r) => acc + r.totalQty, 0);
+                 const grandTotalBultos = summaryRows.reduce((acc, r) => {
+                   if (r.empaqueCantidad > 0) return acc + (r.totalQty / r.empaqueCantidad);
+                   return acc;
+                 }, 0);
+
+                 const hasBultos = summaryRows.some(r => r.empaqueCantidad > 0);
+
+                 return (
+                   <div className="mt-4 pt-3 border-t border-gray-200">
+                     <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                       Resumen de Despacho
+                     </h4>
+                     <table className="w-full text-left">
+                       <thead>
+                         <tr className="border-b border-gray-300">
+                           <th className="py-1 text-[9px] font-bold text-gray-400 uppercase tracking-wider w-1/2">Producto</th>
+                           <th className="py-1 text-[9px] font-bold text-gray-400 uppercase tracking-wider text-right">Unidades</th>
+                           {hasBultos && (
+                             <th className="py-1 text-[9px] font-bold text-gray-400 uppercase tracking-wider text-right">Bultos</th>
+                           )}
+                         </tr>
+                       </thead>
+                       <tbody>
+                         {summaryRows.map((row, idx) => {
+                           const bultosNum = row.empaqueCantidad > 0 ? row.totalQty / row.empaqueCantidad : null;
+                           const bultosStr = bultosNum !== null
+                             ? `${Number(bultosNum.toFixed(2)).toLocaleString('es-VE')} ${bultosNum === 1 ? row.unidadEmpaque : (row.unidadEmpaque.endsWith('s') ? row.unidadEmpaque : `${row.unidadEmpaque}s`)}`
+                             : '—';
+                           return (
+                             <tr key={idx} className="border-b border-gray-50 last:border-0">
+                               <td className="py-1 text-[10px] text-gray-700 font-medium leading-tight">{row.description}</td>
+                               <td className="py-1 text-[10px] text-gray-800 font-mono text-right font-semibold leading-tight">{row.totalQty.toLocaleString('es-VE')}</td>
+                               {hasBultos && (
+                                 <td className="py-1 text-[10px] text-gray-600 font-mono text-right leading-tight">{bultosStr}</td>
+                               )}
+                             </tr>
+                           );
+                         })}
+                       </tbody>
+                       <tfoot>
+                         <tr className="border-t border-gray-400">
+                           <td className="py-1 text-[9px] font-bold text-gray-500 uppercase">TOTAL DESPACHO</td>
+                           <td className="py-1 text-[10px] font-mono text-right font-bold text-gray-900">{grandTotalQty.toLocaleString('es-VE')}</td>
+                           {hasBultos && (
+                             <td className="py-1 text-[10px] font-mono text-right font-bold text-gray-700">
+                               {Number(grandTotalBultos.toFixed(2)).toLocaleString('es-VE')}
+                             </td>
+                           )}
+                         </tr>
+                       </tfoot>
+                     </table>
+                   </div>
+                 );
+               })()}
+
               {(viewMode !== 'DELIVERY_NOTE' || showPricesInDeliveryNote) && (
                  <div className="mt-8 flex justify-end">
                      <div className="w-full md:w-5/12 space-y-3">
@@ -994,7 +1094,7 @@ export default function InvoiceDetailsPage() {
               )}
 
               {/* Historial de Abonos / Pagos Realizados */}
-              {invoice.payments && invoice.payments.length > 0 && (
+              {(viewMode !== 'DELIVERY_NOTE' || showPricesInDeliveryNote) && invoice.payments && invoice.payments.length > 0 && (
                 <div className="mt-8 pt-6 border-t border-gray-200">
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
@@ -1068,135 +1168,50 @@ export default function InvoiceDetailsPage() {
                   </div>
                 </div>
               )}
+           </div>
+           
+           <div className="bg-gray-50 px-8 py-6 border-t border-gray-200 text-center text-xs text-gray-400 print:hidden" data-html2canvas-ignore="true">
+                Documento generado por Sistema FINK
+           </div>
+       </div>
 
-              {/* Delivery Note Summary: grouped by product code */}
-              {viewMode === 'DELIVERY_NOTE' && (() => {
-                const itemsToSummarize = invoice.items || [];
-                if (itemsToSummarize.length === 0) return null;
-
-                // Build a map: productId → { description, totalQty, totalBultos, empaqueCantidad, unidadEmpaque }
-                const summaryMap = new Map<string, {
-                  description: string;
-                  totalQty: number;
-                  empaqueCantidad: number;
-                  unidadEmpaque: string;
-                }>();
-
-                itemsToSummarize.forEach((item) => {
-                  const key = item.productId || `__no_product__${item.description || item.name || ''}`;
-                  const prod = products.find((p: any) => p.id === item.productId);
-                  const empaqQty = prod?.empaqueCantidad && prod.empaqueCantidad > 1 ? prod.empaqueCantidad : 0;
-                  const unidad = prod?.unidad_empaque || 'bulto';
-
-                  if (summaryMap.has(key)) {
-                    const entry = summaryMap.get(key)!;
-                    entry.totalQty += item.quantity;
-                  } else {
-                    summaryMap.set(key, {
-                      description: item.description || item.name || 'Sin nombre',
-                      totalQty: item.quantity,
-                      empaqueCantidad: empaqQty,
-                      unidadEmpaque: unidad,
-                    });
-                  }
-                });
-
-                const summaryRows = Array.from(summaryMap.values());
-                // Only show summary if there's at least one product with packaging OR if any product appears merged (qty > original single entry)
-                // Always show when in delivery note mode with items
-                const grandTotalQty = summaryRows.reduce((acc, r) => acc + r.totalQty, 0);
-                const grandTotalBultos = summaryRows.reduce((acc, r) => {
-                  if (r.empaqueCantidad > 0) return acc + (r.totalQty / r.empaqueCantidad);
-                  return acc;
-                }, 0);
-
-                const hasBultos = summaryRows.some(r => r.empaqueCantidad > 0);
-
-                return (
-                  <div className="mt-3 pt-2 border-t border-gray-200 print:mt-2 print:pt-1">
-                    <h4 className="text-[9px] font-bold text-gray-400 uppercase tracking-wider mb-0.5 print:mb-0">
-                      Resumen de Despacho
-                    </h4>
-                    <table className="w-full text-left">
-                      <thead>
-                        <tr className="border-b border-gray-300">
-                          <th className="py-0.5 text-[9px] font-bold text-gray-400 uppercase tracking-wider w-1/2">Producto</th>
-                          <th className="py-0.5 text-[9px] font-bold text-gray-400 uppercase tracking-wider text-right">Unidades</th>
-                          {hasBultos && (
-                            <th className="py-0.5 text-[9px] font-bold text-gray-400 uppercase tracking-wider text-right">Bultos</th>
-                          )}
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {summaryRows.map((row, idx) => {
-                          const bultosNum = row.empaqueCantidad > 0 ? row.totalQty / row.empaqueCantidad : null;
-                          const bultosStr = bultosNum !== null
-                            ? `${Number(bultosNum.toFixed(2)).toLocaleString('es-VE')} ${bultosNum === 1 ? row.unidadEmpaque : (row.unidadEmpaque.endsWith('s') ? row.unidadEmpaque : `${row.unidadEmpaque}s`)}`
-                            : '—';
-                          return (
-                            <tr key={idx} className="border-b border-gray-50 last:border-0">
-                              <td className="py-0.5 text-[10px] text-gray-700 font-medium leading-tight">{row.description}</td>
-                              <td className="py-0.5 text-[10px] text-gray-800 font-mono text-right font-semibold leading-tight">{row.totalQty.toLocaleString('es-VE')}</td>
-                              {hasBultos && (
-                                <td className="py-0.5 text-[10px] text-gray-600 font-mono text-right leading-tight">{bultosStr}</td>
-                              )}
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                      <tfoot>
-                        <tr className="border-t border-gray-400">
-                          <td className="py-0.5 text-[9px] font-bold text-gray-500 uppercase">TOTAL</td>
-                          <td className="py-0.5 text-[10px] font-mono text-right font-bold text-gray-900">{grandTotalQty.toLocaleString('es-VE')}</td>
-                          {hasBultos && (
-                            <td className="py-0.5 text-[10px] font-mono text-right font-bold text-gray-700">
-                              {Number(grandTotalBultos.toFixed(2)).toLocaleString('es-VE')}
-                            </td>
-                          )}
-                        </tr>
-                      </tfoot>
-                    </table>
+       {/* Panel Interno de Rentabilidad (Sólo para vista de Factura, NUNCA en Nota de Entrega, y fuera del documento imprimible/PDF) */}
+       {viewMode === 'INVOICE' && invoice.type === 'INVOICE' && (invoice.totalCost !== undefined && invoice.totalCost > 0) && (
+          <div className="max-w-4xl mx-auto mt-6 bg-slate-50 border border-slate-200 rounded-xl p-5 print:hidden shadow-sm" data-html2canvas-ignore="true">
+              <div className="flex items-center justify-between mb-3 border-b border-slate-200 pb-2">
+                  <h4 className="text-xs font-bold text-slate-600 uppercase tracking-wider flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                      <span>Panel Interno de Rentabilidad (Uso Administrativo)</span>
+                  </h4>
+                  <span className="text-[10px] text-slate-400 font-medium">Exclusivo interno - no visible para clientes ni en PDF</span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-white p-3 rounded-lg border border-slate-200">
+                      <span className="text-xs text-gray-500 block mb-1">Costo Total del Pedido</span>
+                      <span className="font-mono text-gray-800 font-semibold text-base">
+                          {formatCurrency((invoice.totalCost || 0) * conversionFactor, displayCurrency)}
+                      </span>
                   </div>
-                );
-              })()}
-
-              {/* Internal Profitability Details (print:hidden) */}
-              {invoice.type === 'INVOICE' && invoice.status === 'PAID' && (invoice.totalCost !== undefined) && (
-                 <div className="mt-8 pt-6 border-t border-dashed border-gray-200 print:hidden">
-                     <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Información de Rentabilidad (Interno)</h4>
-                     <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 grid grid-cols-1 md:grid-cols-3 gap-4">
-                         <div>
-                             <span className="text-xs text-gray-500 block mb-1">Costo Total del Pedido</span>
-                             <span className="font-mono text-gray-800 font-semibold">
-                                 {formatCurrency((invoice.totalCost || 0) * conversionFactor, displayCurrency)}
-                             </span>
-                         </div>
-                         <div>
-                             <span className="text-xs text-gray-500 block mb-1">Utilidad Neta</span>
-                             <span className={`font-mono font-semibold ${(invoice.netProfit || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                 {formatCurrency((invoice.netProfit || 0) * conversionFactor, displayCurrency)}
-                             </span>
-                         </div>
-                         <div>
-                             <span className="text-xs text-gray-500 block mb-1">Margen de Ganancia</span>
-                             <span className={`font-semibold ${(invoice.netProfit || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                                 {(() => {
-                                     const tax = totals.taxAmount;
-                                     const netSales = Math.max(0.01, totals.total - tax);
-                                     const margin = ((invoice.netProfit || 0) / netSales) * 100;
-                                     return `${margin.toFixed(1)}%`;
-                                 })()}
-                             </span>
-                         </div>
-                     </div>
-                 </div>
-              )}
+                  <div className="bg-white p-3 rounded-lg border border-slate-200">
+                      <span className="text-xs text-gray-500 block mb-1">Utilidad Neta</span>
+                      <span className={`font-mono font-semibold text-base ${(invoice.netProfit || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {formatCurrency((invoice.netProfit || 0) * conversionFactor, displayCurrency)}
+                      </span>
+                  </div>
+                  <div className="bg-white p-3 rounded-lg border border-slate-200">
+                      <span className="text-xs text-gray-500 block mb-1">Margen de Ganancia</span>
+                      <span className={`font-semibold text-base ${(invoice.netProfit || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {(() => {
+                              const tax = totals.taxAmount;
+                              const netSales = Math.max(0.01, totals.total - tax);
+                              const margin = ((invoice.netProfit || 0) / netSales) * 100;
+                              return `${margin.toFixed(1)}%`;
+                          })()}
+                      </span>
+                  </div>
+              </div>
           </div>
-          
-          <div className="bg-gray-50 px-8 py-6 border-t border-gray-200 text-center text-xs text-gray-400 print:hidden">
-               Documento generado por Sistema FINK
-          </div>
-      </div>
+       )}
 
       {/* Payment Modal */}
       {isPaymentModalOpen && (
