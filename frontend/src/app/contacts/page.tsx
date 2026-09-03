@@ -18,7 +18,9 @@ interface Contact {
   phone?: string;
   taxId?: string;
   isActive: boolean;
+  projectId?: string;
   project: {
+    id?: string;
     name: string;
     code: string;
   };
@@ -109,7 +111,6 @@ export default function ContactsPage() {
       setProjects(projectsRes.data.data);
       
       if (projectsRes.data.data.length > 0) {
-        setSelectedProject(projectsRes.data.data[0].id);
         setFormData(prev => ({ ...prev, projectId: projectsRes.data.data[0].id }));
       }
     } catch (error) {
@@ -169,10 +170,16 @@ export default function ContactsPage() {
     setShowModal(true);
   };
 
-  const filteredContacts = contacts.filter(contact =>
-    (!selectedProject || contact.project.code === projects.find(p => p.id === selectedProject)?.code) &&
-    (!searchTerm || contact.name.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
+  const filteredContacts = contacts.filter(contact => {
+    const matchesProject = !selectedProject || contact.projectId === selectedProject || contact.project?.code === projects.find(p => p.id === selectedProject)?.code;
+    const s = searchTerm.toLowerCase().trim();
+    const matchesSearch = !s || 
+      contact.name.toLowerCase().includes(s) || 
+      (contact.taxId && contact.taxId.toLowerCase().includes(s)) ||
+      (contact.email && contact.email.toLowerCase().includes(s)) ||
+      (contact.phone && contact.phone.toLowerCase().includes(s));
+    return matchesProject && matchesSearch;
+  });
 
   const getTypeLabel = (type: string) => {
     const labels: Record<string, string> = {
