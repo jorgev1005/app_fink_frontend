@@ -5,7 +5,7 @@ import { getProjectAccessFilter, checkProjectWriteAccess } from '../utils/projec
 // GET /api/contacts - Listar contactos con búsqueda
 export const getContacts = async (req: Request, res: Response) => {
   try {
-    const { projectId, search, type, limit = '50' } = req.query;
+    const { projectId, search, type, limit } = req.query;
 
     const where: any = {
       ...getProjectAccessFilter(req.user!)
@@ -16,22 +16,30 @@ export const getContacts = async (req: Request, res: Response) => {
     }
 
     if (search) {
+      const s = (search as string).trim();
       where.OR = [
-        { name: { contains: search as string } },
-        { email: { contains: search as string } },
-        { taxId: { contains: search as string } },
+        { name: { contains: s, mode: 'insensitive' } },
+        { email: { contains: s, mode: 'insensitive' } },
+        { taxId: { contains: s, mode: 'insensitive' } },
+        { phone: { contains: s, mode: 'insensitive' } },
       ];
     }
 
     if (type) {
-      where.type = type;
+      if (type === 'CUSTOMER') {
+        where.type = { in: ['CUSTOMER', 'BOTH'] };
+      } else if (type === 'SUPPLIER') {
+        where.type = { in: ['SUPPLIER', 'BOTH'] };
+      } else {
+        where.type = type;
+      }
     }
 
     where.isActive = true;
 
     const contacts = await prisma.contactPerson.findMany({
       where,
-      take: parseInt(limit as string),
+      ...(limit ? { take: parseInt(limit as string) } : {}),
       orderBy: { name: 'asc' },
       include: {
         project: {
