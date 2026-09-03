@@ -264,6 +264,13 @@ export default function InvoiceDetailsPage() {
       if (invData.code?.toUpperCase().startsWith('NE')) {
         setViewMode('DELIVERY_NOTE');
       }
+
+      // Auto-open payment modal if requested in URL
+      if (typeof window !== 'undefined' && window.location.search.includes('openPayment=true')) {
+        setTimeout(() => {
+          openPaymentModal(invData);
+        }, 350);
+      }
     } catch (e) {
       console.error(e);
     } finally {
@@ -271,12 +278,14 @@ export default function InvoiceDetailsPage() {
     }
   };
 
-  const openPaymentModal = async () => {
-     if (!invoice) return;
+  const openPaymentModal = async (targetInv?: any) => {
+     const inv = targetInv || invoice;
+     if (!inv) return;
      setIsPaymentModalOpen(true);
      setPaymentError(null);
+     setPaymentAmount(String(inv.outstanding || 0));
      try {
-        const res = await api.accounts.getAll({ projectId: invoice.projectId });
+        const res = await api.accounts.getAll({ projectId: inv.projectId });
         // Only keep active asset cash/bank accounts
         const list = (res.data.data || []).filter((a: any) => a.isActive && a.type === 'ASSET' && (a.subType === 'BANK' || a.subType === 'CASH'));
         setAccounts(list);
@@ -374,7 +383,8 @@ export default function InvoiceDetailsPage() {
     if (!invoice) return;
     const isDelivery = viewMode === 'DELIVERY_NOTE';
     const isSale = invoice.type === 'INVOICE';
-    const header = isDelivery ? 'NOTA DE ENTREGA' : (isSale ? 'FACTURA DE VENTA' : 'FACTURA DE COMPRA');
+    const isOC = invoice.code?.toUpperCase().startsWith('OC-');
+    const header = isDelivery ? 'NOTA DE ENTREGA' : (isOC ? 'ORDEN DE COMPRA' : (isSale ? 'FACTURA DE VENTA' : 'FACTURA DE COMPRA'));
     const partyLabel = isSale ? 'Cliente' : 'Proveedor';
     const partyName = contactName || 'Sin nombre';
     const totalStr = formatCurrency(totals.total * conversionFactor, displayCurrency);
@@ -478,7 +488,8 @@ export default function InvoiceDetailsPage() {
       }
 
       const isDelivery = viewMode === 'DELIVERY_NOTE';
-      const docPrefix = isDelivery ? 'Nota_Entrega' : (invoice.type === 'INVOICE' ? 'Factura' : 'Factura_Compra');
+      const isOC = invoice.code?.toUpperCase().startsWith('OC-');
+      const docPrefix = isDelivery ? 'Nota_Entrega' : (isOC ? 'Orden_Compra' : (invoice.type === 'INVOICE' ? 'Factura' : 'Factura_Compra'));
       const filename = `${docPrefix}_${invoice.code}.pdf`;
       pdf.save(filename);
     } catch (error) {
@@ -503,6 +514,9 @@ export default function InvoiceDetailsPage() {
   };
 
   const getTypeLabel = (type: string) => {
+    if (invoice?.code?.toUpperCase().startsWith('OC-') || invoice?.purchaseOrder) {
+      return 'Orden de Compra';
+    }
     return type === 'INVOICE' ? 'Factura de Venta' : 'Factura de Compra';
   };
 
@@ -519,9 +533,12 @@ export default function InvoiceDetailsPage() {
     } else if (status === 'PARTIALLY_PAID') {
        label = 'ABONADA / PARCIAL';
        color = 'bg-amber-100 text-amber-800 border border-amber-300';
-    } else if (status === 'DRAFT' || status === 'OPEN') {
+    } else if (status === 'DRAFT') {
        label = 'BORRADOR';
        color = 'bg-gray-100 text-gray-800';
+    } else if (status === 'OPEN') {
+       label = type === 'INVOICE' ? 'POR COBRAR' : 'POR PAGAR';
+       color = type === 'INVOICE' ? 'bg-blue-100 text-blue-800' : 'bg-orange-100 text-orange-800';
     } else if (status === 'CANCELLED') {
        label = 'ANULADA';
        color = 'bg-red-100 text-red-800';

@@ -56,14 +56,15 @@ export default function InvoicesPage() {
         if (projectFilter && inv.projectId !== projectFilter) return false;
         if (statusFilter && inv.status !== statusFilter) return false;
         
+        if (originFilter === 'PURCHASE' && inv.type !== 'BILL' && !inv.code?.startsWith('OC-')) return false;
         if (originFilter === 'POS' && !inv.code?.startsWith('POS-')) return false;
         if (originFilter === 'DELIVERY_NOTE' && !inv.code?.startsWith('NE')) return false;
-        if (originFilter === 'STANDARD' && (inv.code?.startsWith('POS-') || inv.code?.startsWith('NE'))) return false;
+        if (originFilter === 'STANDARD' && (inv.code?.startsWith('POS-') || inv.code?.startsWith('NE') || inv.type === 'BILL' || inv.code?.startsWith('OC-'))) return false;
 
         if (search) {
              const term = search.toLowerCase();
              const codeMatch = inv.code?.toLowerCase().includes(term);
-             const name = inv.clientName || inv.contact?.name || inv.contactName || '';
+             const name = inv.clientName || inv.contact?.name || inv.vendor?.name || inv.contactName || '';
              const nameMatch = name.toLowerCase().includes(term);
              const projectMatch = (inv.project?.name || '').toLowerCase().includes(term);
              return codeMatch || nameMatch || projectMatch;
@@ -76,16 +77,19 @@ export default function InvoicesPage() {
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
                 <div>
                     <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-                        Facturas & Ventas
+                        Facturas, Ventas & Compras
                         {projectFilter && (
                             <span className="text-xs bg-blue-100 text-blue-800 font-semibold px-2.5 py-1 rounded-full">
                                 {projects.find(p => p.id === projectFilter)?.name || 'Proyecto'}
                             </span>
                         )}
                     </h1>
-                    <p className="text-gray-500 text-sm">Gestiona tus documentos de cobro, notas de entrega y ventas de mostrador POS</p>
+                    <p className="text-gray-500 text-sm">Gestiona tus ventas, notas de entrega, facturas y órdenes de compra a proveedores</p>
                 </div>
                 <div className="flex items-center gap-2">
+                    <Link href="/inventory" className="bg-slate-800 text-white px-3.5 py-2 rounded-lg hover:bg-slate-700 transition font-medium text-sm flex items-center gap-1.5 shadow-sm">
+                        📦 Inventario / O.C.
+                    </Link>
                     <Link href="/pos" className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 transition font-medium text-sm flex items-center gap-1.5 shadow-sm">
                         🛒 Ir al POS
                     </Link>
@@ -99,7 +103,7 @@ export default function InvoicesPage() {
             <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 mb-6 flex flex-col md:flex-row gap-3">
                 <div className="flex-1">
                     <input 
-                        placeholder="Buscar por código, cliente o proyecto..." 
+                        placeholder="Buscar por código, cliente, proveedor o proyecto..." 
                         className="w-full border border-gray-300 px-4 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
                         value={search}
                         onChange={e => setSearch(e.target.value)}
@@ -124,10 +128,11 @@ export default function InvoicesPage() {
                     value={originFilter}
                     onChange={e => setOriginFilter(e.target.value)}
                 >
-                    <option value="">Todos los tipos de venta</option>
-                    <option value="POS">🛒 Ventas POS (Caja)</option>
-                    <option value="STANDARD">📄 Facturas Administrativas</option>
+                    <option value="">Todos los tipos de documento</option>
+                    <option value="PURCHASE">📥 Órdenes de Compra y Proveedores</option>
+                    <option value="STANDARD">📄 Facturas de Venta</option>
                     <option value="DELIVERY_NOTE">📦 Notas de Entrega</option>
+                    <option value="POS">🛒 Ventas POS (Caja)</option>
                 </select>
 
                 {/* Filtro de Estado */}
@@ -168,16 +173,18 @@ export default function InvoicesPage() {
                                 <tr>
                                     <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Código</th>
                                     <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Proyecto</th>
-                                    <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Cliente</th>
+                                    <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Cliente / Proveedor</th>
                                     <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Fecha</th>
                                     <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Total</th>
-                                    <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Utilidad (Margen)</th>
+                                    <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Detalle / Margen</th>
                                     <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Estado</th>
                                     <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Acciones</th>
                                 </tr>
                             </thead>
                             <tbody className="bg-white divide-y divide-gray-200 text-sm">
                                 {filtered.map(inv => {
+                                    const isPurchase = inv.type === 'BILL' || inv.code?.startsWith('OC-');
+                                    const isOC = inv.code?.startsWith('OC-') || Boolean(inv.purchaseOrder);
                                     const isPos = Boolean(inv.posSessionId);
                                     const isNE = inv.code?.startsWith('NE');
                                     const projectName = inv.project?.name || projects.find(p => p.id === inv.projectId)?.name || 'General';
@@ -187,6 +194,16 @@ export default function InvoicesPage() {
                                             <td className="px-5 py-3.5 whitespace-nowrap">
                                                 <div className="flex items-center gap-1.5">
                                                     <span className="font-semibold text-gray-900 font-mono text-xs sm:text-sm">{inv.code}</span>
+                                                    {isOC && (
+                                                        <span className="text-[10px] bg-indigo-100 text-indigo-800 font-bold px-1.5 py-0.5 rounded border border-indigo-200">
+                                                            OC
+                                                        </span>
+                                                    )}
+                                                    {isPurchase && !isOC && (
+                                                        <span className="text-[10px] bg-orange-100 text-orange-800 font-bold px-1.5 py-0.5 rounded border border-orange-200">
+                                                            COMPRA
+                                                        </span>
+                                                    )}
                                                     {isPos && (
                                                         <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded border border-emerald-200">
                                                             POS
@@ -205,7 +222,10 @@ export default function InvoicesPage() {
                                                 </span>
                                             </td>
                                             <td className="px-5 py-3.5 whitespace-nowrap text-gray-600 text-xs sm:text-sm">
-                                                <div className="font-medium text-gray-900">{inv.clientName || inv.contact?.name || inv.contactName || '-'}</div>
+                                                <div className="font-medium text-gray-900 flex items-center gap-1">
+                                                    {isPurchase && <span className="text-xs text-slate-400">🏢</span>}
+                                                    {inv.clientName || inv.contact?.name || inv.vendor?.name || inv.contactName || '-'}
+                                                </div>
                                                 {inv.contact?.taxId && (
                                                     <div className="text-[10px] text-gray-400 font-mono">{inv.contact.taxId}</div>
                                                 )}
@@ -217,7 +237,22 @@ export default function InvoicesPage() {
                                                 {Number(inv.total || 0).toLocaleString('es-VE', { minimumFractionDigits: 2 })} {inv.currency}
                                             </td>
                                             <td className="px-5 py-3.5 whitespace-nowrap text-right">
-                                                {inv.type === 'INVOICE' && inv.status === 'PAID' ? (() => {
+                                                {isPurchase ? (
+                                                    <div>
+                                                        {inv.status === 'PAID' ? (
+                                                            <span className="font-mono text-emerald-600 font-bold text-xs">PAGADA TOTAL</span>
+                                                        ) : (
+                                                            <div>
+                                                                <span className="font-mono text-amber-600 font-semibold text-xs">
+                                                                    Pend: {Number(inv.outstanding ?? inv.total ?? 0).toLocaleString('es-VE', { minimumFractionDigits: 2 })} {inv.currency}
+                                                                </span>
+                                                                {Number(inv.outstanding) < Number(inv.total) && (
+                                                                    <div className="text-[10px] text-emerald-600 font-semibold">Tiene Abonos</div>
+                                                                )}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ) : inv.type === 'INVOICE' && inv.status === 'PAID' ? (() => {
                                                     let taxAmount = 0;
                                                     try {
                                                         if (inv.lines) {
@@ -247,13 +282,15 @@ export default function InvoicesPage() {
                                                 <span className={`px-2.5 py-1 inline-flex text-[11px] leading-4 font-semibold rounded-full items-center
                                                     ${
                                                       inv.status === 'PAID' ? 'bg-green-100 text-green-800' : 
-                                                      inv.status === 'POSTED' ? (inv.type === 'BILL' ? 'bg-orange-100 text-orange-800' : 'bg-blue-100 text-blue-800') : 
+                                                      inv.status === 'PARTIALLY_PAID' ? 'bg-amber-100 text-amber-800 border border-amber-300' :
+                                                      inv.status === 'POSTED' || inv.status === 'OPEN' ? (isPurchase ? 'bg-orange-100 text-orange-800' : 'bg-blue-100 text-blue-800') : 
                                                       inv.status === 'CANCELLED' ? 'bg-red-100 text-red-800' :
                                                       'bg-gray-100 text-gray-800'
                                                     }`}>
                                                     {
-                                                     inv.status === 'POSTED' ? (inv.type === 'BILL' ? 'POR PAGAR' : 'POR COBRAR') : 
-                                                     inv.status === 'PAID' ? (inv.type === 'BILL' ? 'PAGADA' : 'COBRADA') : 
+                                                     inv.status === 'POSTED' || inv.status === 'OPEN' ? (isPurchase ? 'POR PAGAR' : 'POR COBRAR') : 
+                                                     inv.status === 'PAID' ? (isPurchase ? 'PAGADA' : 'COBRADA') : 
+                                                     inv.status === 'PARTIALLY_PAID' ? 'ABONADA' :
                                                      inv.status === 'DRAFT' ? 'BORRADOR' : inv.status
                                                     }
                                                 </span>
@@ -261,7 +298,7 @@ export default function InvoicesPage() {
                                             <td className="px-5 py-3.5 whitespace-nowrap text-right font-medium">
                                                 <div className="flex gap-1.5 justify-end">
                                                     <Link href={`/invoices/${inv.id}`} className="text-blue-600 hover:text-blue-900 border border-blue-200 px-2.5 py-1 rounded text-xs hover:bg-blue-50 font-semibold transition">
-                                                        Ver
+                                                        {isPurchase ? 'Ver / Abonar' : 'Ver'}
                                                     </Link>
                                                     <button 
                                                         onClick={() => handleDelete(inv.id)}

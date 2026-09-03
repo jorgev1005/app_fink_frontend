@@ -140,6 +140,8 @@ export default function InventoryPage() {
   const [poNotes, setPoNotes] = useState('');
   const [poItems, setPoItems] = useState<Array<{ product: Product; quantity: number; costPrice: number }>>([]);
   const [poSearch, setPoSearch] = useState('');
+  const [supplierSearch, setSupplierSearch] = useState('');
+  const [savingPOInSystem, setSavingPOInSystem] = useState(false);
 
   // Modal State
   const [showModal, setShowModal] = useState(false);
@@ -463,6 +465,8 @@ export default function InventoryPage() {
   // ── MANEJO DE ORDEN DE COMPRA (PROVEEDORES) ───────────────────
   const openPurchaseOrderModal = () => {
     setPoProjectId(selectedProject || (projects.length > 0 ? projects[0].id : ''));
+    setSupplierSearch('');
+    loadSuppliers();
     setShowPurchaseOrderModal(true);
   };
 
@@ -475,6 +479,76 @@ export default function InventoryPage() {
       setPoSupplierTaxId(supp.taxId || '');
       setPoSupplierPhone(supp.phone || '');
       if (supp.address) setPoDeliveryAddress(supp.address);
+      if (supp.notes) setPoNotes(supp.notes);
+      if (supp.projectId && !poProjectId) setPoProjectId(supp.projectId);
+    }
+  };
+
+  const handleSavePurchaseOrderInSystem = async (andPay: boolean = false) => {
+    if (poItems.length === 0) {
+      toast.error('Debe agregar al menos un producto a la orden de compra');
+      return;
+    }
+    const targetProject = poProjectId || selectedProject || (projects.length > 0 ? projects[0].id : '');
+    if (!targetProject) {
+      toast.error('Debe seleccionar un proyecto para la orden de compra');
+      return;
+    }
+
+    setSavingPOInSystem(true);
+    try {
+      const d = new Date();
+      const year = d.getFullYear();
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const rand = Math.floor(Math.random() * 9000) + 1000;
+      const orderCode = `OC-${year}${month}${day}-${rand}`;
+
+      const totalCostUSD = poItems.reduce((acc, i) => acc + (i.costPrice * i.quantity), 0);
+
+      const itemsData = poItems.map(item => ({
+        productId: item.product.id,
+        name: item.product.name,
+        description: item.product.name,
+        sku: item.product.sku || undefined,
+        quantity: Number(item.quantity),
+        unitPrice: Number(item.costPrice),
+        price: Number(item.costPrice),
+        total: Number(item.costPrice * item.quantity),
+        notes: poNotes || undefined
+      }));
+
+      const payload = {
+        projectId: targetProject,
+        type: 'BILL',
+        code: orderCode,
+        vendorId: selectedSupplierId || null,
+        issueDate: new Date().toISOString().slice(0, 10),
+        currency: 'USD',
+        total: totalCostUSD,
+        lines: itemsData,
+        status: 'OPEN',
+        purchaseOrder: orderCode,
+        purchaseOrderDate: new Date().toISOString().slice(0, 10),
+        notes: poNotes || `Orden de Compra formal emitida a ${poSupplierName.trim() || 'Proveedor'}`
+      };
+
+      const res = await api.invoices.create(payload);
+      const created = res.data?.data;
+
+      toast.success(`✅ Orden de Compra #${orderCode} registrada en el sistema`);
+      setShowPurchaseOrderModal(false);
+
+      if (andPay && created?.id) {
+        router.push(`/invoices/${created.id}?openPayment=true`);
+      } else if (created?.id) {
+        router.push(`/invoices/${created.id}`);
+      }
+    } catch (err: any) {
+      console.error('Error saving PO in system:', err);
+      toast.error(err.response?.data?.error?.message || err.message || 'Error al guardar la orden de compra');
+    } finally {
+      setSavingPOInSystem(false);
     }
   };
 
@@ -1710,21 +1784,68 @@ export default function InventoryPage() {
                 {/* Selectores desde Maestro de Proveedores y Proyecto */}
                 <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
                   <div className="sm:col-span-7">
-                    <label className="block text-[10px] text-blue-300 font-bold mb-1">
-                      🏢 Proveedor desde el Maestro de Contactos:
-                    </label>
-                    <select
-                      value={selectedSupplierId}
-                      onChange={(e) => handleSelectSupplier(e.target.value)}
-                      className="w-full bg-slate-900 border border-blue-500/60 rounded-xl p-2 text-white font-semibold text-xs outline-none focus:ring-2 focus:ring-blue-400"
-                    >
-                      <option value="">-- Seleccionar Proveedor del Maestro o escribir manual --</option>
-                      {suppliers.map(s => (
-                        <option key={s.id} value={s.id}>
-                          {s.name} {s.taxId ? `(${s.taxId})` : ''} {s.phone ? `- Tel: ${s.phone}` : ''}
-                        </option>
-                      ))}
-                    </select>
+                    {(() => {
+                      const filtered = suppliers.filter(s => {
+                        if (!supplierSearch) return true;
+                        const term = supplierSearch.toLowerCase();
+                        const nameMatch = (s.name || '').toLowerCase().includes(term);
+                        const taxMatch = (s.taxId || '').toLowerCase().includes(term);
+                        const phoneMatch = (s.phone || '').toLowerCase().includes(term);
+                        return nameMatch || taxMatch || phoneMatch;
+                      }).sort((a, b) => {
+                        if (poProjectId) {
+                          if (a.projectId === poProjectId && b.projectId !== poProjectId) return -1;
+                          if (b.projectId === poProjectId && a.projectId !== poProjectId) return 1;
+                        }
+                        return (a.name || '').localeCompare(b.name || '', 'es', { sensitivity: 'base' });
+                      });
+
+                      return (
+                        <>
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="block text-[10px] text-blue-300 font-bold">
+                              🏢 Proveedor desde el Maestro de Contactos:
+                            </label>
+                            <span className="text-[10px] text-slate-400">
+                              ({filtered.length} disponibles)
+                            </span>
+                          </div>
+
+                          {/* Input de Búsqueda Rápida de Proveedor */}
+                          <div className="mb-1.5 relative">
+                            <input
+                              type="text"
+                              placeholder="🔍 Filtrar proveedor (ej. SERDEINCA, RIF...)"
+                              value={supplierSearch}
+                              onChange={(e) => setSupplierSearch(e.target.value)}
+                              className="w-full bg-slate-950 border border-slate-700 rounded-xl px-2.5 py-1 text-xs text-white placeholder-slate-500 outline-none focus:border-blue-400 focus:ring-1 focus:ring-blue-400"
+                            />
+                            {supplierSearch && (
+                              <button
+                                type="button"
+                                onClick={() => setSupplierSearch('')}
+                                className="absolute right-2 top-1 text-slate-400 hover:text-white text-xs"
+                              >
+                                ✕
+                              </button>
+                            )}
+                          </div>
+
+                          <select
+                            value={selectedSupplierId}
+                            onChange={(e) => handleSelectSupplier(e.target.value)}
+                            className="w-full bg-slate-900 border border-blue-500/60 rounded-xl p-2 text-white font-semibold text-xs outline-none focus:ring-2 focus:ring-blue-400"
+                          >
+                            <option value="">-- Seleccionar Proveedor ({filtered.length}) o escribir abajo --</option>
+                            {filtered.map(s => (
+                              <option key={s.id} value={s.id}>
+                                {s.name} {s.taxId ? `(${s.taxId})` : ''} {s.project?.name ? `[${s.project.name}]` : ''}
+                              </option>
+                            ))}
+                          </select>
+                        </>
+                      );
+                    })()}
                   </div>
                   <div className="sm:col-span-5">
                     <label className="block text-[10px] text-slate-300 font-bold mb-1">
@@ -1980,36 +2101,56 @@ export default function InventoryPage() {
             </div>
 
             {/* Footer Actions */}
-            <div className="pt-3 border-t border-slate-800 shrink-0 space-y-2">
+            <div className="pt-3 border-t border-slate-800 shrink-0 space-y-2.5">
+              {/* Acciones Principales de Registro y Pago en el Sistema ERP */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => handleSavePurchaseOrderInSystem(true)}
+                  disabled={savingPOInSystem || poGenerating || poItems.length === 0}
+                  className="py-3 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white rounded-xl text-xs font-extrabold shadow-lg flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-95 border border-emerald-400/30"
+                >
+                  💳 {savingPOInSystem ? 'Registrando...' : 'Guardar Orden y Cargar Pago / Abono'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleSavePurchaseOrderInSystem(false)}
+                  disabled={savingPOInSystem || poGenerating || poItems.length === 0}
+                  className="py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white rounded-xl text-xs font-extrabold shadow-lg flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-95 border border-blue-400/30"
+                >
+                  💾 {savingPOInSystem ? 'Guardando...' : 'Guardar Orden en el Sistema'}
+                </button>
+              </div>
+
+              {/* Acciones Secundarias de Exportación PDF y WhatsApp */}
               <div className="flex gap-2">
                 <button
                   type="button"
                   onClick={() => handleExecutePurchaseOrderPDF('view')}
                   disabled={poGenerating || poItems.length === 0}
-                  className="flex-1 py-3 bg-blue-600 hover:bg-blue-500 disabled:opacity-40 text-white rounded-xl text-xs font-extrabold shadow-lg flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-95"
+                  className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                 >
-                  👁️ {poGenerating ? 'Generando...' : 'Ver / Imprimir Orden (PDF)'}
+                  👁️ {poGenerating ? 'Generando...' : 'Ver PDF'}
                 </button>
                 <button
                   type="button"
                   onClick={() => handleExecutePurchaseOrderPDF('download')}
                   disabled={poGenerating || poItems.length === 0}
-                  className="flex-1 py-3 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-white rounded-xl text-xs font-extrabold shadow-lg flex items-center justify-center gap-2 transition-all cursor-pointer active:scale-95"
+                  className="flex-1 py-2 bg-slate-800 hover:bg-slate-700 disabled:opacity-40 text-slate-200 rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
                 >
-                  ⬇️ {poGenerating ? 'Generando...' : 'Descargar PDF'}
+                  ⬇️ Descargar PDF
                 </button>
+                {poSupplierPhone && (
+                  <button
+                    type="button"
+                    onClick={() => handleExecutePurchaseOrderPDF('whatsapp')}
+                    disabled={poGenerating || poItems.length === 0}
+                    className="flex-1 py-2 bg-green-700 hover:bg-green-600 disabled:opacity-40 text-white rounded-xl text-xs font-semibold flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                  >
+                    📲 WhatsApp
+                  </button>
+                )}
               </div>
-
-              {poSupplierPhone && (
-                <button
-                  type="button"
-                  onClick={() => handleExecutePurchaseOrderPDF('whatsapp')}
-                  disabled={poGenerating || poItems.length === 0}
-                  className="w-full py-2.5 bg-green-600 hover:bg-green-500 disabled:opacity-40 text-white rounded-xl text-xs font-extrabold shadow-md flex items-center justify-center gap-2 transition-all cursor-pointer"
-                >
-                  📲 Enviar al WhatsApp del Proveedor ({poSupplierPhone})
-                </button>
-              )}
             </div>
 
           </div>
