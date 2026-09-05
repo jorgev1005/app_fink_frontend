@@ -724,15 +724,15 @@ export default function InvoiceDetailsPage() {
                 <Copy size={13} /> Duplicar
              </button>
 
-             {/* Edit Button if open or draft */}
-             {(invoice.status === 'OPEN' || invoice.status === 'DRAFT') && (
-                <button 
-                   onClick={() => router.push(`/invoices/${invoice.id}/edit`)}
-                   className="flex items-center gap-1.5 px-3 py-1.5 hover:bg-gray-50 rounded text-gray-700 text-xs font-medium transition border border-gray-100"
-                >
-                   <Edit size={13} /> Editar
-                </button>
-             )}
+              {/* Edit Button if open, posted or draft (and unpaid) */}
+              {(invoice.status === 'OPEN' || invoice.status === 'DRAFT' || (invoice.status === 'POSTED' && Number(invoice.outstanding) === Number(invoice.total))) && (
+                 <button 
+                    onClick={() => router.push(`/invoices/${invoice.id}/edit`)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 hover:bg-gray-50 rounded text-gray-700 text-xs font-medium transition border border-gray-100"
+                 >
+                    <Edit size={13} /> Editar
+                 </button>
+              )}
 
 
               {/* Publish Button if open or draft */}

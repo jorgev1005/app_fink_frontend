@@ -385,6 +385,18 @@ export const updateInvoice = async (req: Request, res: Response) => {
         return res.status(400).json({ success: false, error: { message: 'No se puede editar una factura pagada o parcialmente pagada.' } });
     }
 
+    // Anchor dueDate to noon if it's a date-only string
+    let dueDateToStore = dueDate !== undefined ? (dueDate ? new Date(dueDate) : null) : invoice.dueDate;
+    if (dueDate && typeof dueDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
+      dueDateToStore = new Date(dueDate + 'T12:00:00');
+    }
+
+    // Anchor issueDate to noon if it's a date-only string to prevent TZ shifts
+    let issueDateToStore = issueDate ? new Date(issueDate) : invoice.issueDate;
+    if (issueDate && typeof issueDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(issueDate)) {
+      issueDateToStore = new Date(issueDate + 'T12:00:00');
+    }
+
     const updated = await prisma.$transaction(async (tx) => {
       // 1. Get old items from lines
       let oldItems: any[] = [];
@@ -473,8 +485,8 @@ export const updateInvoice = async (req: Request, res: Response) => {
           projectId: projectId || invoice.projectId,
           code: code || invoice.code,
           type: targetType,
-          issueDate: issueDate ? new Date(issueDate) : invoice.issueDate,
-          dueDate: dueDate ? new Date(dueDate) : invoice.dueDate,
+          issueDate: issueDateToStore,
+          dueDate: dueDateToStore,
           currency: currency || invoice.currency,
           total: total !== undefined ? Number(total) : invoice.total,
           outstanding: total !== undefined ? Number(total) : invoice.outstanding,

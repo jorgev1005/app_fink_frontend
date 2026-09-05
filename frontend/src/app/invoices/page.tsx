@@ -419,6 +419,11 @@ export default function InvoicesPage() {
                                                     <Link href={`/invoices/${inv.id}`} className="text-blue-600 hover:text-blue-900 border border-blue-200 px-2.5 py-1 rounded text-xs hover:bg-blue-50 font-semibold transition">
                                                         {isPurchase ? 'Ver / Abonar' : 'Ver'}
                                                     </Link>
+                                                    {(inv.status === 'OPEN' || inv.status === 'DRAFT' || (inv.status === 'POSTED' && Number(inv.outstanding ?? inv.total) === Number(inv.total))) && (
+                                                        <Link href={`/invoices/${inv.id}/edit`} className="text-slate-700 hover:text-slate-900 border border-slate-200 px-2.5 py-1 rounded text-xs hover:bg-slate-50 font-semibold transition">
+                                                            Editar
+                                                        </Link>
+                                                    )}
                                                     <button 
                                                         onClick={() => handleDelete(inv.id)}
                                                         className="text-red-600 hover:text-red-900 border border-red-200 px-2 py-1 rounded text-xs hover:bg-red-50 font-semibold transition cursor-pointer"

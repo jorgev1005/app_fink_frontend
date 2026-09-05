@@ -3,7 +3,7 @@ import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import api from '@/lib/api';
 import Link from 'next/link';
-import { ArrowLeft, Save, Building, Calendar, FileText, DollarSign, AlertCircle, User, CreditCard, Wallet, Percent, Plus, Trash2, Box, Package } from 'lucide-react';
+import { ArrowLeft, Save, Building, Calendar, FileText, DollarSign, AlertCircle, User, CreditCard, Wallet, Percent, Plus, Trash2, Box, Package, Clock } from 'lucide-react';
 import ProductAutocomplete from '@/components/ProductAutocomplete';
 
 export default function EditInvoicePage() {
@@ -24,6 +24,24 @@ export default function EditInvoicePage() {
   const [lines, setLines] = useState<any[]>([
       { id: Date.now(), productId: '', name: '', quantity: 1, price: 0, total: 0, notes: '' }
   ]);
+
+  // Helper para asignar días de crédito rápidamente
+  const setCreditDays = (days: number) => {
+    const base = issueDate ? new Date(issueDate + 'T12:00:00') : new Date();
+    base.setDate(base.getDate() + days);
+    const yyyy = base.getFullYear();
+    const mm = String(base.getMonth() + 1).padStart(2, '0');
+    const dd = String(base.getDate()).padStart(2, '0');
+    setDueDate(`${yyyy}-${mm}-${dd}`);
+  };
+
+  const getCreditDaysDiff = () => {
+    if (!issueDate || !dueDate) return null;
+    const d1 = new Date(issueDate + 'T12:00:00');
+    const d2 = new Date(dueDate + 'T12:00:00');
+    const diff = Math.round((d2.getTime() - d1.getTime()) / (1000 * 60 * 60 * 24));
+    return diff;
+  };
 
   // Form State
   const [projectId, setProjectId] = useState('');
@@ -250,7 +268,7 @@ export default function EditInvoicePage() {
           code: code || undefined, 
           currency, 
           total: finalTotal,
-          issueDate: issueDate ? new Date(issueDate).toISOString() : new Date().toISOString(),
+          issueDate: issueDate || undefined,
           dueDate: dueDateToSend,
           vendorId: type === 'BILL' ? contactId : undefined,
           customerId: type === 'INVOICE' ? contactId : undefined,
@@ -268,7 +286,7 @@ export default function EditInvoicePage() {
           purchaseOrderDate: type === 'INVOICE' ? (purchaseOrderDate || null) : null
       };      
       await api.invoices.update(id, body);
-      router.push('/invoices');
+      router.push(`/invoices/${id}`);
       
     } catch (err: any) {
         console.error(err);
@@ -300,8 +318,10 @@ export default function EditInvoicePage() {
             <ArrowLeft className="w-5 h-5" />
         </Link>
         <div>
-            <h1 className="text-2xl font-bold text-gray-900">Editar Factura</h1>
-            <p className="text-gray-500 text-sm">Modificar documento existente</p>
+            <h1 className="text-2xl font-bold text-gray-900">
+                Editar {code?.toUpperCase().startsWith('NE') ? 'Nota de Entrega' : (code?.toUpperCase().startsWith('OC-') ? 'Orden de Compra' : (type === 'BILL' ? 'Factura de Compra' : 'Factura de Venta'))} {code ? `#${code}` : ''}
+            </h1>
+            <p className="text-gray-500 text-sm">Modificar fecha de emisión, vencimiento, productos o condiciones</p>
         </div>
       </div>
 
@@ -422,24 +442,79 @@ export default function EditInvoicePage() {
                     </div>
 
                     {/* Dates */}
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Emisión</label>
-                            <input 
-                                type="date"
-                                className="w-full p-2.5 bg-white border border-gray-200 focus:ring-2 focus:ring-blue-100 rounded-xl outline-none"
-                                value={issueDate}
-                                onChange={(e) => setIssueDate(e.target.value)}
-                            />
+                    <div className="md:col-span-2 bg-slate-50/80 p-4 rounded-xl border border-slate-200/80 space-y-3">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1.5">
+                                    <Calendar className="w-4 h-4 text-blue-600" />
+                                    Fecha de Emisión
+                                </label>
+                                <input 
+                                    type="date"
+                                    className="w-full p-2.5 bg-white border border-gray-200 focus:ring-2 focus:ring-blue-100 rounded-xl outline-none font-medium"
+                                    value={issueDate}
+                                    onChange={(e) => setIssueDate(e.target.value)}
+                                />
+                                <p className="text-[11px] text-slate-500 mt-1">
+                                    Puedes cambiar la fecha si la entrega o despacho se realiza en días posteriores.
+                                </p>
+                            </div>
+                            <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center justify-between">
+                                    <span className="flex items-center gap-1.5">
+                                        <Clock className="w-4 h-4 text-amber-600" />
+                                        Fecha de Vencimiento
+                                    </span>
+                                    {dueDate && (
+                                        <span className="text-[11px] font-bold text-blue-700 bg-blue-100/90 px-2 py-0.5 rounded-full">
+                                            {getCreditDaysDiff() !== null ? (
+                                                getCreditDaysDiff() === 0 ? 'Contado (0 días)' :
+                                                (getCreditDaysDiff()! > 0 ? `${getCreditDaysDiff()} días de crédito` : `Vencida (${Math.abs(getCreditDaysDiff()!)}d antes)`)
+                                            ) : ''}
+                                        </span>
+                                    )}
+                                </label>
+                                <input 
+                                    type="date"
+                                    className="w-full p-2.5 bg-white border border-gray-200 focus:ring-2 focus:ring-blue-100 rounded-xl outline-none font-medium"
+                                    value={dueDate}
+                                    onChange={(e) => setDueDate(e.target.value)}
+                                />
+                            </div>
                         </div>
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Vencimiento</label>
-                            <input 
-                                type="date"
-                                className="w-full p-2.5 bg-white border border-gray-200 focus:ring-2 focus:ring-blue-100 rounded-xl outline-none"
-                                value={dueDate}
-                                onChange={(e) => setDueDate(e.target.value)}
-                            />
+
+                        {/* Atajos Rápidos de Días de Crédito */}
+                        <div className="pt-2 border-t border-slate-200/60 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                            <span className="text-xs font-bold text-slate-600 flex items-center gap-1 shrink-0">
+                                ⚡ Atajos de Crédito:
+                            </span>
+                            <div className="flex flex-wrap gap-1.5">
+                                {[
+                                    { label: 'Contado (0d)', days: 0 },
+                                    { label: '7 días', days: 7 },
+                                    { label: '15 días', days: 15 },
+                                    { label: '20 días', days: 20 },
+                                    { label: '30 días', days: 30 },
+                                    { label: '45 días', days: 45 },
+                                    { label: '60 días', days: 60 }
+                                ].map((term) => {
+                                    const isSelected = getCreditDaysDiff() === term.days;
+                                    return (
+                                        <button
+                                            key={term.days}
+                                            type="button"
+                                            onClick={() => setCreditDays(term.days)}
+                                            className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer border ${
+                                                isSelected 
+                                                    ? 'bg-blue-600 text-white border-blue-600 shadow-xs' 
+                                                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100 hover:border-slate-300'
+                                            }`}
+                                        >
+                                            {term.label}
+                                        </button>
+                                    );
+                                })}
+                            </div>
                         </div>
                     </div>
 
@@ -637,7 +712,7 @@ export default function EditInvoicePage() {
         {/* Footer Actions */}
         <div className="bg-gray-50 px-6 py-4 flex justify-end gap-3 border-t border-gray-100">
             <Link 
-                href="/invoices"
+                href={`/invoices/${id}`}
                 className="px-4 py-2 text-sm font-medium text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-xl transition-colors"
                 tabIndex={-1}
             >
@@ -652,7 +727,7 @@ export default function EditInvoicePage() {
                     'Guardando...'
                 ) : (
                     <>
-                        <Save className="w-4 h-4" /> Actualizar Factura
+                        <Save className="w-4 h-4" /> Guardar Cambios
                     </>
                 )}
             </button>
