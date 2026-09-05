@@ -1,10 +1,10 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import api, { projectsAPI } from '@/lib/api';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Clock, AlertCircle, Calendar, CheckCircle2, Search, X } from 'lucide-react';
+import { Clock, AlertCircle, Calendar, CheckCircle2, Search, X, ChevronLeft, ChevronRight, ArrowLeftRight } from 'lucide-react';
 
 const calculateDueStatus = (dueDateStr?: string, status?: string) => {
     if (!dueDateStr) return null;
@@ -54,6 +54,18 @@ export default function InvoicesPage() {
     const [originFilter, setOriginFilter] = useState('');
     const [dueFilter, setDueFilter] = useState('');
     const [search, setSearch] = useState('');
+    const tableContainerRef = useRef<HTMLDivElement>(null);
+
+    const scrollHorizontal = (direction: 'left' | 'right' | 'end') => {
+        if (!tableContainerRef.current) return;
+        if (direction === 'left') {
+            tableContainerRef.current.scrollBy({ left: -380, behavior: 'smooth' });
+        } else if (direction === 'right') {
+            tableContainerRef.current.scrollBy({ left: 380, behavior: 'smooth' });
+        } else if (direction === 'end') {
+            tableContainerRef.current.scrollTo({ left: tableContainerRef.current.scrollWidth, behavior: 'smooth' });
+        }
+    };
 
     useEffect(() => {
         loadData();
@@ -238,22 +250,64 @@ export default function InvoicesPage() {
                     )}
                 </div>
             ) : (
-                <div className="bg-white shadow-sm border border-gray-200 rounded-xl overflow-hidden">
-                    <div className="overflow-x-auto">
-                        <table className="min-w-full divide-y divide-gray-200">
-                            <thead className="bg-gray-50">
-                                <tr>
-                                    <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Código</th>
-                                    <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Proyecto</th>
-                                    <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Cliente / Proveedor</th>
-                                    <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Emisión / Vencimiento</th>
-                                    <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Total</th>
-                                    <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Detalle / Margen</th>
-                                    <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Estado</th>
-                                    <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Acciones</th>
-                                </tr>
-                            </thead>
-                            <tbody className="bg-white divide-y divide-gray-200 text-sm">
+                <div className="space-y-2">
+                    {/* Barra superior de desplazamiento horizontal rápido */}
+                    <div className="flex items-center justify-between bg-slate-50 border border-slate-200/80 px-3 py-1.5 rounded-lg text-xs text-slate-600">
+                        <div className="flex items-center gap-1.5 font-medium">
+                            <ArrowLeftRight className="w-3.5 h-3.5 text-blue-600" />
+                            <span>Desplazamiento horizontal:</span>
+                        </div>
+                        <div className="flex items-center gap-1.5">
+                            <button
+                                type="button"
+                                onClick={() => scrollHorizontal('left')}
+                                className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 font-semibold rounded border border-slate-200 transition flex items-center gap-1 shadow-2xs cursor-pointer"
+                                title="Mover vista a la izquierda"
+                            >
+                                <ChevronLeft className="w-3.5 h-3.5" />
+                                <span>Izquierda</span>
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => scrollHorizontal('right')}
+                                className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 font-semibold rounded border border-slate-200 transition flex items-center gap-1 shadow-2xs cursor-pointer"
+                                title="Mover vista a la derecha"
+                            >
+                                <span>Derecha</span>
+                                <ChevronRight className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => scrollHorizontal('end')}
+                                className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded transition flex items-center gap-1 shadow-2xs cursor-pointer ml-1"
+                                title="Ir directamente a los botones de Acciones"
+                            >
+                                <span>Ir a Acciones</span>
+                                <ChevronRight className="w-3.5 h-3.5" />
+                            </button>
+                        </div>
+                    </div>
+
+                    <div className="bg-white shadow-sm border border-gray-200 rounded-xl overflow-hidden relative">
+                        <div ref={tableContainerRef} className="overflow-x-auto scroll-smooth">
+                            <table className="min-w-full divide-y divide-gray-200">
+                                <thead className="bg-gray-50">
+                                    <tr>
+                                        <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider sticky left-0 bg-gray-50 z-10 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]">
+                                            Código
+                                        </th>
+                                        <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Proyecto</th>
+                                        <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Cliente / Proveedor</th>
+                                        <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Emisión / Vencimiento</th>
+                                        <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Total</th>
+                                        <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider">Detalle / Margen</th>
+                                        <th className="px-5 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">Estado</th>
+                                        <th className="px-5 py-3 text-right text-xs font-semibold text-gray-500 uppercase tracking-wider sticky right-0 bg-gray-50 z-10 shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.08)]">
+                                            Acciones
+                                        </th>
+                                    </tr>
+                                </thead>
+                                <tbody className="bg-white divide-y divide-gray-200 text-sm">
                                 {filtered.map(inv => {
                                     const isPurchase = inv.type === 'BILL' || inv.code?.startsWith('OC-');
                                     const isPurchaseOrder = inv.code?.toUpperCase().startsWith('OC-');
@@ -263,8 +317,8 @@ export default function InvoicesPage() {
                                     const projectName = inv.project?.name || projects.find(p => p.id === inv.projectId)?.name || 'General';
 
                                     return (
-                                        <tr key={inv.id} className="hover:bg-gray-50/80 transition">
-                                            <td className="px-5 py-3.5 whitespace-nowrap">
+                                        <tr key={inv.id} className="hover:bg-gray-50/80 transition group">
+                                            <td className="px-5 py-3.5 whitespace-nowrap sticky left-0 bg-white group-hover:bg-gray-50/95 z-5 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)]">
                                                 <div className="flex flex-col gap-1">
                                                     <div className="flex items-center gap-1.5">
                                                         <span className="font-semibold text-gray-900 font-mono text-xs sm:text-sm">{inv.code}</span>
@@ -414,7 +468,7 @@ export default function InvoicesPage() {
                                                     }
                                                 </span>
                                             </td>
-                                            <td className="px-5 py-3.5 whitespace-nowrap text-right font-medium">
+                                            <td className="px-5 py-3.5 whitespace-nowrap text-right font-medium sticky right-0 bg-white group-hover:bg-gray-50/95 z-5 shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.06)]">
                                                 <div className="flex gap-1.5 justify-end">
                                                     <Link href={`/invoices/${inv.id}`} className="text-blue-600 hover:text-blue-900 border border-blue-200 px-2.5 py-1 rounded text-xs hover:bg-blue-50 font-semibold transition">
                                                         {isPurchase ? 'Ver / Abonar' : 'Ver'}
@@ -437,6 +491,46 @@ export default function InvoicesPage() {
                                 })}
                             </tbody>
                         </table>
+                    </div>
+                </div>
+
+                    {/* Barra flotante inferior fija para desplazarse horizontalmente sin tener que ir al final de la página */}
+                    <div className="sticky bottom-3 z-20 flex justify-center pointer-events-none mt-2">
+                        <div className="bg-slate-900/90 backdrop-blur-md text-white px-4 py-2 rounded-full shadow-xl flex items-center gap-3 border border-slate-700/60 pointer-events-auto text-xs font-medium">
+                            <span className="text-slate-300 flex items-center gap-1.5">
+                                <ArrowLeftRight className="w-3.5 h-3.5 text-blue-400" />
+                                Mover tabla:
+                            </span>
+                            <div className="flex items-center gap-1.5 border-l border-slate-700 pl-3">
+                                <button
+                                    type="button"
+                                    onClick={() => scrollHorizontal('left')}
+                                    className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 rounded-md transition flex items-center gap-1 border border-slate-700 cursor-pointer"
+                                    title="Desplazar a la izquierda"
+                                >
+                                    <ChevronLeft className="w-3.5 h-3.5" />
+                                    <span>Izquierda</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => scrollHorizontal('right')}
+                                    className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 rounded-md transition flex items-center gap-1 border border-slate-700 cursor-pointer"
+                                    title="Desplazar a la derecha"
+                                >
+                                    <span>Derecha</span>
+                                    <ChevronRight className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => scrollHorizontal('end')}
+                                    className="px-3 py-1 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-semibold rounded-md transition flex items-center gap-1 shadow-sm cursor-pointer ml-1"
+                                    title="Ir a las columnas de Estado y Acciones"
+                                >
+                                    <span>Acciones</span>
+                                    <ChevronRight className="w-3.5 h-3.5" />
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             )}
