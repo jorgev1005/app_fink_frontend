@@ -454,10 +454,21 @@ function NewInvoiceContent() {
       // This prevents the -1 day error due to UTC midnight conversion
       const issueDateToSend = issueDate;
 
+      // Automatic code generator on frontend to guarantee immediate assignment
+      let finalCode = code ? String(code).trim() : undefined;
+      if (!finalCode && type === 'BILL' && isPurchaseOrder) {
+        const d = new Date();
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        const rand = Math.floor(Math.random() * 9000) + 1000;
+        finalCode = `OC-${year}${month}${day}-${rand}`;
+      }
+
       const body = { 
           projectId, 
           type,
-          code: code || undefined, 
+          code: finalCode, 
           currency, 
           total: finalTotal,
           issueDate: issueDateToSend,
