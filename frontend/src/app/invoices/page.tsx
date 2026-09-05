@@ -256,9 +256,10 @@ export default function InvoicesPage() {
                             <tbody className="bg-white divide-y divide-gray-200 text-sm">
                                 {filtered.map(inv => {
                                     const isPurchase = inv.type === 'BILL' || inv.code?.startsWith('OC-');
-                                    const isOC = inv.code?.startsWith('OC-') || Boolean(inv.purchaseOrder);
-                                    const isPos = Boolean(inv.posSessionId);
-                                    const isNE = inv.code?.startsWith('NE');
+                                    const isPurchaseOrder = inv.code?.toUpperCase().startsWith('OC-');
+                                    const isNE = inv.code?.toUpperCase().startsWith('NE');
+                                    const isPos = Boolean(inv.posSessionId) || inv.code?.toUpperCase().startsWith('POS-');
+                                    const isSaleInvoice = inv.type === 'INVOICE' && !isNE && !isPos && !isPurchaseOrder;
                                     const projectName = inv.project?.name || projects.find(p => p.id === inv.projectId)?.name || 'General';
 
                                     return (
@@ -267,12 +268,12 @@ export default function InvoicesPage() {
                                                 <div className="flex flex-col gap-1">
                                                     <div className="flex items-center gap-1.5">
                                                         <span className="font-semibold text-gray-900 font-mono text-xs sm:text-sm">{inv.code}</span>
-                                                        {isOC && !inv.purchaseOrder?.startsWith('COT-') && (
+                                                        {isPurchaseOrder && (
                                                             <span className="text-[10px] bg-indigo-100 text-indigo-800 font-bold px-1.5 py-0.5 rounded border border-indigo-200">
-                                                                OC
+                                                                O.C.
                                                             </span>
                                                         )}
-                                                        {isPurchase && !isOC && (
+                                                        {isPurchase && !isPurchaseOrder && (
                                                             <span className="text-[10px] bg-orange-100 text-orange-800 font-bold px-1.5 py-0.5 rounded border border-orange-200">
                                                                 COMPRA
                                                             </span>
@@ -287,6 +288,11 @@ export default function InvoicesPage() {
                                                                 NE
                                                             </span>
                                                         )}
+                                                        {isSaleInvoice && (
+                                                            <span className="text-[10px] bg-blue-100 text-blue-800 font-bold px-1.5 py-0.5 rounded border border-blue-200">
+                                                                FACTURA
+                                                            </span>
+                                                        )}
                                                     </div>
                                                     {inv.purchaseOrder && (
                                                         <button
@@ -295,10 +301,14 @@ export default function InvoicesPage() {
                                                                 e.stopPropagation();
                                                                 setSearch(inv.purchaseOrder);
                                                             }}
-                                                            className="text-[9.5px] bg-blue-50 hover:bg-blue-100 text-blue-700 font-mono font-bold px-1.5 py-0.5 rounded border border-blue-200 transition cursor-pointer w-fit flex items-center gap-1"
-                                                            title={`Filtrar todos los documentos de la cotización: ${inv.purchaseOrder}`}
+                                                            className="text-[9.5px] bg-slate-50 hover:bg-slate-100 text-slate-700 font-mono px-1.5 py-0.5 rounded border border-slate-200 transition cursor-pointer w-fit flex items-center gap-1"
+                                                            title={`Filtrar todos los documentos con esta referencia: ${inv.purchaseOrder}`}
                                                         >
-                                                            <span>📋</span> {inv.purchaseOrder}
+                                                            <span>📋</span>
+                                                            <span className="font-semibold text-slate-500">
+                                                                {inv.purchaseOrder.startsWith('COT-') ? 'Cotización:' : (isPurchase ? 'Ref:' : 'O.C. Cliente:')}
+                                                            </span>
+                                                            <span className="font-bold text-slate-800">{inv.purchaseOrder}</span>
                                                         </button>
                                                     )}
                                                 </div>

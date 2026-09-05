@@ -447,19 +447,23 @@ export default function EditInvoicePage() {
                     {type === 'INVOICE' && (
                         <div className="grid grid-cols-2 gap-4 md:col-span-2">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Orden de Compra (O.C.)</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    O.C. / Nro. de Pedido del Cliente <span className="text-gray-400 font-normal">(Opcional)</span>
+                                </label>
                                 <input 
-                                    className="w-full p-2.5 bg-white border border-gray-200 focus:ring-2 focus:ring-blue-100 rounded-xl transition-all outline-none"
-                                    placeholder="Ej. OC-1234, OC-5678"
+                                    className="w-full p-2.5 bg-white border border-gray-200 focus:ring-2 focus:ring-blue-100 rounded-xl transition-all outline-none text-sm"
+                                    placeholder="Ej. O.C. del cliente, nro de pedido o referencia"
                                     value={purchaseOrder}
                                     onChange={(e) => setPurchaseOrder(e.target.value)}
                                 />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Fecha de O.C.</label>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                    Fecha de O.C. / Pedido <span className="text-gray-400 font-normal">(Opcional)</span>
+                                </label>
                                 <input 
                                     type="text"
-                                    className="w-full p-2.5 bg-white border border-gray-200 focus:ring-2 focus:ring-blue-100 rounded-xl transition-all outline-none"
+                                    className="w-full p-2.5 bg-white border border-gray-200 focus:ring-2 focus:ring-blue-100 rounded-xl transition-all outline-none text-sm"
                                     placeholder="Ej. 05/06/2026, 10/06/2026"
                                     value={purchaseOrderDate}
                                     onChange={(e) => setPurchaseOrderDate(e.target.value)}

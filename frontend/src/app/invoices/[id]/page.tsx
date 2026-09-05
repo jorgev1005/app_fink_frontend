@@ -381,10 +381,10 @@ export default function InvoiceDetailsPage() {
 
   const shareViaWhatsApp = () => {
     if (!invoice) return;
-    const isDelivery = viewMode === 'DELIVERY_NOTE';
-    const isSale = invoice.type === 'INVOICE';
+    const isDelivery = viewMode === 'DELIVERY_NOTE' || invoice.code?.toUpperCase().startsWith('NE');
     const isOC = invoice.code?.toUpperCase().startsWith('OC-');
-    const header = isDelivery ? 'NOTA DE ENTREGA' : (isOC ? 'ORDEN DE COMPRA' : (isSale ? 'FACTURA DE VENTA' : 'FACTURA DE COMPRA'));
+    const isSale = invoice.type === 'INVOICE' && !isOC;
+    const header = isDelivery ? 'NOTA DE ENTREGA' : (isOC ? 'ORDEN DE COMPRA A PROVEEDOR' : (isSale ? 'FACTURA DE VENTA' : 'FACTURA DE COMPRA'));
     const partyLabel = isSale ? 'Cliente' : 'Proveedor';
     const partyName = contactName || 'Sin nombre';
     const totalStr = formatCurrency(totals.total * conversionFactor, displayCurrency);
@@ -514,10 +514,13 @@ export default function InvoiceDetailsPage() {
   };
 
   const getTypeLabel = (type: string) => {
-    if (invoice?.code?.toUpperCase().startsWith('OC-') || invoice?.purchaseOrder) {
-      return 'Orden de Compra';
+    if (invoice?.code?.toUpperCase().startsWith('OC-')) {
+      return 'Orden de Compra a Proveedor';
     }
-    return type === 'INVOICE' ? 'Factura de Venta' : 'Factura de Compra';
+    if (invoice?.code?.toUpperCase().startsWith('NE-') || invoice?.code?.toUpperCase().startsWith('NE')) {
+      return 'Nota de Entrega';
+    }
+    return type === 'INVOICE' ? 'Factura de Venta' : 'Factura de Compra / Gasto';
   };
 
   const getStatusBadge = (status: string, type: string) => {
@@ -849,10 +852,18 @@ export default function InvoiceDetailsPage() {
                            <p>Fecha de Emisión: {formatDate(invoice.issueDate)}</p>
                            <p>Fecha de Vencimiento: {formatDate(invoice.dueDate)}</p>
                            {invoice.purchaseOrder && (
-                               <p>Orden de Compra: {invoice.purchaseOrder}</p>
+                               <p>
+                                   <span className="text-gray-400">
+                                       {invoice.purchaseOrder.startsWith('COT-') ? 'Cotización: ' : (invoice.type === 'BILL' ? 'Orden de Compra: ' : 'O.C. Cliente / Ref: ')}
+                                   </span>
+                                   <span className="font-mono font-bold text-gray-800">{invoice.purchaseOrder}</span>
+                               </p>
                            )}
                            {invoice.purchaseOrderDate && (
-                               <p>Fecha de O.C.: {invoice.purchaseOrderDate}</p>
+                               <p>
+                                   <span className="text-gray-400">Fecha Ref/O.C.: </span>
+                                   <span className="font-medium text-gray-700">{invoice.purchaseOrderDate}</span>
+                               </p>
                            )}
                            {displayCurrency !== invoice.currency && (
                                <p className="text-xs text-blue-600 font-semibold mt-1">
