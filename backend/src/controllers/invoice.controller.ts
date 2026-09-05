@@ -612,7 +612,17 @@ export const deleteInvoice = async (req: Request, res: Response) => {
         }
       }
 
-      // 2. Delete the invoice
+      // 2. Unlink any loose references (loan charges, scheduled occurrences)
+      await tx.loanCharge.updateMany({
+        where: { invoiceId: id },
+        data: { invoiceId: null }
+      });
+      await tx.scheduledOccurrence.updateMany({
+        where: { invoiceId: id },
+        data: { invoiceId: null }
+      });
+
+      // 3. Delete the invoice
       await tx.invoice.delete({ where: { id } });
     });
 
