@@ -494,18 +494,18 @@ export default function InvoicesPage() {
                     </div>
                 </div>
 
-                    {/* Barra flotante inferior fija para desplazarse horizontalmente sin tener que ir al final de la página */}
+                    {/* Barra flotante inferior fija para desplazarse horizontalmente: semi-transparente por defecto, se ilumina al posar el cursor o pulsar */}
                     <div className="sticky bottom-3 z-20 flex justify-center pointer-events-none mt-2">
-                        <div className="bg-slate-900/90 backdrop-blur-md text-white px-4 py-2 rounded-full shadow-xl flex items-center gap-3 border border-slate-700/60 pointer-events-auto text-xs font-medium">
+                        <div className="bg-slate-900/40 hover:bg-slate-900/95 active:bg-slate-900/95 backdrop-blur-xs hover:backdrop-blur-md text-white px-4 py-2 rounded-full shadow-md hover:shadow-2xl flex items-center gap-3 border border-slate-700/40 hover:border-slate-700/90 pointer-events-auto text-xs font-medium opacity-30 hover:opacity-100 focus-within:opacity-100 transition-all duration-300 ease-in-out cursor-pointer select-none">
                             <span className="text-slate-300 flex items-center gap-1.5">
                                 <ArrowLeftRight className="w-3.5 h-3.5 text-blue-400" />
                                 Mover tabla:
                             </span>
-                            <div className="flex items-center gap-1.5 border-l border-slate-700 pl-3">
+                            <div className="flex items-center gap-1.5 border-l border-slate-700/60 pl-3">
                                 <button
                                     type="button"
                                     onClick={() => scrollHorizontal('left')}
-                                    className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 rounded-md transition flex items-center gap-1 border border-slate-700 cursor-pointer"
+                                    className="px-2.5 py-1 bg-slate-800/80 hover:bg-slate-700 active:scale-95 text-slate-200 rounded-md transition flex items-center gap-1 border border-slate-700 cursor-pointer"
                                     title="Desplazar a la izquierda"
                                 >
                                     <ChevronLeft className="w-3.5 h-3.5" />
@@ -514,7 +514,7 @@ export default function InvoicesPage() {
                                 <button
                                     type="button"
                                     onClick={() => scrollHorizontal('right')}
-                                    className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 active:scale-95 text-slate-200 rounded-md transition flex items-center gap-1 border border-slate-700 cursor-pointer"
+                                    className="px-2.5 py-1 bg-slate-800/80 hover:bg-slate-700 active:scale-95 text-slate-200 rounded-md transition flex items-center gap-1 border border-slate-700 cursor-pointer"
                                     title="Desplazar a la derecha"
                                 >
                                     <span>Derecha</span>
