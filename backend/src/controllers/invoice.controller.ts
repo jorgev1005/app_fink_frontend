@@ -96,7 +96,7 @@ export const createInvoice = async (req: Request, res: Response) => {
       projectId, type, issueDate, dueDate, currency, total, code,
       vendorId, customerId, description, taxAmount,
       isPaid, paymentAccountId, paymentMethod, paymentReference, lines,
-      status, isDeliveryNote, purchaseOrder, purchaseOrderDate, notes
+      status, isDeliveryNote, isPurchaseOrder, purchaseOrder, purchaseOrderDate, notes
     } = req.body;
     
     const user = (req as any).user;
@@ -110,7 +110,7 @@ export const createInvoice = async (req: Request, res: Response) => {
 
     // Validate Contact
     if (type === 'BILL' && !vendorId) {
-        return res.status(400).json({ success: false, error: { message: 'El proveedor es obligatorio para facturas de compra' } });
+        return res.status(400).json({ success: false, error: { message: 'El proveedor es obligatorio para compras u órdenes de compra' } });
     }
     if (type === 'INVOICE' && !customerId) {
         return res.status(400).json({ success: false, error: { message: 'El cliente es obligatorio para facturas de venta' } });
@@ -120,6 +120,13 @@ export const createInvoice = async (req: Request, res: Response) => {
     if (!invoiceCode) {
       if (type === 'INVOICE') {
         invoiceCode = await getNextInvoiceCode(projectId, !!isDeliveryNote);
+      } else if (isPurchaseOrder) {
+        const d = new Date();
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        const rand = Math.floor(Math.random() * 9000) + 1000;
+        invoiceCode = `OC-${year}${month}${day}-${rand}`;
       } else {
         invoiceCode = `BILL-${projectId.substring(0, 4).toUpperCase()}-${Date.now()}`;
       }

@@ -26,6 +26,7 @@ function NewInvoiceContent() {
   const [type, setType] = useState('BILL'); // BILL (Gasto/Compra) or INVOICE (Venta)
   const [code, setCode] = useState('');
   const [isDeliveryNote, setIsDeliveryNote] = useState(false);
+  const [isPurchaseOrder, setIsPurchaseOrder] = useState(true); // Default to Purchase Order when in BILL mode
   
   // Items Mode
   const [useItemsMode, setUseItemsMode] = useState(false);
@@ -128,6 +129,24 @@ function NewInvoiceContent() {
     };
 
     loadSourceInvoice();
+  }, [searchParams]);
+
+  // Read initial document type from URL query params (e.g. ?type=po, ?type=ne, ?type=invoice, ?type=bill)
+  useEffect(() => {
+    const urlType = searchParams.get('type')?.toLowerCase();
+    if (urlType === 'po' || urlType === 'oc') {
+      setType('BILL');
+      setIsPurchaseOrder(true);
+    } else if (urlType === 'bill' || urlType === 'gasto' || urlType === 'compra') {
+      setType('BILL');
+      setIsPurchaseOrder(false);
+    } else if (urlType === 'ne') {
+      setType('INVOICE');
+      setIsDeliveryNote(true);
+    } else if (urlType === 'invoice' || urlType === 'factura') {
+      setType('INVOICE');
+      setIsDeliveryNote(false);
+    }
   }, [searchParams]);
 
   // Quotation Import State
@@ -460,6 +479,7 @@ function NewInvoiceContent() {
               notes: line.notes || ''
           })) : undefined, // Send lines mapped to backend structure if in items mode
           isDeliveryNote: type === 'INVOICE' ? isDeliveryNote : false,
+          isPurchaseOrder: type === 'BILL' ? isPurchaseOrder : false,
           purchaseOrder: type === 'INVOICE' ? (purchaseOrder || undefined) : undefined,
           purchaseOrderDate: type === 'INVOICE' ? (purchaseOrderDate || undefined) : undefined
       };
@@ -588,8 +608,8 @@ function NewInvoiceContent() {
                         </div>
                     </div>
 
-                    {/* Subtype Selector (Invoice vs Delivery Note) */}
-                    {type === 'INVOICE' && (
+                    {/* Subtype Selector (Invoice vs Delivery Note for INVOICE, and Orden de Compra vs Factura de Proveedor for BILL) */}
+                    {type === 'INVOICE' ? (
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Subtipo de Venta</label>
                             <div className="flex bg-gray-50 p-1 rounded-xl border border-gray-200">
@@ -614,6 +634,34 @@ function NewInvoiceContent() {
                                     }`}
                                 >
                                     Nota de Entrega
+                                </button>
+                            </div>
+                        </div>
+                    ) : (
+                        <div>
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Subtipo de Compra</label>
+                            <div className="flex bg-gray-50 p-1 rounded-xl border border-gray-200">
+                                <button
+                                    type="button"
+                                    onClick={() => setIsPurchaseOrder(true)}
+                                    className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all ${
+                                        isPurchaseOrder 
+                                        ? 'bg-white text-purple-700 shadow-sm border border-purple-200' 
+                                        : 'text-gray-500 hover:text-gray-700'
+                                    }`}
+                                >
+                                    Orden de Compra (O.C.)
+                                </button>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsPurchaseOrder(false)}
+                                    className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all ${
+                                        !isPurchaseOrder 
+                                        ? 'bg-white text-orange-600 shadow-sm border border-orange-100' 
+                                        : 'text-gray-500 hover:text-gray-700'
+                                    }`}
+                                >
+                                    Factura de Proveedor
                                 </button>
                             </div>
                         </div>
@@ -664,14 +712,24 @@ function NewInvoiceContent() {
 
                     {/* Code */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Nro. de Factura / Control</label>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                            {type === 'BILL' 
+                                ? (isPurchaseOrder ? 'Nro. de Orden de Compra' : 'Nro. Factura Proveedor / Control') 
+                                : (isDeliveryNote ? 'Nro. de Nota de Entrega' : 'Nro. de Factura / Control')}
+                        </label>
                         <input 
                             className="w-full p-2.5 bg-white border border-gray-200 focus:ring-2 focus:ring-blue-100 rounded-xl transition-all outline-none"
-                            placeholder="Ej. 000123"
+                            placeholder={
+                                type === 'BILL' 
+                                    ? (isPurchaseOrder ? 'Ej. OC-20260905-1234 (Automático)' : 'Ej. FAC-0009876') 
+                                    : (isDeliveryNote ? 'Ej. NE-0008 (Automático)' : 'Ej. 000123')
+                            }
                             value={code}
                             onChange={(e) => setCode(e.target.value)}
                         />
-                         <p className="text-xs text-gray-400 mt-1">Opcional (se genera auto si vacío)</p>
+                         <p className="text-xs text-gray-400 mt-1">
+                            {code ? 'Código personalizado' : 'Opcional (se genera automáticamente con formato oficial si se deja vacío)'}
+                         </p>
                     </div>
 
                     {/* Dates & Quick Credit Terms */}
@@ -1021,13 +1079,16 @@ function NewInvoiceContent() {
             <button
                 type="submit"
                 disabled={loading}
-                className="flex items-center gap-2 px-6 py-2 bg-slate-900 hover:bg-slate-800 text-white font-medium rounded-xl shadow-lg shadow-slate-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="flex items-center gap-2 px-6 py-2 bg-slate-900 hover:bg-slate-800 text-white font-medium rounded-xl shadow-lg shadow-slate-200 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
             >
                 {loading ? (
                     'Guardando...'
                 ) : (
                     <>
-                        <Save className="w-4 h-4" /> Guardar Factura
+                        <Save className="w-4 h-4" /> 
+                        {type === 'BILL' 
+                            ? (isPurchaseOrder ? 'Emitir Orden de Compra' : 'Guardar Compra / Factura') 
+                            : (isDeliveryNote ? 'Emitir Nota de Entrega' : 'Guardar Factura de Venta')}
                     </>
                 )}
             </button>

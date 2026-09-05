@@ -149,15 +149,18 @@ export default function InvoicesPage() {
                     </h1>
                     <p className="text-gray-500 text-sm">Gestiona tus ventas, notas de entrega, facturas y órdenes de compra a proveedores</p>
                 </div>
-                <div className="flex items-center gap-2">
-                    <Link href="/inventory" className="bg-slate-800 text-white px-3.5 py-2 rounded-lg hover:bg-slate-700 transition font-medium text-sm flex items-center gap-1.5 shadow-sm">
-                        📦 Inventario / O.C.
+                <div className="flex flex-wrap items-center gap-2">
+                    <Link href="/inventory" className="bg-slate-800 text-white px-3 py-2 rounded-lg hover:bg-slate-700 transition font-medium text-sm flex items-center gap-1.5 shadow-sm">
+                        📦 Inventario
                     </Link>
-                    <Link href="/pos" className="bg-emerald-600 text-white px-4 py-2 rounded-lg hover:bg-emerald-700 transition font-medium text-sm flex items-center gap-1.5 shadow-sm">
-                        🛒 Ir al POS
+                    <Link href="/pos" className="bg-emerald-600 text-white px-3 py-2 rounded-lg hover:bg-emerald-700 transition font-medium text-sm flex items-center gap-1.5 shadow-sm">
+                        🛒 POS
                     </Link>
-                    <Link href="/invoices/new" className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition font-medium text-sm flex items-center shadow-sm">
-                        + Nueva Factura
+                    <Link href="/invoices/new?type=po" className="bg-purple-700 text-white px-3.5 py-2 rounded-lg hover:bg-purple-800 transition font-medium text-sm flex items-center gap-1.5 shadow-sm">
+                        + Nueva O.C.
+                    </Link>
+                    <Link href="/invoices/new?type=invoice" className="bg-blue-600 text-white px-3.5 py-2 rounded-lg hover:bg-blue-700 transition font-medium text-sm flex items-center shadow-sm">
+                        + Nueva Factura / Nota
                     </Link>
                 </div>
             </div>
