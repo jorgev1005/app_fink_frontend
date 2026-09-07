@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import api, { apiClient } from '@/lib/api';
 import { toast } from 'sonner';
+import skuSupplierCodes from '@/data/sku_supplier_codes.json';
 
 interface Product {
   id: string;
@@ -601,7 +602,8 @@ export default function InventoryPage() {
         tasaOverride: exchangeRate?.usdToBs || undefined,
         notes: poNotes.trim() || undefined,
         items: poItems.map(item => {
-          let sCode = (item.product as any).supplierCode;
+          const sCodes = skuSupplierCodes as Record<string, string>;
+          let sCode = (item.product as any).supplierCode || (item.product.sku ? sCodes[item.product.sku] : undefined);
           if (!sCode && item.product.description) {
             const m = item.product.description.match(/C[oó]digo Proveedor:\s*([^|\n\r]+)/i);
             if (m && m[1]) sCode = m[1].trim();
@@ -2028,7 +2030,8 @@ export default function InventoryPage() {
                               <div className="flex items-center gap-3 text-[10px] text-slate-400 mt-1">
                                 <span>SKU: {item.product.sku || 'N/A'}</span>
                                 {(() => {
-                                  let sCode = (item.product as any).supplierCode;
+                                  const sCodes = skuSupplierCodes as Record<string, string>;
+                                  let sCode = (item.product as any).supplierCode || (item.product.sku ? sCodes[item.product.sku] : null);
                                   if (!sCode && item.product.description) {
                                     const m = item.product.description.match(/C[oó]digo Proveedor:\s*([^|\n\r]+)/i);
                                     if (m && m[1]) sCode = m[1].trim();

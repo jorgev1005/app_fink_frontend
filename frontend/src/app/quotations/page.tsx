@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import api, { apiClient } from '@/lib/api';
+import skuSupplierCodes from '@/data/sku_supplier_codes.json';
 
 interface QuotationItem {
   sku?: string;
@@ -244,8 +245,9 @@ export default function QuotationsPage() {
       const res = await (api as any).quotations.getById(quote.id || quote.correlative);
       const enrichedQuote = res.data?.success ? res.data.data : quote;
       
+      const sCodes = skuSupplierCodes as Record<string, string>;
       const itemsPrepared = (enrichedQuote.items || []).map((it: QuotationItem) => {
-        let sCode = it.supplierCode;
+        let sCode = it.supplierCode || (it.sku ? sCodes[it.sku] : undefined);
         if (!sCode && (it as any).description) {
           const m = (it as any).description.match(/C[oó]digo Proveedor:\s*([^|\n\r]+)/i);
           if (m && m[1]) sCode = m[1].trim();
@@ -259,8 +261,9 @@ export default function QuotationsPage() {
       });
       setPoItems(itemsPrepared);
     } catch (e) {
+      const sCodes = skuSupplierCodes as Record<string, string>;
       const itemsPrepared = (quote.items || []).map((it: QuotationItem) => {
-        let sCode = it.supplierCode;
+        let sCode = it.supplierCode || (it.sku ? sCodes[it.sku] : undefined);
         if (!sCode && (it as any).description) {
           const m = (it as any).description.match(/C[oó]digo Proveedor:\s*([^|\n\r]+)/i);
           if (m && m[1]) sCode = m[1].trim();
@@ -312,7 +315,7 @@ export default function QuotationsPage() {
         notes: poNotes.trim() || undefined,
         selectedItems: selectedList.map(i => ({
           sku: i.sku,
-          supplierCode: i.supplierCode,
+          supplierCode: i.supplierCode || (i.sku ? (skuSupplierCodes as Record<string, string>)[i.sku] : undefined),
           name: i.name,
           quantity: i.quantity,
           unit: i.unit || 'UNIDAD',
@@ -1302,12 +1305,17 @@ export default function QuotationsPage() {
                           </td>
                           <td className="p-3 font-mono">
                             <div className="font-semibold text-slate-700">{item.sku || 'N/A'}</div>
-                            {item.supplierCode && (
-                              <div className="text-[11px] font-bold text-blue-600 tracking-tight flex items-center gap-1 mt-0.5" title="Código de referencia del proveedor">
-                                <span className="text-[9px] uppercase px-1 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded font-semibold">Prov</span>
-                                <span>{item.supplierCode}</span>
-                              </div>
-                            )}
+                            {(() => {
+                              const sCodes = skuSupplierCodes as Record<string, string>;
+                              const sCode = item.supplierCode || (item.sku ? sCodes[item.sku] : null);
+                              if (!sCode) return null;
+                              return (
+                                <div className="text-[11px] font-bold text-blue-600 tracking-tight flex items-center gap-1 mt-0.5" title="Código de referencia del proveedor">
+                                  <span className="text-[9px] uppercase px-1 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded font-semibold">Prov</span>
+                                  <span>{sCode}</span>
+                                </div>
+                              );
+                            })()}
                           </td>
                           <td className="p-3 font-medium text-slate-900">{item.name}</td>
                           <td className="p-3 text-center">

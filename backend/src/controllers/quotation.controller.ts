@@ -5,6 +5,24 @@ import prisma from '../config/database';
 import { generatePurchaseOrderPDFBuffer } from '../services/purchaseOrderPdf.service';
 import { generateQuotationPDFBuffer } from '../services/quotationPdf.service';
 
+function loadSupplierCodesMap(): Record<string, string> {
+  const possiblePaths = [
+    path.join(process.cwd(), 'data', 'sku_supplier_codes.json'),
+    path.join(process.cwd(), 'backend', 'data', 'sku_supplier_codes.json'),
+    path.join(__dirname, '..', '..', 'data', 'sku_supplier_codes.json'),
+    path.join(__dirname, '..', '..', '..', 'data', 'sku_supplier_codes.json'),
+    path.join('/home/fink/app_fink/backend/data', 'sku_supplier_codes.json')
+  ];
+  for (const p of possiblePaths) {
+    if (fs.existsSync(p)) {
+      try {
+        return JSON.parse(fs.readFileSync(p, 'utf8'));
+      } catch (_) {}
+    }
+  }
+  return {};
+}
+
 function getHistoryPaths(): string[] {
   const root = process.cwd();
   return [
@@ -350,7 +368,12 @@ export const getQuotationById = async (req: Request, res: Response) => {
       } catch (_) {}
 
       // Extraer código o referencia del proveedor (para uso interno y O.C.)
-      let supplierCode = it.supplierCode || (product as any)?.supplierCode || null;
+      const supplierCodesMap = loadSupplierCodesMap();
+      let supplierCode = it.supplierCode 
+        || (it.sku ? supplierCodesMap[it.sku] : null)
+        || (product?.sku ? supplierCodesMap[product.sku] : null)
+        || (product as any)?.supplierCode 
+        || null;
       if (!supplierCode && product?.description) {
         const match = product.description.match(/C[oó]digo Proveedor:\s*([^|\n\r]+)/i);
         if (match && match[1]) supplierCode = match[1].trim();
@@ -563,7 +586,12 @@ export const generatePOFromQuotation = async (req: Request, res: Response) => {
       } catch (_) {}
 
       // Extraer código de proveedor para la Orden de Compra
-      let supplierCode = it.supplierCode || (product as any)?.supplierCode || null;
+      const supplierCodesMap = loadSupplierCodesMap();
+      let supplierCode = it.supplierCode 
+        || (it.sku ? supplierCodesMap[it.sku] : null)
+        || (product?.sku ? supplierCodesMap[product.sku] : null)
+        || (product as any)?.supplierCode 
+        || null;
       if (!supplierCode && product?.description) {
         const match = product.description.match(/C[oó]digo Proveedor:\s*([^|\n\r]+)/i);
         if (match && match[1]) supplierCode = match[1].trim();

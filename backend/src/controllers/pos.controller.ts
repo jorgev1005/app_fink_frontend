@@ -748,9 +748,18 @@ export const exportPurchaseOrderPDF = async (req: Request, res: Response) => {
 
     const { generatePurchaseOrderPDFBuffer } = require('../services/purchaseOrderPdf.service');
     
+    // Cargar mapa de códigos de proveedor
+    let supplierCodesMap: Record<string, string> = {};
+    try {
+      const fs = require('fs');
+      const path = require('path');
+      const mapPath = path.join(__dirname, '..', '..', 'data', 'sku_supplier_codes.json');
+      if (fs.existsSync(mapPath)) supplierCodesMap = JSON.parse(fs.readFileSync(mapPath, 'utf8'));
+    } catch (_) {}
+
     // Asegurar código de proveedor en cada ítem
     const enrichedItems = await Promise.all(items.map(async (it: any) => {
-      let supplierCode = it.supplierCode;
+      let supplierCode = it.supplierCode || (it.sku ? supplierCodesMap[it.sku] : null);
       if (!supplierCode) {
         let product: any = null;
         try {
@@ -761,7 +770,10 @@ export const exportPurchaseOrderPDF = async (req: Request, res: Response) => {
             product = await prisma.product.findFirst({ where: { name: it.name } });
           }
         } catch (_) {}
-        if (product?.description) {
+        if (product?.sku && supplierCodesMap[product.sku]) {
+          supplierCode = supplierCodesMap[product.sku];
+        }
+        if (!supplierCode && product?.description) {
           const match = product.description.match(/C[oó]digo Proveedor:\s*([^|\n\r]+)/i);
           if (match && match[1]) supplierCode = match[1].trim();
         }
