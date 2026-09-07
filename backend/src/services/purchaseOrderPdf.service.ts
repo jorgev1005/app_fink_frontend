@@ -3,6 +3,7 @@ import QRCode from 'qrcode';
 
 export interface PurchaseOrderItem {
     sku?: string;
+    supplierCode?: string;
     name: string;
     quantity: number;
     unit?: string;
@@ -213,11 +214,15 @@ export async function generatePurchaseOrderPDFBuffer(options: PurchaseOrderPDFOp
             doc.fontSize(7.5).font('Helvetica');
             const nameHeight = doc.heightOfString(item.name, { width: colWidths.nombre });
             doc.fontSize(6.5).font('Helvetica');
-            const skuHeight = doc.heightOfString(item.sku || 'N/A', { width: colWidths.sku });
+            const skuText = item.sku || 'N/A';
+            const skuTextHeight = doc.heightOfString(skuText, { width: colWidths.sku });
+            const hasSupplierCode = Boolean(item.supplierCode && item.supplierCode.trim());
+            const supplierCodeHeight = hasSupplierCode ? 9 : 0;
+            const totalSkuHeight = skuTextHeight + supplierCodeHeight;
             const extraHeight = hasExtra ? 9 : 0;
 
-            const contentH = Math.max(nameHeight + extraHeight, skuHeight);
-            const rowH = Math.max(contentH + 6, 18);
+            const contentH = Math.max(nameHeight + extraHeight, totalSkuHeight);
+            const rowH = Math.max(contentH + 6, 20);
 
             if (y > doc.page.height - 120 - rowH) {
                 doc.addPage();
@@ -230,9 +235,13 @@ export async function generatePurchaseOrderPDFBuffer(options: PurchaseOrderPDFOp
 
             const middleY = y + (rowH / 2) - 4;
 
-            // SKU
+            // SKU y Código de Proveedor (si existe)
             doc.fontSize(6.5).fillColor(GRAY).font('Helvetica');
-            doc.text(item.sku || 'N/A', cols.sku + 3, y + 4, { width: colWidths.sku });
+            doc.text(skuText, cols.sku + 3, y + 4, { width: colWidths.sku });
+            if (hasSupplierCode) {
+                doc.fontSize(6).fillColor('#1d4ed8').font('Helvetica-Bold');
+                doc.text(`Ref: ${item.supplierCode}`, cols.sku + 3, y + 4 + skuTextHeight + 1, { width: colWidths.sku, lineBreak: false });
+            }
 
             // Nombre
             doc.fontSize(7.5).fillColor(DARK).font('Helvetica');

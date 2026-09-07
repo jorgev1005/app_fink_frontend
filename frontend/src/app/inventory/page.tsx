@@ -600,15 +600,23 @@ export default function InventoryPage() {
         projectId: poProjectId || selectedProject || undefined,
         tasaOverride: exchangeRate?.usdToBs || undefined,
         notes: poNotes.trim() || undefined,
-        items: poItems.map(item => ({
-          sku: item.product.sku || undefined,
-          name: item.product.name,
-          quantity: item.quantity,
-          unit: item.product.unit || 'UNIDAD',
-          costPrice: item.costPrice,
-          empaqueCantidad: item.product.empaqueCantidad || undefined,
-          medidas: item.product.medidas || undefined,
-        }))
+        items: poItems.map(item => {
+          let sCode = (item.product as any).supplierCode;
+          if (!sCode && item.product.description) {
+            const m = item.product.description.match(/C[oó]digo Proveedor:\s*([^|\n\r]+)/i);
+            if (m && m[1]) sCode = m[1].trim();
+          }
+          return {
+            sku: item.product.sku || undefined,
+            supplierCode: sCode || undefined,
+            name: item.product.name,
+            quantity: item.quantity,
+            unit: item.product.unit || 'UNIDAD',
+            costPrice: item.costPrice,
+            empaqueCantidad: item.product.empaqueCantidad || undefined,
+            medidas: item.product.medidas || undefined,
+          };
+        })
       };
 
       const response = await fetch('/backend-api/api/pos/purchase-order-pdf', {
@@ -2019,6 +2027,18 @@ export default function InventoryPage() {
                               <p className="font-bold text-xs truncate text-white">{item.product.name}</p>
                               <div className="flex items-center gap-3 text-[10px] text-slate-400 mt-1">
                                 <span>SKU: {item.product.sku || 'N/A'}</span>
+                                {(() => {
+                                  let sCode = (item.product as any).supplierCode;
+                                  if (!sCode && item.product.description) {
+                                    const m = item.product.description.match(/C[oó]digo Proveedor:\s*([^|\n\r]+)/i);
+                                    if (m && m[1]) sCode = m[1].trim();
+                                  }
+                                  return sCode ? (
+                                    <span className="text-blue-400 font-semibold bg-blue-950/60 px-1.5 py-0.5 rounded border border-blue-800/40">
+                                      Prov: {sCode}
+                                    </span>
+                                  ) : null;
+                                })()}
                                 <div className="flex items-center gap-1">
                                   <span>Costo: $</span>
                                   <input

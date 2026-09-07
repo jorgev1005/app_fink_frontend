@@ -340,11 +340,24 @@ export const getQuotationById = async (req: Request, res: Response) => {
     const items = quote.items || [];
     const enrichedItems = await Promise.all(items.map(async (it: any) => {
       let product: any = null;
-      if (it.sku && it.sku !== 'N/A') {
-        product = await prisma.product.findFirst({ where: { sku: it.sku } });
+      try {
+        if (it.sku && it.sku !== 'N/A') {
+          product = await prisma.product.findFirst({ where: { sku: it.sku } });
+        }
+        if (!product && it.name) {
+          product = await prisma.product.findFirst({ where: { name: it.name } });
+        }
+      } catch (_) {}
+
+      // Extraer código o referencia del proveedor (para uso interno y O.C.)
+      let supplierCode = it.supplierCode || (product as any)?.supplierCode || null;
+      if (!supplierCode && product?.description) {
+        const match = product.description.match(/C[oó]digo Proveedor:\s*([^|\n\r]+)/i);
+        if (match && match[1]) supplierCode = match[1].trim();
       }
-      if (!product && it.name) {
-        product = await prisma.product.findFirst({ where: { name: it.name } });
+      if (!supplierCode && it.description) {
+        const match = it.description.match(/C[oó]digo Proveedor:\s*([^|\n\r]+)/i);
+        if (match && match[1]) supplierCode = match[1].trim();
       }
 
       const costPrice = product?.costPrice && product.costPrice > 0 
@@ -370,6 +383,7 @@ export const getQuotationById = async (req: Request, res: Response) => {
       return {
         ...it,
         costPrice,
+        supplierCode,
         stockAvailable: product?.stock || 0,
         empaqueCantidad: product?.empaqueCantidad || it.empaqueCantidad || 1,
         medidas: product?.medidas || it.medidas || '',
@@ -536,14 +550,27 @@ export const generatePOFromQuotation = async (req: Request, res: Response) => {
     });
     const tasaBCV = tasaOverride ? parseFloat(tasaOverride) : (bcvRate?.usdToBs || 771.07);
 
-    // Preparar ítems para la OC con sus costos unitarios
+    // Preparar ítems para la OC con sus costos unitarios y códigos de proveedor
     const poItems = await Promise.all(itemsToOrder.map(async (it: any) => {
       let product: any = null;
-      if (it.sku && it.sku !== 'N/A') {
-        product = await prisma.product.findFirst({ where: { sku: it.sku } });
+      try {
+        if (it.sku && it.sku !== 'N/A') {
+          product = await prisma.product.findFirst({ where: { sku: it.sku } });
+        }
+        if (!product && it.name) {
+          product = await prisma.product.findFirst({ where: { name: it.name } });
+        }
+      } catch (_) {}
+
+      // Extraer código de proveedor para la Orden de Compra
+      let supplierCode = it.supplierCode || (product as any)?.supplierCode || null;
+      if (!supplierCode && product?.description) {
+        const match = product.description.match(/C[oó]digo Proveedor:\s*([^|\n\r]+)/i);
+        if (match && match[1]) supplierCode = match[1].trim();
       }
-      if (!product && it.name) {
-        product = await prisma.product.findFirst({ where: { name: it.name } });
+      if (!supplierCode && it.description) {
+        const match = it.description.match(/C[oó]digo Proveedor:\s*([^|\n\r]+)/i);
+        if (match && match[1]) supplierCode = match[1].trim();
       }
 
       const costPrice = it.costPrice !== undefined && Number(it.costPrice) > 0
@@ -554,6 +581,7 @@ export const generatePOFromQuotation = async (req: Request, res: Response) => {
 
       return {
         sku: it.sku || product?.sku || undefined,
+        supplierCode: supplierCode || undefined,
         name: it.name || product?.name,
         quantity: Number(it.quantity || 1),
         unit: it.unit || product?.unit || 'UNIDAD',

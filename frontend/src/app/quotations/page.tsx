@@ -13,6 +13,7 @@ import api, { apiClient } from '@/lib/api';
 
 interface QuotationItem {
   sku?: string;
+  supplierCode?: string;
   name: string;
   quantity: number;
   unit?: string;
@@ -238,23 +239,39 @@ export default function QuotationsPage() {
     setPoQuote(quote);
     setPoNotes(`Abastecimiento para Cotización ${quote.correlative} - Cliente: ${quote.customer?.name || 'Particular'}`);
     
-    // Obtener ítems enriquecidos con su costo
+    // Obtener ítems enriquecidos con su costo y código de proveedor
     try {
       const res = await (api as any).quotations.getById(quote.id || quote.correlative);
       const enrichedQuote = res.data?.success ? res.data.data : quote;
       
-      const itemsPrepared = (enrichedQuote.items || []).map((it: QuotationItem) => ({
-        ...it,
-        selected: true,
-        orderCost: it.costPrice && it.costPrice > 0 ? it.costPrice : Number((it.unitPriceUSD * 0.85).toFixed(2))
-      }));
+      const itemsPrepared = (enrichedQuote.items || []).map((it: QuotationItem) => {
+        let sCode = it.supplierCode;
+        if (!sCode && (it as any).description) {
+          const m = (it as any).description.match(/C[oó]digo Proveedor:\s*([^|\n\r]+)/i);
+          if (m && m[1]) sCode = m[1].trim();
+        }
+        return {
+          ...it,
+          supplierCode: sCode,
+          selected: true,
+          orderCost: it.costPrice && it.costPrice > 0 ? it.costPrice : Number((it.unitPriceUSD * 0.85).toFixed(2))
+        };
+      });
       setPoItems(itemsPrepared);
     } catch (e) {
-      const itemsPrepared = (quote.items || []).map((it: QuotationItem) => ({
-        ...it,
-        selected: true,
-        orderCost: it.costPrice && it.costPrice > 0 ? it.costPrice : Number((it.unitPriceUSD * 0.85).toFixed(2))
-      }));
+      const itemsPrepared = (quote.items || []).map((it: QuotationItem) => {
+        let sCode = it.supplierCode;
+        if (!sCode && (it as any).description) {
+          const m = (it as any).description.match(/C[oó]digo Proveedor:\s*([^|\n\r]+)/i);
+          if (m && m[1]) sCode = m[1].trim();
+        }
+        return {
+          ...it,
+          supplierCode: sCode,
+          selected: true,
+          orderCost: it.costPrice && it.costPrice > 0 ? it.costPrice : Number((it.unitPriceUSD * 0.85).toFixed(2))
+        };
+      });
       setPoItems(itemsPrepared);
     }
 
@@ -295,6 +312,7 @@ export default function QuotationsPage() {
         notes: poNotes.trim() || undefined,
         selectedItems: selectedList.map(i => ({
           sku: i.sku,
+          supplierCode: i.supplierCode,
           name: i.name,
           quantity: i.quantity,
           unit: i.unit || 'UNIDAD',
@@ -1282,7 +1300,15 @@ export default function QuotationsPage() {
                               className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 cursor-pointer"
                             />
                           </td>
-                          <td className="p-3 font-mono text-slate-500">{item.sku || 'N/A'}</td>
+                          <td className="p-3 font-mono">
+                            <div className="font-semibold text-slate-700">{item.sku || 'N/A'}</div>
+                            {item.supplierCode && (
+                              <div className="text-[11px] font-bold text-blue-600 tracking-tight flex items-center gap-1 mt-0.5" title="Código de referencia del proveedor">
+                                <span className="text-[9px] uppercase px-1 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded font-semibold">Prov</span>
+                                <span>{item.supplierCode}</span>
+                              </div>
+                            )}
+                          </td>
                           <td className="p-3 font-medium text-slate-900">{item.name}</td>
                           <td className="p-3 text-center">
                             <input

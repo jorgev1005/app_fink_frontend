@@ -747,6 +747,28 @@ export const exportPurchaseOrderPDF = async (req: Request, res: Response) => {
     }
 
     const { generatePurchaseOrderPDFBuffer } = require('../services/purchaseOrderPdf.service');
+    
+    // Asegurar código de proveedor en cada ítem
+    const enrichedItems = await Promise.all(items.map(async (it: any) => {
+      let supplierCode = it.supplierCode;
+      if (!supplierCode) {
+        let product: any = null;
+        try {
+          if (it.sku && it.sku !== 'N/A') {
+            product = await prisma.product.findFirst({ where: { sku: it.sku } });
+          }
+          if (!product && it.name) {
+            product = await prisma.product.findFirst({ where: { name: it.name } });
+          }
+        } catch (_) {}
+        if (product?.description) {
+          const match = product.description.match(/C[oó]digo Proveedor:\s*([^|\n\r]+)/i);
+          if (match && match[1]) supplierCode = match[1].trim();
+        }
+      }
+      return { ...it, supplierCode };
+    }));
+
     const { buffer, orderNumber } = await generatePurchaseOrderPDFBuffer({
       supplierName,
       supplierTaxId,
@@ -758,7 +780,7 @@ export const exportPurchaseOrderPDF = async (req: Request, res: Response) => {
       expectedDate,
       paymentTerms,
       tasaBCV,
-      items,
+      items: enrichedItems,
       notes
     });
 
