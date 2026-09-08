@@ -1,5 +1,5 @@
 "use client";
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { 
@@ -151,6 +151,182 @@ export default function QuotationsPage() {
     medidas?: string;
   }>>([]);
 
+  // Autocomplete de Clientes
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+  const customerDropdownRef = useRef<HTMLDivElement>(null);
+
+  // Autocomplete de Productos
+  const [showProductDropdown, setShowProductDropdown] = useState(false);
+  const [highlightedProductIndex, setHighlightedProductIndex] = useState(-1);
+  const productDropdownRef = useRef<HTMLDivElement>(null);
+  const productInputRef = useRef<HTMLInputElement>(null);
+
+  // Cerrar dropdowns al hacer clic afuera
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (customerDropdownRef.current && !customerDropdownRef.current.contains(event.target as Node)) {
+        setShowCustomerDropdown(false);
+      }
+      if (productDropdownRef.current && !productDropdownRef.current.contains(event.target as Node)) {
+        setShowProductDropdown(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Base consolidada de Clientes (Contactos + Clientes de Cotizaciones previas)
+  const allCustomerOptions = useMemo(() => {
+    const map = new Map<string, { name: string; taxId: string; phone: string; email: string; city: string; seller: string }>();
+
+    // 1. Desde Contactos registrados
+    suppliers.forEach((c: any) => {
+      if (c?.name && c.name.trim()) {
+        const key = c.name.trim().toLowerCase();
+        map.set(key, {
+          name: c.name.trim(),
+          taxId: c.taxId || '',
+          phone: c.phone || '',
+          email: c.email || '',
+          city: c.address || 'La Victoria, Aragua',
+          seller: 'Oficina'
+        });
+      }
+    });
+
+    // 2. Desde Cotizaciones emitidas
+    quotations.forEach((q: any) => {
+      if (q?.customer?.name && q.customer.name.trim()) {
+        const key = q.customer.name.trim().toLowerCase();
+        const existing = map.get(key);
+        map.set(key, {
+          name: q.customer.name.trim(),
+          taxId: q.customer.taxId || existing?.taxId || '',
+          phone: q.customer.phone || existing?.phone || '',
+          email: q.customer.email || existing?.email || '',
+          city: q.customer.city || existing?.city || 'La Victoria, Aragua',
+          seller: q.customer.seller || existing?.seller || 'Oficina'
+        });
+      }
+    });
+
+    return Array.from(map.values());
+  }, [suppliers, quotations]);
+
+  const filteredCustomerOptions = useMemo(() => {
+    const q = (manualCustomer.name || '').trim().toLowerCase();
+    if (!q) {
+      return allCustomerOptions.slice(0, 8);
+    }
+    return allCustomerOptions.filter(c => 
+      c.name.toLowerCase().includes(q) || 
+      (c.taxId && c.taxId.toLowerCase().includes(q)) || 
+      (c.phone && c.phone.toLowerCase().includes(q))
+    ).slice(0, 10);
+  }, [manualCustomer.name, allCustomerOptions]);
+
+  const handleSelectCustomer = (c: { name: string; taxId: string; phone: string; email: string; city: string; seller: string }) => {
+    setManualCustomer({
+      name: c.name,
+      taxId: c.taxId || '',
+      phone: c.phone || '',
+      email: c.email || '',
+      city: c.city || 'La Victoria, Aragua',
+      seller: c.seller || 'Oficina'
+    });
+    setShowCustomerDropdown(false);
+    toast.success(`Cliente "${c.name}" autocompletado`);
+  };
+
+  // Normalizador de búsqueda sin acentos
+  const normalizeSearch = (str: string) =>
+    (str || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim();
+
+  // Búsqueda inteligente de productos en tiempo real
+  const matchingProducts = useMemo(() => {
+    const raw = normalizeSearch(quickCodeInput);
+    if (!raw) return [];
+
+    const tokens = raw.split(/\s+/).filter(Boolean);
+
+    return availableProducts.filter(p => {
+      const pSku = normalizeSearch(p.sku);
+      const pName = normalizeSearch(p.name);
+      const pCat = normalizeSearch(p.category || p.division);
+      const pSupplier = normalizeSearch((skuSupplierCodes as any)[p.sku] || p.supplierCode);
+      const haystack = `${pSku} ${pName} ${pCat} ${pSupplier}`;
+
+      if (haystack.includes(raw)) return true;
+
+      return tokens.every(t => {
+        if (haystack.includes(t)) return true;
+        const singular = t.endsWith('es') ? t.slice(0, -2) : (t.endsWith('s') ? t.slice(0, -1) : t);
+        return singular.length >= 3 && haystack.includes(singular);
+      });
+    }).slice(0, 15);
+  }, [quickCodeInput, availableProducts]);
+
+  const handleAddProductToManualQuote = (product: any, qtyToAdd?: number) => {
+    const qty = (qtyToAdd !== undefined && qtyToAdd > 0) ? qtyToAdd : (Number(quickCodeQty) > 0 ? Number(quickCodeQty) : 1);
+    const unitPrice = resolveItemPrice(product, manualPricingTier);
+    const existingIdx = manualItems.findIndex(i => (i.sku || '').toUpperCase() === (product.sku || '').toUpperCase());
+
+    if (existingIdx >= 0) {
+      const updated = [...manualItems];
+      const newQty = updated[existingIdx].quantity + qty;
+      updated[existingIdx] = {
+        ...updated[existingIdx],
+        quantity: newQty,
+        subtotalUSD: Number((updated[existingIdx].unitPriceUSD * newQty).toFixed(2))
+      };
+      setManualItems(updated);
+    } else {
+      setManualItems(prev => [...prev, {
+        sku: product.sku,
+        name: product.name,
+        quantity: qty,
+        unit: product.unit || 'UNIDAD',
+        unitPriceUSD: unitPrice,
+        subtotalUSD: Number((unitPrice * qty).toFixed(2)),
+        costPrice: product.costPrice,
+        medidas: product.medidas
+      }]);
+    }
+
+    toast.success(`+${qty} "${product.name}" añadido`);
+    setQuickCodeInput('');
+    setQuickCodeQty(1);
+    setShowProductDropdown(false);
+    setHighlightedProductIndex(-1);
+    if (productInputRef.current) {
+      productInputRef.current.focus();
+    }
+  };
+
+  const handleProductInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!showProductDropdown || matchingProducts.length === 0) return;
+
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightedProductIndex(prev => (prev < matchingProducts.length - 1 ? prev + 1 : 0));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightedProductIndex(prev => (prev > 0 ? prev - 1 : matchingProducts.length - 1));
+    } else if (e.key === 'Enter') {
+      if (highlightedProductIndex >= 0 && matchingProducts[highlightedProductIndex]) {
+        e.preventDefault();
+        handleAddProductToManualQuote(matchingProducts[highlightedProductIndex]);
+      }
+    } else if (e.key === 'Escape') {
+      setShowProductDropdown(false);
+      setHighlightedProductIndex(-1);
+    }
+  };
+
   useEffect(() => {
     loadQuotations();
     loadSuppliers();
@@ -202,55 +378,41 @@ export default function QuotationsPage() {
 
   const handleManualQuickAdd = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    const raw = quickCodeInput.trim().toUpperCase();
+    const raw = quickCodeInput.trim();
     if (!raw) return;
 
-    const qty = Number(quickCodeQty) > 0 ? Number(quickCodeQty) : 1;
-    const found = availableProducts.find(p => 
-      (p.sku || '').toUpperCase() === raw || 
-      (p.name || '').toLowerCase() === raw.toLowerCase()
-    );
-
-    if (found) {
-      const unitPrice = resolveItemPrice(found, manualPricingTier);
-      const existingIdx = manualItems.findIndex(i => (i.sku || '').toUpperCase() === found.sku.toUpperCase());
-
-      if (existingIdx >= 0) {
-        const updated = [...manualItems];
-        const newQty = updated[existingIdx].quantity + qty;
-        updated[existingIdx] = {
-          ...updated[existingIdx],
-          quantity: newQty,
-          subtotalUSD: Number((updated[existingIdx].unitPriceUSD * newQty).toFixed(2))
-        };
-        setManualItems(updated);
-      } else {
-        setManualItems([...manualItems, {
-          sku: found.sku,
-          name: found.name,
-          quantity: qty,
-          unit: found.unit || 'UNIDAD',
-          unitPriceUSD: unitPrice,
-          subtotalUSD: Number((unitPrice * qty).toFixed(2)),
-          costPrice: found.costPrice,
-          medidas: found.medidas
-        }]);
-      }
-      toast.success(`+${qty} "${found.name}" añadido`);
-    } else {
-      setManualItems([...manualItems, {
-        sku: raw,
-        name: raw,
-        quantity: qty,
-        unit: 'UNIDAD',
-        unitPriceUSD: 0,
-        subtotalUSD: 0
-      }]);
-      toast.info(`Código "${raw}" añadido. Puede editar el nombre y precio.`);
+    if (highlightedProductIndex >= 0 && matchingProducts[highlightedProductIndex]) {
+      handleAddProductToManualQuote(matchingProducts[highlightedProductIndex]);
+      return;
     }
 
+    const exact = availableProducts.find(p => 
+      (p.sku || '').toUpperCase() === raw.toUpperCase() || 
+      (p.name || '').toLowerCase() === raw.toLowerCase()
+    );
+    if (exact) {
+      handleAddProductToManualQuote(exact);
+      return;
+    }
+
+    if (matchingProducts.length > 0) {
+      handleAddProductToManualQuote(matchingProducts[0]);
+      return;
+    }
+
+    const qty = Number(quickCodeQty) > 0 ? Number(quickCodeQty) : 1;
+    setManualItems(prev => [...prev, {
+      sku: raw.toUpperCase(),
+      name: raw,
+      quantity: qty,
+      unit: 'UNIDAD',
+      unitPriceUSD: 0,
+      subtotalUSD: 0
+    }]);
+    toast.info(`Ítem personalizado "${raw}" añadido. Puede editar el nombre y precio.`);
     setQuickCodeInput('');
     setQuickCodeQty(1);
+    setShowProductDropdown(false);
   };
 
   const handleUpdateManualItemQty = (idx: number, qty: number) => {
@@ -707,7 +869,11 @@ export default function QuotationsPage() {
 
         <div className="flex items-center gap-2.5">
           <button 
-            onClick={() => setShowManualQuoteModal(true)}
+            onClick={() => {
+              loadSuppliers();
+              loadAvailableProducts();
+              setShowManualQuoteModal(true);
+            }}
             className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-md font-extrabold text-xs transition-all cursor-pointer"
           >
             <Plus size={16} />
@@ -1714,16 +1880,77 @@ export default function QuotationsPage() {
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div className="sm:col-span-2">
-                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Nombre / Razón Social *</label>
-                    <input
-                      type="text"
-                      placeholder="Ej: Inversiones Los Andes C.A. / Carlos Pérez"
-                      value={manualCustomer.name}
-                      onChange={e => setManualCustomer({ ...manualCustomer, name: e.target.value })}
-                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-900 outline-none focus:border-blue-500"
-                    />
+                  <div className="sm:col-span-2 relative" ref={customerDropdownRef}>
+                    <div className="flex items-center justify-between mb-1">
+                      <label className="block text-[11px] font-bold text-slate-700">
+                        Nombre / Razón Social *
+                      </label>
+                      {manualCustomer.name && (
+                        <button
+                          type="button"
+                          onClick={() => setManualCustomer({ name: '', taxId: '', phone: '', email: '', city: 'La Victoria, Aragua', seller: 'Oficina' })}
+                          className="text-[10px] text-slate-400 hover:text-red-600 transition-colors flex items-center gap-0.5 cursor-pointer font-semibold"
+                          title="Limpiar datos del cliente"
+                        >
+                          <X size={11} /> Limpiar
+                        </button>
+                      )}
+                    </div>
+                    <div className="relative">
+                      <input
+                        type="text"
+                        placeholder="Buscar cliente registrado o escribir nombre..."
+                        value={manualCustomer.name}
+                        onFocus={() => setShowCustomerDropdown(true)}
+                        onChange={e => {
+                          setManualCustomer({ ...manualCustomer, name: e.target.value });
+                          setShowCustomerDropdown(true);
+                        }}
+                        className="w-full pl-8 pr-7 py-2 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 shadow-2xs"
+                      />
+                      <Search size={13} className="absolute left-2.5 top-2.5 text-slate-400 pointer-events-none" />
+                      {manualCustomer.name && (
+                        <button
+                          type="button"
+                          onClick={() => { setManualCustomer({ ...manualCustomer, name: '' }); setShowCustomerDropdown(true); }}
+                          className="absolute right-2.5 top-2.5 text-slate-400 hover:text-slate-600 cursor-pointer"
+                        >
+                          <X size={13} />
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Dropdown flotante de Clientes */}
+                    {showCustomerDropdown && filteredCustomerOptions.length > 0 && (
+                      <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-2xl z-50 max-h-64 overflow-y-auto divide-y divide-slate-100">
+                        <div className="px-3 py-1.5 bg-slate-50 text-[10px] font-bold text-slate-500 flex items-center justify-between sticky top-0 z-10 border-b border-slate-100">
+                          <span>Clientes sugeridos ({filteredCustomerOptions.length}):</span>
+                          <span className="text-[9px] text-blue-600 font-semibold">Clic para autocompletar</span>
+                        </div>
+                        {filteredCustomerOptions.map((cust, idx) => (
+                          <div
+                            key={idx}
+                            onClick={() => handleSelectCustomer(cust)}
+                            className="px-3 py-2 hover:bg-blue-50/80 cursor-pointer transition-colors flex items-center justify-between gap-2"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <div className="text-xs font-bold text-slate-900 truncate flex items-center gap-1.5">
+                                <Building2 size={13} className="text-blue-600 shrink-0" />
+                                <span>{cust.name}</span>
+                              </div>
+                              <div className="text-[10px] text-slate-500 flex items-center gap-2 mt-0.5 flex-wrap">
+                                {cust.taxId && <span className="font-mono bg-slate-100 px-1 rounded text-slate-700 font-semibold">{cust.taxId}</span>}
+                                {cust.phone && <span>📞 {cust.phone}</span>}
+                                {cust.city && <span>📍 {cust.city}</span>}
+                              </div>
+                            </div>
+                            <span className="text-[10px] font-bold text-blue-600 shrink-0">Seleccionar →</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
+
                   <div>
                     <label className="block text-[11px] font-bold text-slate-700 mb-1">RIF / Cédula</label>
                     <input
@@ -1767,21 +1994,45 @@ export default function QuotationsPage() {
                 </div>
               </div>
 
-              {/* 2. Barra de Carga Rápida por Código (SKU) */}
-              <div className="bg-blue-50/60 p-3.5 rounded-2xl border border-blue-200 space-y-2">
-                <span className="font-extrabold text-blue-900 text-xs flex items-center gap-1.5">
-                  <Package size={15} /> Cargar Productos Código por Código:
-                </span>
+              {/* 2. Barra de Carga Rápida por Código (SKU) con Autocomplete en Vivo */}
+              <div className="bg-blue-50/60 p-3.5 rounded-2xl border border-blue-200 space-y-2 relative" ref={productDropdownRef}>
+                <div className="flex items-center justify-between">
+                  <span className="font-extrabold text-blue-900 text-xs flex items-center gap-1.5">
+                    <Package size={15} /> Cargar Productos Código por Código:
+                  </span>
+                  {availableProducts.length > 0 && (
+                    <span className="text-[10px] font-bold text-blue-700 bg-blue-100/70 px-2 py-0.5 rounded-full">
+                      {availableProducts.length} productos en catálogo
+                    </span>
+                  )}
+                </div>
                 
                 <form onSubmit={handleManualQuickAdd} className="flex flex-wrap sm:flex-nowrap items-center gap-2">
                   <div className="relative flex-1 min-w-[200px]">
                     <input
+                      ref={productInputRef}
                       type="text"
-                      placeholder="Código SKU (Ej: LUC-FER-PRO-NIP-001 o nombre del producto)..."
+                      placeholder="Código SKU (Ej: LUC-FER-PRO-NIP-001) o nombre del producto (Ej: niples)..."
                       value={quickCodeInput}
-                      onChange={e => setQuickCodeInput(e.target.value)}
-                      className="w-full px-3.5 py-2 bg-white border border-blue-300 rounded-xl text-xs font-mono font-bold text-slate-900 placeholder-slate-400 outline-none focus:ring-2 focus:ring-blue-500"
+                      onFocus={() => { if (quickCodeInput.trim()) setShowProductDropdown(true); }}
+                      onChange={e => {
+                        setQuickCodeInput(e.target.value);
+                        setShowProductDropdown(true);
+                        setHighlightedProductIndex(-1);
+                      }}
+                      onKeyDown={handleProductInputKeyDown}
+                      className="w-full pl-9 pr-8 py-2.5 bg-white border border-blue-300 rounded-xl text-xs font-mono font-bold text-slate-900 placeholder-slate-400 outline-none focus:ring-2 focus:ring-blue-500 shadow-xs"
                     />
+                    <Search size={15} className="absolute left-3 top-3 text-blue-500 pointer-events-none" />
+                    {quickCodeInput && (
+                      <button
+                        type="button"
+                        onClick={() => { setQuickCodeInput(''); setShowProductDropdown(false); }}
+                        className="absolute right-3 top-3 text-slate-400 hover:text-slate-600 cursor-pointer"
+                      >
+                        <X size={14} />
+                      </button>
+                    )}
                   </div>
                   
                   <div className="flex items-center gap-1.5 shrink-0">
@@ -1791,19 +2042,91 @@ export default function QuotationsPage() {
                       min="1"
                       value={quickCodeQty}
                       onChange={e => setQuickCodeQty(parseInt(e.target.value) || 1)}
-                      className="w-16 px-2 py-2 bg-white border border-blue-300 rounded-xl text-xs font-mono font-bold text-center text-slate-900 outline-none focus:ring-2 focus:ring-blue-500"
+                      className="w-16 px-2 py-2.5 bg-white border border-blue-300 rounded-xl text-xs font-mono font-bold text-center text-slate-900 outline-none focus:ring-2 focus:ring-blue-500 shadow-xs"
                     />
                   </div>
 
                   <button
                     type="submit"
                     disabled={!quickCodeInput.trim()}
-                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all shadow-xs shrink-0 cursor-pointer"
+                    className="px-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all shadow-xs shrink-0 cursor-pointer"
                   >
                     <Plus size={15} />
                     <span>+ Agregar Ítem</span>
                   </button>
                 </form>
+
+                {/* Dropdown de Sugerencias de Productos en Vivo */}
+                {showProductDropdown && matchingProducts.length > 0 && (
+                  <div className="absolute left-3.5 right-3.5 top-full mt-1 bg-white border-2 border-blue-400 rounded-2xl shadow-2xl z-50 max-h-80 overflow-y-auto divide-y divide-slate-100">
+                    <div className="px-3.5 py-1.5 bg-blue-50 text-[10px] font-bold text-blue-800 flex items-center justify-between sticky top-0 z-10 border-b border-blue-100">
+                      <span>Sugerencias que coinciden con &quot;{quickCodeInput}&quot; ({matchingProducts.length}):</span>
+                      <span className="text-[9px] text-blue-600 font-semibold">Enter o Clic para agregar con Cant: {quickCodeQty}</span>
+                    </div>
+                    {matchingProducts.map((p, idx) => {
+                      const itemPrice = resolveItemPrice(p, manualPricingTier);
+                      const isHighlighted = idx === highlightedProductIndex;
+                      const suppCode = (skuSupplierCodes as any)[p.sku] || p.supplierCode;
+                      return (
+                        <div
+                          key={p.id || p.sku || idx}
+                          onClick={() => handleAddProductToManualQuote(p)}
+                          onMouseEnter={() => setHighlightedProductIndex(idx)}
+                          className={`px-3.5 py-2.5 transition-colors cursor-pointer flex items-center justify-between gap-3 ${
+                            isHighlighted ? 'bg-blue-100/90' : 'hover:bg-blue-50'
+                          }`}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-mono font-bold text-blue-700 text-xs bg-blue-50 px-2 py-0.5 rounded-md border border-blue-200">
+                                {p.sku}
+                              </span>
+                              {suppCode && (
+                                <span className="text-[10px] font-mono font-semibold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">
+                                  Prov: {suppCode}
+                                </span>
+                              )}
+                              <span className="font-bold text-slate-800 text-xs truncate">
+                                {p.name}
+                              </span>
+                            </div>
+                            <div className="text-[10px] text-slate-500 mt-1 flex items-center gap-3">
+                              {(p.division || p.category) && (
+                                <span className="text-slate-600">{p.division || p.category}</span>
+                              )}
+                              {p.medidas && <span>📏 {p.medidas}</span>}
+                              {p.stock !== undefined && (
+                                <span className={p.stock > 0 ? 'text-emerald-700 font-semibold' : 'text-amber-600'}>
+                                  📦 Stock: {p.stock} {p.unit || 'und'}
+                                </span>
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="text-right shrink-0">
+                            <div className="text-xs font-mono font-extrabold text-emerald-700">
+                              ${itemPrice.toFixed(2)} USD
+                            </div>
+                            <div className="text-[10px] font-mono text-slate-500">
+                              Bs. {(itemPrice * bcvRate).toFixed(2)}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {showProductDropdown && quickCodeInput.trim().length >= 2 && matchingProducts.length === 0 && (
+                  <div className="absolute left-3.5 right-3.5 top-full mt-1 bg-white border border-slate-200 rounded-2xl shadow-xl z-50 p-4 text-center">
+                    <p className="text-xs text-slate-600 font-semibold">
+                      No se encontró ningún producto con el código o nombre &quot;{quickCodeInput}&quot;
+                    </p>
+                    <p className="text-[11px] text-slate-400 mt-1">
+                      Puede agregarlo como ítem libre presionando &quot;+ Agregar Ítem&quot; o Enter
+                    </p>
+                  </div>
+                )}
 
                 {availableProducts.length > 0 && (
                   <p className="text-[10px] text-blue-700/80 font-medium">
