@@ -637,7 +637,8 @@ export const exportQuotationPDF = async (req: Request, res: Response) => {
       tasaParalelo,
       tasaEUR,
       items,
-      notes
+      notes,
+      zelleAccount: req.body.zelleAccount || req.body.zelleEmail || req.body.customer?.zelleEmail || 'admin@grupoaludra.com'
     });
 
     // Save to persistent quote history

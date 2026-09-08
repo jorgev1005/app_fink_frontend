@@ -6,7 +6,7 @@ import {
   FileText, CheckCircle2, Clock, XCircle, ShoppingBag, Truck, Search, 
   Filter, Eye, ArrowLeft, RefreshCw, MessageSquare, Phone, MapPin, 
   Building2, UserCheck, AlertCircle, Plus, Send, ExternalLink, 
-  ChevronRight, ArrowRight, Download, Check, X, Package, DollarSign, Percent
+  ChevronRight, ArrowRight, Download, Check, X, Package, DollarSign, Percent, Trash2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import api, { apiClient } from '@/lib/api';
@@ -122,10 +122,232 @@ export default function QuotationsPage() {
   const [poItems, setPoItems] = useState<Array<QuotationItem & { selected: boolean; orderCost: number }>>([]);
   const [generatingPO, setGeneratingPO] = useState(false);
 
+  // Modal Cotización Manual Código por Código
+  const [showManualQuoteModal, setShowManualQuoteModal] = useState(false);
+  const [savingManualQuote, setSavingManualQuote] = useState(false);
+  const [availableProducts, setAvailableProducts] = useState<any[]>([]);
+  const [bcvRate, setBcvRate] = useState<number>(785.07);
+  const [manualCustomer, setManualCustomer] = useState({
+    name: '',
+    taxId: '',
+    phone: '',
+    email: '',
+    city: 'La Victoria, Aragua',
+    seller: 'Oficina'
+  });
+  const [manualPricingTier, setManualPricingTier] = useState<'DIVISAS' | 'BCV'>('DIVISAS');
+  const [manualZelleAccount, setManualZelleAccount] = useState('admin@grupoaludra.com');
+  const [manualNotes, setManualNotes] = useState('');
+  const [quickCodeInput, setQuickCodeInput] = useState('');
+  const [quickCodeQty, setQuickCodeQty] = useState(1);
+  const [manualItems, setManualItems] = useState<Array<{
+    sku: string;
+    name: string;
+    quantity: number;
+    unitPriceUSD: number;
+    unit: string;
+    subtotalUSD: number;
+    costPrice?: number;
+    medidas?: string;
+  }>>([]);
+
   useEffect(() => {
     loadQuotations();
     loadSuppliers();
+    loadAvailableProducts();
   }, [statusFilter, channelFilter]);
+
+  const loadAvailableProducts = async () => {
+    try {
+      const [prodRes, rateRes] = await Promise.all([
+        (api as any).products.getAll({ limit: 3000 }),
+        (api as any).exchangeRates.getLatest ? (api as any).exchangeRates.getLatest() : Promise.resolve(null)
+      ]);
+      if (prodRes?.data?.data) {
+        setAvailableProducts(prodRes.data.data);
+      } else if (Array.isArray(prodRes?.data)) {
+        setAvailableProducts(prodRes.data);
+      }
+      if (rateRes?.data?.data?.usdToBs) {
+        setBcvRate(Number(rateRes.data.data.usdToBs));
+      }
+    } catch (e) {
+      console.warn('Error loading products for quote modal:', e);
+    }
+  };
+
+  const resolveItemPrice = (prod: any, tier: 'DIVISAS' | 'BCV') => {
+    if (tier === 'BCV') {
+      return (prod.priceList && Number(prod.priceList) > 0) ? Number(prod.priceList) : Number(prod.unitPrice || 0);
+    }
+    return Number(prod.unitPrice || 0);
+  };
+
+  const handleSwitchManualPricingTier = (newTier: 'DIVISAS' | 'BCV') => {
+    setManualPricingTier(newTier);
+    setManualItems(prev => prev.map(item => {
+      const prod = availableProducts.find(p => (p.sku || '').toUpperCase() === (item.sku || '').toUpperCase());
+      if (prod) {
+        const newPrice = resolveItemPrice(prod, newTier);
+        return {
+          ...item,
+          unitPriceUSD: newPrice,
+          subtotalUSD: Number((newPrice * item.quantity).toFixed(2))
+        };
+      }
+      return item;
+    }));
+    toast.info(`Precios cambiados a: ${newTier === 'BCV' ? '🇻🇪 Precio 1 (Tasa BCV)' : '💵 Precio 2 (Divisas / Zelle)'}`);
+  };
+
+  const handleManualQuickAdd = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const raw = quickCodeInput.trim().toUpperCase();
+    if (!raw) return;
+
+    const qty = Number(quickCodeQty) > 0 ? Number(quickCodeQty) : 1;
+    const found = availableProducts.find(p => 
+      (p.sku || '').toUpperCase() === raw || 
+      (p.name || '').toLowerCase() === raw.toLowerCase()
+    );
+
+    if (found) {
+      const unitPrice = resolveItemPrice(found, manualPricingTier);
+      const existingIdx = manualItems.findIndex(i => (i.sku || '').toUpperCase() === found.sku.toUpperCase());
+
+      if (existingIdx >= 0) {
+        const updated = [...manualItems];
+        const newQty = updated[existingIdx].quantity + qty;
+        updated[existingIdx] = {
+          ...updated[existingIdx],
+          quantity: newQty,
+          subtotalUSD: Number((updated[existingIdx].unitPriceUSD * newQty).toFixed(2))
+        };
+        setManualItems(updated);
+      } else {
+        setManualItems([...manualItems, {
+          sku: found.sku,
+          name: found.name,
+          quantity: qty,
+          unit: found.unit || 'UNIDAD',
+          unitPriceUSD: unitPrice,
+          subtotalUSD: Number((unitPrice * qty).toFixed(2)),
+          costPrice: found.costPrice,
+          medidas: found.medidas
+        }]);
+      }
+      toast.success(`+${qty} "${found.name}" añadido`);
+    } else {
+      setManualItems([...manualItems, {
+        sku: raw,
+        name: raw,
+        quantity: qty,
+        unit: 'UNIDAD',
+        unitPriceUSD: 0,
+        subtotalUSD: 0
+      }]);
+      toast.info(`Código "${raw}" añadido. Puede editar el nombre y precio.`);
+    }
+
+    setQuickCodeInput('');
+    setQuickCodeQty(1);
+  };
+
+  const handleUpdateManualItemQty = (idx: number, qty: number) => {
+    if (qty <= 0) {
+      handleRemoveManualItem(idx);
+      return;
+    }
+    const updated = [...manualItems];
+    updated[idx] = {
+      ...updated[idx],
+      quantity: qty,
+      subtotalUSD: Number((updated[idx].unitPriceUSD * qty).toFixed(2))
+    };
+    setManualItems(updated);
+  };
+
+  const handleUpdateManualItemPrice = (idx: number, price: number) => {
+    const updated = [...manualItems];
+    updated[idx] = {
+      ...updated[idx],
+      unitPriceUSD: price,
+      subtotalUSD: Number((price * updated[idx].quantity).toFixed(2))
+    };
+    setManualItems(updated);
+  };
+
+  const handleRemoveManualItem = (idx: number) => {
+    setManualItems(manualItems.filter((_, i) => i !== idx));
+  };
+
+  const handleSaveManualQuote = async () => {
+    if (!manualCustomer.name.trim()) {
+      toast.error('Por favor ingrese el nombre del cliente');
+      return;
+    }
+    if (manualItems.length === 0) {
+      toast.error('Debe agregar al menos un producto a la cotización');
+      return;
+    }
+
+    setSavingManualQuote(true);
+    try {
+      const totalUSD = manualItems.reduce((acc, i) => acc + (i.subtotalUSD || 0), 0);
+      const totalBs = totalUSD * bcvRate;
+
+      const payload = {
+        channel: 'FINK_MANUAL',
+        customer: {
+          ...manualCustomer,
+          name: manualCustomer.name.trim(),
+          taxId: (manualCustomer.taxId || '').trim(),
+          phone: (manualCustomer.phone || '').trim(),
+          email: (manualCustomer.email || '').trim(),
+          city: manualCustomer.city || 'La Victoria, Aragua',
+          seller: manualCustomer.seller || 'Oficina'
+        },
+        paymentMethod: manualPricingTier === 'BCV' ? 'bcv_bs' : 'cash_usd',
+        zelleAccount: (manualZelleAccount || 'admin@grupoaludra.com').trim(),
+        rates: { bcv: bcvRate, paralelo: 929.80, eur: 916.03 },
+        items: manualItems.map(i => ({
+          sku: i.sku,
+          name: i.name,
+          quantity: i.quantity,
+          unit: i.unit || 'UNIDAD',
+          unitPriceUSD: i.unitPriceUSD,
+          unitPriceBs: Number((i.unitPriceUSD * bcvRate).toFixed(2)),
+          subtotalUSD: i.subtotalUSD,
+          subtotalBs: Number((i.subtotalUSD * bcvRate).toFixed(2)),
+          costPrice: i.costPrice,
+          medidas: i.medidas
+        })),
+        totalUSD: Number(totalUSD.toFixed(2)),
+        totalBs: Number(totalBs.toFixed(2)),
+        notes: manualNotes.trim()
+      };
+
+      const res = await (api as any).quotations.create(payload);
+      if (res.data?.success) {
+        toast.success('¡Cotización creada exitosamente!');
+        setShowManualQuoteModal(false);
+        setManualItems([]);
+        setManualCustomer({ name: '', taxId: '', phone: '', email: '', city: 'La Victoria, Aragua', seller: 'Oficina' });
+        setManualNotes('');
+        loadQuotations();
+
+        const quoteId = res.data.data?.correlative || res.data.data?.id;
+        if (quoteId) {
+          window.open(`/backend-api/api/quotations/${quoteId}/pdf`, '_blank');
+        }
+      }
+    } catch (err: any) {
+      console.error('Error creando cotización manual:', err);
+      toast.error(err.response?.data?.error?.message || err.message || 'Error al guardar cotización');
+    } finally {
+      setSavingManualQuote(false);
+    }
+  };
 
   const loadSuppliers = async () => {
     try {
@@ -484,6 +706,13 @@ export default function QuotationsPage() {
         </div>
 
         <div className="flex items-center gap-2.5">
+          <button 
+            onClick={() => setShowManualQuoteModal(true)}
+            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-md font-extrabold text-xs transition-all cursor-pointer"
+          >
+            <Plus size={16} />
+            Nueva Cotización
+          </button>
           <button 
             onClick={() => router.push('/pos')}
             className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-xs font-semibold text-xs transition-all cursor-pointer"
@@ -1417,6 +1646,342 @@ export default function QuotationsPage() {
                 </button>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: NUEVA COTIZACIÓN MANUAL CÓDIGO POR CÓDIGO */}
+      {showManualQuoteModal && (
+        <div 
+          onClick={(e) => { if (e.target === e.currentTarget) setShowManualQuoteModal(false); }}
+          className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+        >
+          <div className="bg-white rounded-3xl max-w-4xl w-full shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[92vh] animate-in fade-in zoom-in duration-200">
+            
+            {/* Header */}
+            <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center font-bold">
+                  <FileText size={22} />
+                </div>
+                <div>
+                  <h3 className="text-base font-extrabold text-slate-900">Nueva Cotización Manual (Código por Código)</h3>
+                  <p className="text-xs text-slate-500">Carga rápida por SKU, selector de tarifa (BCV vs Zelle) y emisión de PDF</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowManualQuoteModal(false)}
+                className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 rounded-xl transition-all"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            {/* Content con Scroll */}
+            <div className="p-6 overflow-y-auto space-y-5 flex-1 text-xs">
+              
+              {/* 1. Datos del Cliente & Modalidad de Precios */}
+              <div className="bg-slate-50/80 p-4 rounded-2xl border border-slate-200/80 space-y-3">
+                <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2.5">
+                  <span className="font-extrabold text-slate-800 text-xs flex items-center gap-1.5">
+                    👤 Datos del Cliente
+                  </span>
+
+                  {/* Selector Modalidad de Precios */}
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-bold text-slate-600">Tarifa:</span>
+                    <div className="flex bg-white p-0.5 rounded-xl border border-slate-300 text-[11px] font-bold shadow-xs">
+                      <button
+                        type="button"
+                        onClick={() => handleSwitchManualPricingTier('DIVISAS')}
+                        className={`px-3 py-1 rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
+                          manualPricingTier === 'DIVISAS' ? 'bg-emerald-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        <DollarSign size={12} /> Divisas / Zelle (P2)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSwitchManualPricingTier('BCV')}
+                        className={`px-3 py-1 rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
+                          manualPricingTier === 'BCV' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        🇻🇪 Tasa BCV (P1)
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div className="sm:col-span-2">
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Nombre / Razón Social *</label>
+                    <input
+                      type="text"
+                      placeholder="Ej: Inversiones Los Andes C.A. / Carlos Pérez"
+                      value={manualCustomer.name}
+                      onChange={e => setManualCustomer({ ...manualCustomer, name: e.target.value })}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-semibold text-slate-900 outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">RIF / Cédula</label>
+                    <input
+                      type="text"
+                      placeholder="J-12345678-9"
+                      value={manualCustomer.taxId}
+                      onChange={e => setManualCustomer({ ...manualCustomer, taxId: e.target.value.toUpperCase() })}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-mono font-semibold text-slate-900 outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Teléfono / WhatsApp</label>
+                    <input
+                      type="text"
+                      placeholder="0412-1234567"
+                      value={manualCustomer.phone}
+                      onChange={e => setManualCustomer({ ...manualCustomer, phone: e.target.value })}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-mono font-semibold text-slate-900 outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Correo Electrónico</label>
+                    <input
+                      type="email"
+                      placeholder="cliente@empresa.com"
+                      value={manualCustomer.email}
+                      onChange={e => setManualCustomer({ ...manualCustomer, email: e.target.value })}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 outline-none focus:border-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-700 mb-1">Ciudad Destino</label>
+                    <input
+                      type="text"
+                      placeholder="La Victoria, Aragua"
+                      value={manualCustomer.city}
+                      onChange={e => setManualCustomer({ ...manualCustomer, city: e.target.value })}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs text-slate-900 outline-none focus:border-blue-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* 2. Barra de Carga Rápida por Código (SKU) */}
+              <div className="bg-blue-50/60 p-3.5 rounded-2xl border border-blue-200 space-y-2">
+                <span className="font-extrabold text-blue-900 text-xs flex items-center gap-1.5">
+                  <Package size={15} /> Cargar Productos Código por Código:
+                </span>
+                
+                <form onSubmit={handleManualQuickAdd} className="flex flex-wrap sm:flex-nowrap items-center gap-2">
+                  <div className="relative flex-1 min-w-[200px]">
+                    <input
+                      type="text"
+                      placeholder="Código SKU (Ej: LUC-FER-PRO-NIP-001 o nombre del producto)..."
+                      value={quickCodeInput}
+                      onChange={e => setQuickCodeInput(e.target.value)}
+                      className="w-full px-3.5 py-2 bg-white border border-blue-300 rounded-xl text-xs font-mono font-bold text-slate-900 placeholder-slate-400 outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className="text-xs font-bold text-slate-600">Cant:</span>
+                    <input
+                      type="number"
+                      min="1"
+                      value={quickCodeQty}
+                      onChange={e => setQuickCodeQty(parseInt(e.target.value) || 1)}
+                      className="w-16 px-2 py-2 bg-white border border-blue-300 rounded-xl text-xs font-mono font-bold text-center text-slate-900 outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <button
+                    type="submit"
+                    disabled={!quickCodeInput.trim()}
+                    className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-40 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all shadow-xs shrink-0 cursor-pointer"
+                  >
+                    <Plus size={15} />
+                    <span>+ Agregar Ítem</span>
+                  </button>
+                </form>
+
+                {availableProducts.length > 0 && (
+                  <p className="text-[10px] text-blue-700/80 font-medium">
+                    💡 Base de datos: {availableProducts.length} productos disponibles para búsqueda instantánea por SKU o escáner.
+                  </p>
+                )}
+              </div>
+
+              {/* 3. Tabla de Productos Cotizados */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="font-extrabold text-slate-800 text-xs">
+                    Renglones Cotizados ({manualItems.length}):
+                  </span>
+                  {manualItems.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setManualItems([])}
+                      className="text-[11px] text-red-600 hover:text-red-700 font-semibold cursor-pointer"
+                    >
+                      Vaciar lista
+                    </button>
+                  )}
+                </div>
+
+                {manualItems.length === 0 ? (
+                  <div className="border-2 border-dashed border-slate-200 rounded-2xl p-8 text-center text-slate-400 space-y-1">
+                    <Package className="mx-auto text-slate-300" size={32} />
+                    <p className="font-semibold text-xs text-slate-500">No hay productos agregados</p>
+                    <p className="text-[11px]">Escribe un SKU arriba y pulsa &quot;+ Agregar Ítem&quot; o presiona Enter</p>
+                  </div>
+                ) : (
+                  <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
+                    <table className="w-full text-left text-xs border-collapse">
+                      <thead className="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
+                        <tr>
+                          <th className="py-2.5 px-3">SKU</th>
+                          <th className="py-2.5 px-3">Descripción</th>
+                          <th className="py-2.5 px-3 text-center w-20">Cant.</th>
+                          <th className="py-2.5 px-3 text-right w-28">P. Unit ($)</th>
+                          <th className="py-2.5 px-3 text-right w-28">Subtotal ($)</th>
+                          <th className="py-2.5 px-2 text-center w-10"></th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {manualItems.map((item, idx) => (
+                          <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                            <td className="py-2 px-3 font-mono font-bold text-blue-700">{item.sku}</td>
+                            <td className="py-2 px-3 font-semibold text-slate-800">
+                              <input
+                                type="text"
+                                value={item.name}
+                                onChange={e => {
+                                  const up = [...manualItems];
+                                  up[idx].name = e.target.value;
+                                  setManualItems(up);
+                                }}
+                                className="w-full bg-transparent border-b border-transparent hover:border-slate-300 focus:border-blue-500 outline-none font-semibold text-slate-800"
+                              />
+                            </td>
+                            <td className="py-2 px-3 text-center">
+                              <input
+                                type="number"
+                                min="1"
+                                value={item.quantity}
+                                onChange={e => handleUpdateManualItemQty(idx, parseInt(e.target.value) || 0)}
+                                className="w-16 px-1.5 py-1 text-center font-mono font-bold border border-slate-200 rounded-lg outline-none focus:border-blue-500"
+                              />
+                            </td>
+                            <td className="py-2 px-3 text-right">
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={item.unitPriceUSD}
+                                onChange={e => handleUpdateManualItemPrice(idx, parseFloat(e.target.value) || 0)}
+                                className="w-20 px-1.5 py-1 text-right font-mono font-bold border border-slate-200 rounded-lg outline-none focus:border-blue-500 text-emerald-700"
+                              />
+                            </td>
+                            <td className="py-2 px-3 text-right font-mono font-bold text-slate-900">
+                              ${item.subtotalUSD.toFixed(2)}
+                            </td>
+                            <td className="py-2 px-2 text-center">
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveManualItem(idx)}
+                                className="text-slate-400 hover:text-red-500 p-1 rounded-lg transition-colors cursor-pointer"
+                              >
+                                <Trash2 size={14} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
+              {/* 4. Cuenta Zelle y Notas */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    Cuenta Zelle para Pago (Transferencias en Divisas)
+                  </label>
+                  <input
+                    type="text"
+                    value={manualZelleAccount}
+                    onChange={e => setManualZelleAccount(e.target.value)}
+                    placeholder="admin@grupoaludra.com"
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-mono font-bold text-emerald-700 outline-none focus:border-blue-500"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-0.5">
+                    Se imprimirá en el PDF de cotización en la sección de cuentas bancarias.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    Observaciones y Condiciones Especiales
+                  </label>
+                  <input
+                    type="text"
+                    value={manualNotes}
+                    onChange={e => setManualNotes(e.target.value)}
+                    placeholder="Ej: Despacho a convenir. Pago 100% anticipado."
+                    className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-800 outline-none focus:border-blue-500"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-0.5">
+                    Notas visibles en la cotización impresa y enviada al cliente.
+                  </p>
+                </div>
+              </div>
+
+              {/* 5. Totales */}
+              <div className="bg-slate-900 text-white p-4 rounded-2xl flex flex-wrap items-center justify-between gap-4 shadow-md">
+                <div>
+                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
+                    Modalidad: {manualPricingTier === 'BCV' ? 'Precio 1 (Tasa BCV)' : 'Precio 2 (Divisas / Zelle)'}
+                  </span>
+                  <span className="text-xs text-slate-300 font-mono">
+                    Tasa Oficial BCV: Bs. {bcvRate.toFixed(2)}
+                  </span>
+                </div>
+
+                <div className="text-right">
+                  <div className="text-lg font-extrabold font-mono text-emerald-400">
+                    ${manualItems.reduce((acc, i) => acc + (i.subtotalUSD || 0), 0).toFixed(2)} USD
+                  </div>
+                  <div className="text-xs font-bold font-mono text-amber-300">
+                    Bs. {(manualItems.reduce((acc, i) => acc + (i.subtotalUSD || 0), 0) * bcvRate).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </div>
+                </div>
+              </div>
+
+            </div>
+
+            {/* Footer Buttons */}
+            <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex items-center justify-between shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowManualQuoteModal(false)}
+                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200 rounded-xl transition-all cursor-pointer"
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                onClick={handleSaveManualQuote}
+                disabled={savingManualQuote || manualItems.length === 0}
+                className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-extrabold rounded-xl text-xs flex items-center gap-2 shadow-md transition-all cursor-pointer"
+              >
+                <FileText size={16} />
+                <span>{savingManualQuote ? 'Guardando...' : 'Emitir Cotización y Descargar PDF'}</span>
+              </button>
+            </div>
+
           </div>
         </div>
       )}

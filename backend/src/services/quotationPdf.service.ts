@@ -35,6 +35,7 @@ export interface QuotationPDFOptions {
     applyTax?: boolean;
     taxRate?: number;
     notes?: string;
+    zelleAccount?: string;
 }
 
 function generarNumeroCotizacion(): string {
@@ -66,7 +67,8 @@ export async function generateQuotationPDFBuffer(options: QuotationPDFOptions): 
         items,
         applyTax = false,
         taxRate = 16,
-        notes
+        notes,
+        zelleAccount
     } = options;
 
     const whatsappUrl = `https://wa.me/584122711859?text=${encodeURIComponent(`Hola, quisiera confirmar la cotización ${quotationNumber} a nombre de ${clientName}`)}`;
@@ -347,9 +349,10 @@ export async function generateQuotationPDFBuffer(options: QuotationPDFOptions): 
         doc.fontSize(7.5).fillColor(DARK).font('Helvetica-Bold')
            .text('Cuentas Bancarias / Métodos de Pago:', LEFT + 10, totY + 6, { lineBreak: false });
 
+        const zelleTarget = (zelleAccount || 'admin@grupoaludra.com').trim();
         doc.fontSize(6.5).fillColor(GRAY).font('Helvetica')
            .text('• Bolívares: Banesco Pago Móvil / Transferencia (J-40500250-6 | 0134 | 0412-271-1859)', LEFT + 10, totY + 18, { width: bankW - 15, lineBreak: false })
-           .text('• Divisas: Zelle (admin@grupoaludra.com) | Banesco Panamá | Binance USDT', LEFT + 10, totY + 28, { width: bankW - 15, lineBreak: false })
+           .text(`• Divisas: Zelle (${zelleTarget}) | Banesco Panamá | Binance USDT`, LEFT + 10, totY + 28, { width: bankW - 15, lineBreak: false })
            .text('• Efectivo: Dólares en billetes en buen estado.', LEFT + 10, totY + 38, { width: bankW - 15, lineBreak: false });
 
         y = totY + 66;
@@ -369,8 +372,12 @@ export async function generateQuotationPDFBuffer(options: QuotationPDFOptions): 
            .text('Términos y Condiciones de la Cotización:', LEFT + 10, y + 6, { lineBreak: false });
         doc.fontSize(6.5).font('Helvetica')
            .text('* Precios en Bolívares calculados con la tasa oficial BCV vigente a la fecha de pago.', LEFT + 10, y + 18, { width: W - 110, lineBreak: false })
-           .text('* Cotización válida por 48 horas continuas sujeta a disponibilidad de inventario.', LEFT + 10, y + 29, { width: W - 110, lineBreak: false })
-           .text('* Para confirmar este pedido, responda a este documento o escanee el código QR.', LEFT + 10, y + 40, { width: W - 110, lineBreak: false });
+           .text('* Cotización válida por 48 horas continuas sujeta a disponibilidad de inventario.', LEFT + 10, y + 29, { width: W - 110, lineBreak: false });
+        if (notes && notes.trim()) {
+           doc.text(`* Notas / Observaciones: ${notes.trim().slice(0, 110)}`, LEFT + 10, y + 40, { width: W - 110, lineBreak: false });
+        } else {
+           doc.text('* Para confirmar este pedido, responda a este documento o escanee el código QR.', LEFT + 10, y + 40, { width: W - 110, lineBreak: false });
+        }
 
         doc.rect(qrX - 5, qrY, 85, 68).fill(LGRAY);
         doc.rect(qrX - 5, qrY, 2, 68).fill(GREEN);

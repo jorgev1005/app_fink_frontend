@@ -190,6 +190,9 @@ function POSComponent() {
   const [cart, setCart] = useState<CartItem[]>([]);
   const [cartCurrency, setCartCurrency] = useState<'USD' | 'BS'>('USD');
   const [applyTax, setApplyTax] = useState<boolean>(false); // por defecto Sin IVA (Exento)
+  const [pricingTier, setPricingTier] = useState<'DIVISAS' | 'BCV'>('DIVISAS'); // Precio 2 Divisas vs Precio 1 BCV
+  const [quickSkuInput, setQuickSkuInput] = useState('');
+  const [quickSkuQty, setQuickSkuQty] = useState(1);
   
   // Customer State
   const [customerType, setCustomerType] = useState<'generic' | 'express'>('generic');
@@ -283,6 +286,7 @@ function POSComponent() {
   const [quoteClientEmail, setQuoteClientEmail] = useState('');
   const [quoteSaveContact, setQuoteSaveContact] = useState(true);
   const [quoteNotes, setQuoteNotes] = useState('');
+  const [quoteZelleAccount, setQuoteZelleAccount] = useState('admin@grupoaludra.com');
   const [deliveryMode, setDeliveryMode] = useState<'PICKUP' | 'SHIPPING'>('SHIPPING');
   const [quoteFreightPercent, setQuoteFreightPercent] = useState<number>(15);
   const [quoteDestinationCity, setQuoteDestinationCity] = useState<string>('Valencia');
@@ -349,6 +353,8 @@ function POSComponent() {
         projectId: selectedProjectId,
         tasaOverride: exchangeRate,
         notes: quoteNotes.trim() || undefined,
+        zelleAccount: (quoteZelleAccount || 'admin@grupoaludra.com').trim(),
+        paymentMethod: pricingTier === 'BCV' ? 'bcv_bs' : 'cash_usd',
         items: cart.map(ci => ({
           sku: ci.product.sku || undefined,
           name: ci.product.name,
@@ -607,6 +613,24 @@ function POSComponent() {
     }
   };
 
+  // Helper para resolver precio unitario según la modalidad activa (Precio 2 Divisas vs Precio 1 BCV)
+  const getProductTierPrice = (p: Product, tier: 'DIVISAS' | 'BCV') => {
+    if (tier === 'BCV') {
+      return (p.priceList && p.priceList > 0) ? safeNum(p.priceList) : safeNum(p.unitPrice);
+    }
+    return safeNum(p.unitPrice);
+  };
+
+  // Alternar entre Precio 1 (BCV) y Precio 2 (Divisas) recalculando todo el carrito
+  const switchPricingTier = (newTier: 'DIVISAS' | 'BCV') => {
+    setPricingTier(newTier);
+    setCart(prev => prev.map(ci => ({
+      ...ci,
+      unitPrice: getProductTierPrice(ci.product, newTier)
+    })));
+    toast.info(`Modalidad de precio cambiada a: ${newTier === 'BCV' ? '🇻🇪 Precio 1 (Tasa BCV)' : '💵 Precio 2 (Divisas / Zelle)'}`);
+  };
+
   // Cart Management: Permite facturación inmediata con o sin stock (Bajo Pedido / Pendiente por Verificar)
   const addToCart = (product: Product, qtyToAdd: number = 1) => {
     const existing = cart.find(ci => ci.product.id === product.id);
@@ -614,7 +638,24 @@ function POSComponent() {
       const newQty = existing.quantity + qtyToAdd;
       setCart(cart.map(ci => ci.product.id === product.id ? { ...ci, quantity: newQty } : ci));
     } else {
-      setCart([...cart, { product, quantity: qtyToAdd, unitPrice: safeNum(product.unitPrice) }]);
+      setCart([...cart, { product, quantity: qtyToAdd, unitPrice: getProductTierPrice(product, pricingTier) }]);
+    }
+  };
+
+  // Carga Rápida Código por Código (SKU)
+  const handleQuickAddSku = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    const raw = quickSkuInput.trim().toUpperCase();
+    if (!raw) return;
+    const found = products.find(p => (p.sku || '').toUpperCase() === raw || (p.name || '').toLowerCase() === raw.toLowerCase());
+    if (found) {
+      const qty = Number(quickSkuQty) > 0 ? Number(quickSkuQty) : 1;
+      addToCart(found, qty);
+      toast.success(`+${qty} "${found.name}" agregado al pedido`);
+      setQuickSkuInput('');
+      setQuickSkuQty(1);
+    } else {
+      toast.error(`Producto con código "${raw}" no encontrado`);
     }
   };
 
@@ -871,7 +912,41 @@ function POSComponent() {
         <section className={`lg:col-span-7 flex flex-col space-y-3 ${activeTab === 'cart' ? 'hidden lg:flex' : 'flex'}`}>
           
           {/* Search & Division Pills */}
-          <div className="bg-slate-900 p-3 rounded-2xl border border-slate-800 space-y-2">
+          <div className="bg-slate-900 p-3 rounded-2xl border border-slate-800 space-y-2.5">
+            
+            {/* Carga Rápida Código por Código (SKU / Pistola de Códigos) */}
+            <form onSubmit={handleQuickAddSku} className="bg-slate-950 p-2 rounded-xl border border-emerald-500/30 flex items-center gap-2">
+              <div className="flex items-center gap-1 text-emerald-400 font-bold text-xs pl-1 shrink-0">
+                <Package size={15} />
+                <span className="hidden sm:inline">SKU Directo:</span>
+              </div>
+              <input
+                type="text"
+                placeholder="Código SKU (Ej: LUC-FER-PRO-NIP-001 o pistola de barras)..."
+                value={quickSkuInput}
+                onChange={(e) => setQuickSkuInput(e.target.value)}
+                className="flex-1 px-2.5 py-1.5 bg-slate-900 border border-slate-800 rounded-lg text-xs font-mono text-white placeholder-slate-500 outline-none focus:border-emerald-500"
+              />
+              <div className="flex items-center gap-1 shrink-0">
+                <span className="text-[10px] text-slate-400 font-semibold">Cant:</span>
+                <input
+                  type="number"
+                  min="1"
+                  value={quickSkuQty}
+                  onChange={(e) => setQuickSkuQty(parseInt(e.target.value) || 1)}
+                  className="w-12 px-1.5 py-1.5 bg-slate-900 border border-slate-800 rounded-lg text-xs font-mono text-center text-white outline-none focus:border-emerald-500"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={!quickSkuInput.trim()}
+                className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white rounded-lg text-xs font-extrabold flex items-center gap-1 transition-all cursor-pointer shadow-md shrink-0"
+              >
+                <Plus size={13} />
+                <span>+ Agregar</span>
+              </button>
+            </form>
+
             <div className="relative">
               <Search className="absolute left-3.5 top-3 text-slate-500" size={16} />
               <input 
@@ -1054,6 +1129,39 @@ function POSComponent() {
                   }`}
                 >
                   {applyTax ? 'IVA (16%)' : 'Exento (0%)'}
+                </button>
+              </div>
+            </div>
+
+            {/* Modalidad de Precios: Precio 2 (Divisas) vs Precio 1 (BCV) */}
+            <div className="bg-slate-950 p-1.5 rounded-xl border border-slate-800 flex items-center justify-between text-xs">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider pl-1">
+                Modalidad:
+              </span>
+              <div className="flex bg-slate-900 p-0.5 rounded-lg border border-slate-800 text-[11px] font-bold">
+                <button
+                  type="button"
+                  onClick={() => switchPricingTier('DIVISAS')}
+                  className={`px-2.5 py-1 rounded-md transition-all flex items-center gap-1 cursor-pointer ${
+                    pricingTier === 'DIVISAS'
+                      ? 'bg-emerald-600 text-white shadow'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="Precio 2: Divisas en efectivo, Zelle o Binance USDT"
+                >
+                  <DollarSign size={12} /> Divisas / Zelle (P2)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => switchPricingTier('BCV')}
+                  className={`px-2.5 py-1 rounded-md transition-all flex items-center gap-1 cursor-pointer ${
+                    pricingTier === 'BCV'
+                      ? 'bg-blue-600 text-white shadow'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                  title="Precio 1: Lista oficial en Bolívares a tasa BCV"
+                >
+                  🇻🇪 Tasa BCV (P1)
                 </button>
               </div>
             </div>
@@ -2367,6 +2475,31 @@ function POSComponent() {
                     )}
                   </div>
                 </div>
+
+                {/* Selector Modalidad de Precios para la Cotización */}
+                <div className="flex justify-between items-center bg-slate-900/90 p-2 rounded-xl border border-slate-800">
+                  <span className="text-[11px] font-bold text-slate-300">Modalidad de Precio:</span>
+                  <div className="flex bg-slate-950 p-0.5 rounded-lg border border-slate-800 text-[11px] font-bold">
+                    <button
+                      type="button"
+                      onClick={() => switchPricingTier('DIVISAS')}
+                      className={`px-2.5 py-1 rounded-md transition-all flex items-center gap-1 cursor-pointer ${
+                        pricingTier === 'DIVISAS' ? 'bg-emerald-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      <DollarSign size={11} /> Divisas / Zelle (P2)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => switchPricingTier('BCV')}
+                      className={`px-2.5 py-1 rounded-md transition-all flex items-center gap-1 cursor-pointer ${
+                        pricingTier === 'BCV' ? 'bg-blue-600 text-white shadow' : 'text-slate-400 hover:text-white'
+                      }`}
+                    >
+                      🇻🇪 Tasa BCV (P1)
+                    </button>
+                  </div>
+                </div>
               </div>
 
               {/* Selector de Modalidad y Flete */}
@@ -2545,6 +2678,20 @@ function POSComponent() {
                     placeholder="Ej: Tiempo de entrega 24 horas. Despacho incluido."
                     className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-white outline-none focus:ring-2 focus:ring-emerald-500 text-xs"
                   />
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-300 mb-1">Cuenta Zelle de Pago (Transferencias en Divisas)</label>
+                  <input
+                    type="text"
+                    value={quoteZelleAccount}
+                    onChange={(e) => setQuoteZelleAccount(e.target.value)}
+                    placeholder="admin@grupoaludra.com"
+                    className="w-full bg-slate-900 border border-slate-700 rounded-xl p-2.5 text-emerald-400 font-mono font-bold outline-none focus:ring-2 focus:ring-emerald-500 text-xs"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-0.5">
+                    Esta cuenta se imprimirá en el PDF de cotización bajo &quot;Cuentas Bancarias / Métodos de Pago&quot;.
+                  </p>
                 </div>
               </div>
 

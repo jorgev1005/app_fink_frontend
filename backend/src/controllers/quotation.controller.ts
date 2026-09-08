@@ -116,6 +116,7 @@ export const createQuotation = async (req: Request, res: Response) => {
       totalUSD: Number(body.totalUSD || 0),
       totalBs: Number(body.totalBs || (Number(body.totalUSD || 0) * Number(body.rates?.bcv || 785.07))),
       notes: body.notes || '',
+      zelleAccount: body.zelleAccount || body.zelleEmail || body.customer?.zelleEmail || '',
       status: body.status || 'PENDING'
     };
 
@@ -709,7 +710,8 @@ export const viewQuotationPDF = async (req: Request, res: Response) => {
         empaqueCantidad: it.empaqueCantidad,
         notes: it.notes
       })),
-      notes: quote.notes
+      notes: quote.notes,
+      zelleAccount: quote.zelleAccount || quote.zelleEmail || (quote.customer as any)?.zelleEmail || 'admin@grupoaludra.com'
     });
 
     const filename = quotationNumber + '.pdf';
