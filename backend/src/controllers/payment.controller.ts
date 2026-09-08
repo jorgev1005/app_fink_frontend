@@ -174,7 +174,7 @@ export const importBankItems = async (req: Request, res: Response) => {
 export const payInvoice = async (req: Request, res: Response) => {
   try {
     const { id } = req.params; // invoice id
-    const { amount, currency, method, reference, autoPost, accountId } = req.body;
+    const { amount, currency, method, reference, autoPost, accountId, date } = req.body;
     const user = (req as any).user;
 
     const invoice = await prisma.invoice.findUnique({ where: { id } });
@@ -183,13 +183,15 @@ export const payInvoice = async (req: Request, res: Response) => {
     const payAmount = Number(amount || 0);
     if (!(payAmount > 0)) return res.status(400).json({ success: false, error: { message: 'amount must be > 0' } });
 
+    const paymentDate = date ? new Date(date) : new Date();
+
     // If autoPost is explicitly requested and we have accountId, we can use the Smart Service
     if (autoPost && accountId) {
         // Use Smart Service
         const payment = await PaymentService.createPayment({
             projectId: invoice.projectId,
             userId: user.id,
-            date: new Date(),
+            date: paymentDate,
             amount: payAmount,
             currency: currency || invoice.currency,
             accountId: accountId,
@@ -218,7 +220,7 @@ export const payInvoice = async (req: Request, res: Response) => {
         data: {
           project: { connect: { id: invoice.projectId } },
           code,
-          date: new Date(),
+          date: paymentDate,
           currency: currency || invoice.currency,
           amount: payAmount,
           method: method || 'BANK_TRANSFER',

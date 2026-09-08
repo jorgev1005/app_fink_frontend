@@ -2,7 +2,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
-import { ArrowLeft, Save, CreditCard, Wallet, Building2, Calculator, ArrowRightLeft, RefreshCw, AlertCircle, Smartphone } from 'lucide-react';
+import { ArrowLeft, Save, CreditCard, Wallet, Building2, Calculator, ArrowRightLeft, RefreshCw, AlertCircle, Smartphone, Calendar } from 'lucide-react';
 import Link from 'next/link';
 
 export default function PayInvoicePage({ params }: { params: { id: string } }) {
@@ -10,6 +10,7 @@ export default function PayInvoicePage({ params }: { params: { id: string } }) {
   const { id } = params;
   
   // Form State
+  const [paymentDate, setPaymentDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
   const [amount, setAmount] = useState(''); // Amount in payment currency (e.g. BS)
   const [invoiceAmount, setInvoiceAmount] = useState(''); // Amount in invoice currency (e.g. USD)
   const [paymentCurrency, setPaymentCurrency] = useState('BS');
@@ -219,7 +220,7 @@ export default function PayInvoicePage({ params }: { params: { id: string } }) {
 
       const payload = {
           projectId: invoice.projectId,
-          date: new Date(),
+          date: paymentDate ? new Date(`${paymentDate}T12:00:00`) : new Date(),
           amount: value,
           currency: paymentCurrency,
           method,
@@ -273,10 +274,25 @@ export default function PayInvoicePage({ params }: { params: { id: string } }) {
 
         <form onSubmit={submit} className="p-6 space-y-6">
           
-          {/* 1. Account Selection */}
+          {/* 1. Payment Date Selection */}
+          <section>
+            <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center gap-1.5">
+              <Calendar className="w-4 h-4 text-blue-600" />
+              {isBill ? '1. Fecha del Pago' : '1. Fecha del Cobro'}
+            </label>
+            <input 
+              type="date"
+              className="w-full p-2.5 bg-gray-50 border border-gray-200 focus:bg-white focus:ring-2 focus:ring-blue-100 rounded-xl transition-all outline-none text-base"
+              value={paymentDate}
+              onChange={(e) => setPaymentDate(e.target.value)}
+              required
+            />
+          </section>
+
+          {/* 2. Account Selection */}
           <section>
             <label className="block text-sm font-medium text-gray-700 mb-2">
-              {isBill ? '1. ¿Desde dónde sale el dinero?' : '1. ¿A qué cuenta entra el dinero?'}
+              {isBill ? '2. ¿Desde dónde sale el dinero?' : '2. ¿A qué cuenta entra el dinero?'}
             </label>
             <div className="grid gap-3">
                 <select 
@@ -307,9 +323,9 @@ export default function PayInvoicePage({ params }: { params: { id: string } }) {
             </div>
           </section>
 
-          {/* 2. Amount & Conversion Logic */}
+          {/* 3. Amount & Conversion Logic */}
           <section className="space-y-4">
-            <label className="block text-sm font-medium text-gray-700">2. Monto de la operación</label>
+            <label className="block text-sm font-medium text-gray-700">3. Monto de la operación</label>
             
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div>
@@ -402,9 +418,9 @@ export default function PayInvoicePage({ params }: { params: { id: string } }) {
 
           </section>
 
-          {/* 3. Method */}
+          {/* 4. Method */}
           <section>
-             <label className="block text-sm font-medium text-gray-700 mb-2">3. Método de operación</label>
+             <label className="block text-sm font-medium text-gray-700 mb-2">4. Método de operación</label>
              <div className="grid grid-cols-4 gap-3">
               {[
                   { id: 'BANK_TRANSFER', label: 'Transferencia', icon: Building2 },
@@ -429,9 +445,9 @@ export default function PayInvoicePage({ params }: { params: { id: string } }) {
             </div>
           </section>
 
-          {/* 4. Reference or Note */}
+          {/* 5. Reference or Note */}
           <section>
-             <label className="block text-sm font-medium text-gray-700 mb-2">4. Referencia o Nota (Opcional)</label>
+             <label className="block text-sm font-medium text-gray-700 mb-2">5. Referencia o Nota (Opcional)</label>
              <input
                 type="text"
                 placeholder="Ej. Transferencia #12345, Pago móvil BNC, Efectivo caja"

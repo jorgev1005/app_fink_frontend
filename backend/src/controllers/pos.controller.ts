@@ -213,8 +213,11 @@ export const processPOSSale = async (req: Request, res: Response) => {
       currency = 'USD',
       payments, // [{ method, currency, amount, accountId, reference }]
       taxRate = 16,
-      notes
+      notes,
+      date
     } = req.body;
+
+    const saleDate = date ? new Date(date) : new Date();
 
     if (!projectId || !Array.isArray(items) || items.length === 0) {
       return res.status(400).json({
@@ -375,7 +378,7 @@ export const processPOSSale = async (req: Request, res: Response) => {
           code: posCode,
           type: 'INVOICE',
           customerId: contactId,
-          issueDate: new Date(),
+          issueDate: saleDate,
           currency,
           total: totalSale,
           outstanding: 0,
@@ -419,7 +422,7 @@ export const processPOSSale = async (req: Request, res: Response) => {
             data: {
               projectId,
               code: pCode,
-              date: new Date(),
+              date: saleDate,
               currency: p.currency || currency,
               amount: pAmount,
               method: p.method || 'CASH',

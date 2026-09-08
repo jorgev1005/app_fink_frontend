@@ -18,6 +18,7 @@ import {
   Unlock, 
   CheckCircle2, 
   X, 
+  Calendar,
   Calculator,
   RefreshCw,
   RotateCcw,
@@ -201,6 +202,7 @@ function POSComponent() {
 
   // Payment Modal State
   const [showPaymentModal, setShowPaymentModal] = useState(false);
+  const [saleDate, setSaleDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
   const [paymentEntries, setPaymentEntries] = useState<Array<{ method: string; currency: 'USD' | 'BS'; amount: number; accountId: string; reference: string }>>([]);
   const [cashReceivedUsd, setCashReceivedUsd] = useState<number>(0);
   const [cashReceivedBs, setCashReceivedBs] = useState<number>(0);
@@ -775,7 +777,8 @@ function POSComponent() {
           ...pe,
           accountId: pe.accountId || resolveMethodAccount(pe.method, pe.currency)
         })),
-        taxRate: applyTax ? 16 : 0
+        taxRate: applyTax ? 16 : 0,
+        date: saleDate ? new Date(`${saleDate}T12:00:00`) : new Date()
       };
 
       const res = await posAPI.processSale(payload);
@@ -1362,6 +1365,21 @@ function POSComponent() {
                   <span className="text-[10px] uppercase font-bold text-slate-400">Tasa de Cambio</span>
                   <div className="text-xs font-mono text-amber-400 font-bold">Bs. {fmt(exchangeRate)}</div>
                 </div>
+              </div>
+
+              {/* Fecha de la Venta / Cobro */}
+              <div className="bg-slate-950/80 p-2.5 sm:p-3 rounded-2xl border border-slate-800 flex items-center justify-between gap-3">
+                <label className="text-xs font-semibold text-slate-300 flex items-center gap-1.5 shrink-0">
+                  <Calendar size={15} className="text-emerald-400" />
+                  Fecha de la Venta:
+                </label>
+                <input 
+                  type="date"
+                  value={saleDate}
+                  onChange={(e) => setSaleDate(e.target.value)}
+                  className="bg-slate-900 border border-slate-700 text-emerald-300 text-xs sm:text-sm font-mono px-3 py-1.5 rounded-xl focus:border-emerald-500 focus:outline-none cursor-pointer"
+                  required
+                />
               </div>
 
               {/* TARJETA DINÁMICA DE DATOS DE COBRO DEL PROYECTO SEGÚN MÉTODO */}

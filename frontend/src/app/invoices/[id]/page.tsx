@@ -115,6 +115,7 @@ export default function InvoiceDetailsPage() {
   // Payment Modal States
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [accounts, setAccounts] = useState<any[]>([]);
+  const [paymentDate, setPaymentDate] = useState<string>(() => new Date().toISOString().split('T')[0]);
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentAccountId, setPaymentAccountId] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('BANK_TRANSFER');
@@ -310,6 +311,7 @@ export default function InvoiceDetailsPage() {
            accountId: paymentAccountId,
            method: paymentMethod,
            reference: paymentReference,
+           date: paymentDate ? new Date(`${paymentDate}T12:00:00`) : new Date(),
            autoPost: true
         });
         
@@ -1264,6 +1266,19 @@ export default function InvoiceDetailsPage() {
                         <span>{paymentError}</span>
                      </div>
                   )}
+
+                  <div>
+                     <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">
+                        {invoice.type === 'INVOICE' ? 'Fecha del Cobro' : 'Fecha del Pago'} *
+                     </label>
+                     <input 
+                        type="date" 
+                        required
+                        value={paymentDate}
+                        onChange={(e) => setPaymentDate(e.target.value)}
+                        className="w-full border border-gray-300 px-3 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-gray-800"
+                     />
+                  </div>
 
                   <div>
                      <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Monto a Registrar ({invoice.currency})</label>
