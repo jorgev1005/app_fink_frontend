@@ -311,6 +311,7 @@ export const paymentsAPI = {
   },
   import: (data: any) => apiClient.post('/api/payments/import', data),
   getAll: (params?: any) => apiClient.get('/api/payments', { params }),
+  delete: (id: string) => apiClient.delete(`/api/payments/${id}`),
 }
 
 export const transactionTemplatesAPI = {

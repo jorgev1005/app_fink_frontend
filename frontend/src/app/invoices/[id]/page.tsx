@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import api from '@/lib/api';
-import { Printer, ArrowLeft, Download, Edit, CreditCard, CheckCircle, FileText, Copy, Play, MessageCircle } from 'lucide-react';
+import { Printer, ArrowLeft, Download, Edit, CreditCard, CheckCircle, FileText, Copy, Play, MessageCircle, Trash2, Undo2, AlertTriangle } from 'lucide-react';
 
 interface InvoiceItem {
   id: string;
@@ -342,6 +342,43 @@ export default function InvoiceDetailsPage() {
         console.error(err);
         alert(err.response?.data?.error?.message || err.message || 'Error al publicar la factura');
      } finally {
+        setLoading(false);
+     }
+  };
+
+  const [revertingPaymentId, setRevertingPaymentId] = useState<string | null>(null);
+
+  const handleRevertPayment = async (paymentId: string, paymentCode: string) => {
+     if (!confirm(`¿Estás seguro de que deseas revertir y eliminar el pago ${paymentCode}? Esta acción devolverá el dinero en el saldo bancario/caja y restaurará el saldo pendiente de este documento.`)) {
+        return;
+     }
+     try {
+        setRevertingPaymentId(paymentId);
+        await (api.payments as any).delete(paymentId);
+        alert(`El pago ${paymentCode} ha sido revertido y eliminado exitosamente.`);
+        await loadInvoice();
+     } catch (err: any) {
+        console.error(err);
+        alert(err.response?.data?.error?.message || err.message || 'Error al revertir el pago');
+     } finally {
+        setRevertingPaymentId(null);
+     }
+  };
+
+  const handleDeleteInvoice = async () => {
+     if (!invoice) return;
+     const docType = getTypeLabel(invoice.type);
+     if (!confirm(`¿Estás seguro de que deseas eliminar permanentemente esta ${docType} (${invoice.code})? Esta acción revertirá cualquier efecto contable y devolverá la mercancía al inventario.`)) {
+        return;
+     }
+     try {
+        setLoading(true);
+        await api.invoices.delete(invoice.id);
+        alert(`${docType} eliminada correctamente.`);
+        router.push('/invoices');
+     } catch (err: any) {
+        console.error(err);
+        alert(err.response?.data?.error?.message || err.message || 'Error al eliminar el documento');
         setLoading(false);
      }
   };
@@ -783,6 +820,17 @@ export default function InvoiceDetailsPage() {
              >
                 <Printer size={13} /> Imprimir
              </button>
+
+             {/* Delete Document Button */}
+             {(!invoice.payments || invoice.payments.length === 0) && (
+                <button 
+                   onClick={handleDeleteInvoice}
+                   className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded text-xs font-medium transition border border-red-200 shadow-sm ml-auto"
+                   title="Eliminar documento definitivamente"
+                >
+                   <Trash2 size={13} /> Eliminar
+                </button>
+             )}
         </div>
       </div>
 
@@ -1145,11 +1193,14 @@ export default function InvoiceDetailsPage() {
                           <th className="py-2.5 px-3">Referencia</th>
                           <th className="py-2.5 px-3">Cuenta (Caja/Banco)</th>
                           <th className="py-2.5 px-3 text-right">Monto Abonado</th>
+                          <th className="py-2.5 px-3 text-center print:hidden" data-html2canvas-ignore="true">Acción</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100 bg-white">
                         {invoice.payments.map((alloc) => {
                           const p = alloc.payment;
+                          const paymentIdToRevert = p?.id || alloc.paymentId;
+                          const isReverting = revertingPaymentId === paymentIdToRevert;
                           return (
                             <tr key={alloc.id} className="hover:bg-gray-50/50">
                               <td className="py-2 px-3 text-gray-700 whitespace-nowrap">
@@ -1177,6 +1228,17 @@ export default function InvoiceDetailsPage() {
                                   </div>
                                 )}
                               </td>
+                              <td className="py-2 px-3 text-center print:hidden" data-html2canvas-ignore="true">
+                                <button
+                                  onClick={() => handleRevertPayment(paymentIdToRevert, p?.code || 'este pago')}
+                                  disabled={isReverting}
+                                  className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-md transition-colors disabled:opacity-50"
+                                  title="Revertir este abono y devolver saldo a la cuenta"
+                                >
+                                  <Undo2 size={12} />
+                                  <span>{isReverting ? 'Revirtiendo...' : 'Revertir'}</span>
+                                </button>
+                              </td>
                             </tr>
                           );
                         })}
@@ -1192,6 +1254,7 @@ export default function InvoiceDetailsPage() {
                               displayCurrency
                             )}
                           </td>
+                          <td className="print:hidden" data-html2canvas-ignore="true"></td>
                         </tr>
                       </tfoot>
                     </table>

@@ -301,5 +301,213 @@ export const PaymentService = {
 
       return payment;
     });
+  },
+
+  /**
+   * Revert / Delete a payment completely
+   * Restores invoice/transaction outstanding amounts, reverses account balances,
+   * deletes accounting transactions and removes payment allocations.
+   */
+  async deletePayment(paymentId: string, userId: string) {
+    const payment = await prisma.payment.findUnique({
+      where: { id: paymentId },
+      include: {
+        allocations: {
+          include: {
+            invoice: true,
+            transaction: true
+          }
+        },
+        transaction: {
+          include: {
+            entries: true
+          }
+        },
+        account: true
+      }
+    });
+
+    if (!payment) {
+      throw new Error('Pago no encontrado');
+    }
+
+    return await prisma.$transaction(async (tx) => {
+      // 1. Revert bank account balances if accounting transaction exists
+      if (payment.transaction && payment.transaction.entries) {
+        for (const entry of payment.transaction.entries) {
+          // Revert debit (money in was added -> subtract it with CREDIT)
+          if (entry.debitAccountId && Number(entry.debitAmount) > 0) {
+            const acc = await tx.account.findUnique({ where: { id: entry.debitAccountId } });
+            if (acc) {
+              const accCurrency = (acc.currency || payment.currency) as any;
+              await updateAccountBalance(entry.debitAccountId, accCurrency, Number(entry.debitAmount), 'CREDIT');
+            }
+          }
+          // Revert credit (money out was subtracted -> add it back with DEBIT)
+          if (entry.creditAccountId && Number(entry.creditAmount) > 0) {
+            const acc = await tx.account.findUnique({ where: { id: entry.creditAccountId } });
+            if (acc) {
+              const accCurrency = (acc.currency || payment.currency) as any;
+              await updateAccountBalance(entry.creditAccountId, accCurrency, Number(entry.creditAmount), 'DEBIT');
+            }
+          }
+        }
+
+        // Delete payment transaction entries and transaction
+        await tx.transactionEntry.deleteMany({
+          where: { transactionId: payment.transaction.id }
+        });
+        await tx.transaction.delete({
+          where: { id: payment.transaction.id }
+        });
+      } else if (payment.accountId && payment.amount > 0) {
+        // Fallback balance restoration if simple payment had accountId
+        const acc = await tx.account.findUnique({ where: { id: payment.accountId } });
+        if (acc) {
+          const accCurrency = (acc.currency || payment.currency) as any;
+          // By default, for sales payments entering account, revert with CREDIT
+          await updateAccountBalance(payment.accountId, accCurrency, Number(payment.amount), 'CREDIT');
+        }
+      }
+
+      // Also check if any standalone transaction was created referencing this payment code
+      const standaloneTxns = await tx.transaction.findMany({
+        where: {
+          projectId: payment.projectId,
+          reference: payment.code
+        },
+        include: { entries: true }
+      });
+
+      for (const stxn of standaloneTxns) {
+        for (const entry of stxn.entries) {
+          if (entry.debitAccountId && Number(entry.debitAmount) > 0) {
+            const acc = await tx.account.findUnique({ where: { id: entry.debitAccountId } });
+            if (acc) {
+              await updateAccountBalance(entry.debitAccountId, (acc.currency || stxn.currency) as any, Number(entry.debitAmount), 'CREDIT');
+            }
+          }
+          if (entry.creditAccountId && Number(entry.creditAmount) > 0) {
+            const acc = await tx.account.findUnique({ where: { id: entry.creditAccountId } });
+            if (acc) {
+              await updateAccountBalance(entry.creditAccountId, (acc.currency || stxn.currency) as any, Number(entry.creditAmount), 'DEBIT');
+            }
+          }
+        }
+        await tx.transactionEntry.deleteMany({ where: { transactionId: stxn.id } });
+        await tx.transaction.delete({ where: { id: stxn.id } });
+      }
+
+      // 2. Restore Target Invoices
+      for (const alloc of payment.allocations) {
+        if (alloc.invoiceId && alloc.invoice) {
+          const inv = alloc.invoice;
+          const effectiveRate = payment.exchangeRate || 1;
+          let restoreAmount = alloc.allocatedAmount;
+
+          // If allocation was recorded in payment currency, convert to invoice currency
+          if (inv.currency !== payment.currency && effectiveRate > 0) {
+            if (inv.currency === 'USD' && payment.currency === 'BS') {
+              restoreAmount = alloc.allocatedAmount / effectiveRate;
+            } else if (inv.currency === 'BS' && payment.currency === 'USD') {
+              restoreAmount = alloc.allocatedAmount * effectiveRate;
+            }
+          }
+
+          const newOutstanding = Math.min(Number(inv.total), Number(inv.outstanding || 0) + restoreAmount);
+          const newStatus = newOutstanding >= Number(inv.total) - 0.01 
+            ? 'POSTED' 
+            : (newOutstanding <= 0.01 ? 'PAID' : 'PARTIALLY_PAID');
+
+          await tx.invoice.update({
+            where: { id: inv.id },
+            data: {
+              outstanding: newOutstanding,
+              status: newStatus
+            }
+          });
+
+          // Sync posting transaction if present
+          const postingTxn = await tx.transaction.findFirst({
+            where: {
+              projectId: inv.projectId,
+              reference: inv.code,
+              type: inv.type === 'BILL' ? 'EXPENSE' : 'INCOME',
+              status: 'COMPLETED'
+            }
+          });
+
+          if (postingTxn) {
+            let txnRestore = alloc.allocatedAmount;
+            if (postingTxn.currency !== payment.currency && effectiveRate > 0) {
+              if (postingTxn.currency === 'USD' && payment.currency === 'BS') txnRestore = alloc.allocatedAmount / effectiveRate;
+              else if (postingTxn.currency === 'BS' && payment.currency === 'USD') txnRestore = alloc.allocatedAmount * effectiveRate;
+            }
+
+            const currentPaid = Math.max(0, Number(postingTxn.amountPaid || 0) - txnRestore);
+            const txnAmount = Number(postingTxn.amount || 0);
+            const epsilon = 0.01;
+
+            let nextPaymentStatus: 'PENDING' | 'PARTIAL' | 'PAID' = 'PENDING';
+            if (currentPaid >= txnAmount - epsilon) {
+              nextPaymentStatus = 'PAID';
+            } else if (currentPaid > epsilon) {
+              nextPaymentStatus = 'PARTIAL';
+            }
+
+            await tx.transaction.update({
+              where: { id: postingTxn.id },
+              data: {
+                amountPaid: currentPaid,
+                paymentStatus: nextPaymentStatus
+              }
+            });
+          }
+        } else if (alloc.transactionId && alloc.transaction) {
+          const txn = alloc.transaction;
+          const effectiveRate = payment.exchangeRate || 1;
+          let txnRestore = alloc.allocatedAmount;
+          if (txn.currency !== payment.currency && effectiveRate > 0) {
+            if (txn.currency === 'USD' && payment.currency === 'BS') txnRestore = alloc.allocatedAmount / effectiveRate;
+            else if (txn.currency === 'BS' && payment.currency === 'USD') txnRestore = alloc.allocatedAmount * effectiveRate;
+          }
+
+          const currentPaid = Math.max(0, Number(txn.amountPaid || 0) - txnRestore);
+          const txnAmount = Number(txn.amount || 0);
+          const epsilon = 0.01;
+
+          let nextPaymentStatus: 'PENDING' | 'PARTIAL' | 'PAID' = 'PENDING';
+          if (currentPaid >= txnAmount - epsilon) {
+            nextPaymentStatus = 'PAID';
+          } else if (currentPaid > epsilon) {
+            nextPaymentStatus = 'PARTIAL';
+          }
+
+          await tx.transaction.update({
+            where: { id: txn.id },
+            data: {
+              amountPaid: currentPaid,
+              paymentStatus: nextPaymentStatus,
+              status: currentPaid <= epsilon ? 'PENDING' : txn.status
+            }
+          });
+        }
+      }
+
+      // 3. Delete payment allocations and payment header
+      await tx.paymentAllocation.deleteMany({
+        where: { paymentId: payment.id }
+      });
+
+      await tx.payment.delete({
+        where: { id: payment.id }
+      });
+
+      return {
+        success: true,
+        revertedPaymentCode: payment.code,
+        allocationsCount: payment.allocations.length
+      };
+    });
   }
 };

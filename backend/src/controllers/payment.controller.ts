@@ -351,3 +351,51 @@ export const payInvoice = async (req: Request, res: Response) => {
     res.status(500).json({ success: false, error: { message: error.message } });
   }
 };
+
+/**
+  * Revertir / Eliminar un pago y restaurar las deudas/saldos asociados
+  * DELETE /api/payments/:id
+  */
+export const revertPayment = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const user = (req as any).user;
+
+    const payment = await prisma.payment.findUnique({
+      where: { id },
+      include: { allocations: true }
+    });
+
+    if (!payment) {
+      return res.status(404).json({ success: false, error: { message: 'Pago no encontrado' } });
+    }
+
+    const hasAccess = await checkProjectWriteAccess(user, payment.projectId);
+    if (!hasAccess) {
+      return res.status(403).json({ success: false, error: { message: 'No tienes permisos para revertir pagos en este proyecto' } });
+    }
+
+    const result = await PaymentService.deletePayment(id, user.id);
+
+    // Logging
+    await logActivity(
+      user.id,
+      'DELETE',
+      'Payment',
+      id,
+      `Reversión de pago ${payment.code}`,
+      { amount: payment.amount, currency: payment.currency, projectId: payment.projectId },
+      req.ip,
+      req.headers['user-agent'] as string
+    );
+
+    res.json({
+      success: true,
+      data: result,
+      message: 'Pago revertido y saldo restaurado exitosamente'
+    });
+  } catch (error: any) {
+    console.error('[revertPayment] error', error);
+    res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
