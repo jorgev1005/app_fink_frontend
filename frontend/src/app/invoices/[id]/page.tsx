@@ -755,4 +755,693 @@ export default function InvoiceDetailsPage() {
                             step="0.01"
                             value={manualRate}
                             onChange={(e) => setManualRate(e.target.value)}
-                            pla
+                            placeholder="Tasa"
+                            className="w-16 text-xs border border-gray-350 rounded px-1.5 py-1 text-center font-mono outline-none focus:ring-1 focus:ring-blue-500"
+                         />
+                      )}
+                   </div>
+                )}
+             </div>
+
+             {/* Duplicate Button */}
+             <button 
+                onClick={handleDuplicate}
+                className="flex items-center gap-1.5 px-3 py-1.5 hover:bg-gray-50 rounded text-gray-700 text-xs font-medium transition border border-gray-100"
+             >
+                <Copy size={13} /> Duplicar
+             </button>
+
+              {/* Edit Button if open, posted or draft (and unpaid) */}
+              {(invoice.status === 'OPEN' || invoice.status === 'DRAFT' || (invoice.status === 'POSTED' && Number(invoice.outstanding) === Number(invoice.total))) && (
+                 <button 
+                    onClick={() => router.push(`/invoices/${invoice.id}/edit`)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 hover:bg-gray-50 rounded text-gray-700 text-xs font-medium transition border border-gray-100"
+                 >
+                    <Edit size={13} /> Editar
+                 </button>
+              )}
+
+
+              {/* Publish Button if open or draft */}
+              {(invoice.status === 'OPEN' || invoice.status === 'DRAFT') && (
+                 <button 
+                    onClick={handlePost}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded text-xs font-medium transition shadow-sm"
+                 >
+                    <Play size={13} /> Publicar (Postear)
+                 </button>
+              )}
+
+             {/* Pay/Collect Button if pending */}
+             {invoice.status === 'POSTED' && (
+                <button 
+                   onClick={() => router.push(`/invoices/${invoice.id}/pay`)}
+                   className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-medium transition shadow-sm"
+                >
+                   <CreditCard size={13} /> 
+                   {invoice.type === 'INVOICE' ? 'Registrar Cobro' : 'Registrar Pago'}
+                </button>
+             )}
+
+             {/* Print, WhatsApp & PDF Buttons */}
+             <button 
+                onClick={shareViaWhatsApp}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-medium transition shadow-sm"
+                title="Compartir resumen y abonos por WhatsApp"
+             >
+                <MessageCircle size={13} /> WhatsApp
+             </button>
+
+             <button 
+                onClick={handleDownloadPdf}
+                disabled={downloadingPdf}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded text-xs font-medium transition shadow-sm disabled:opacity-50"
+                title="Convertir y descargar factura en PDF"
+             >
+                <Download size={13} /> {downloadingPdf ? 'Generando...' : 'PDF'}
+             </button>
+
+             <button 
+                onClick={() => window.print()}
+                className="flex items-center gap-1.5 px-3 py-1.5 hover:bg-gray-50 rounded text-gray-700 text-xs font-medium transition border border-gray-200 shadow-sm"
+                title="Imprimir documento"
+             >
+                <Printer size={13} /> Imprimir
+             </button>
+
+             {/* Delete Document Button */}
+             {(!invoice.payments || invoice.payments.length === 0) && (
+                <button 
+                   onClick={handleDeleteInvoice}
+                   className="flex items-center gap-1.5 px-3 py-1.5 bg-red-50 hover:bg-red-100 text-red-600 rounded text-xs font-medium transition border border-red-200 shadow-sm ml-auto"
+                   title="Eliminar documento definitivamente"
+                >
+                   <Trash2 size={13} /> Eliminar
+                </button>
+             )}
+        </div>
+      </div>
+
+      {/* Invoice Paper */}
+      <div id="invoice-paper-printable" className={`max-w-4xl mx-auto bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden print:shadow-none print:border-none print:rounded-none print:max-w-full print:my-0 print-no-shadow print-wrapper`}>
+           
+           {/* Header */}
+           <div className={`${printLayout === 'FREE_FORM' ? 'p-4 print:p-0 print:pb-2' : 'p-8 md:p-12 print:p-4'} border-b border-gray-100`}>
+               <div className={`flex flex-col md:flex-row justify-between items-start gap-8 ${printLayout === 'FREE_FORM' ? 'mb-2' : 'mb-10'}`}>
+                   {/* Left Column: Logo + Project Name & Client Details */}
+                   <div className="flex-1">
+                       {/* Logo and Project Name Row */}
+                       {printLayout !== 'FREE_FORM' && (
+                           <div className="flex items-center gap-4 mb-6">
+                               {invoice.project?.logoUrl ? (
+                                   <div className="shrink-0">
+                                       {/* eslint-disable-next-line @next/next/no-img-element */}
+                                       <img 
+                                           src={`/backend-api${invoice.project.logoUrl}`} 
+                                           alt={invoice.project.name} 
+                                           className="max-h-16 max-w-[200px] object-contain"
+                                           onError={(e) => {
+                                               e.currentTarget.style.display = 'none';
+                                           }}
+                                       />
+                                   </div>
+                               ) : null}
+                               <div>
+                                   {invoice.project?.description ? (
+                                       <div className="text-sm text-gray-700 font-bold leading-relaxed whitespace-pre-wrap">
+                                           {invoice.project.description}
+                                       </div>
+                                   ) : (
+                                       invoice.project?.name && (
+                                           <h1 className="text-xl font-bold text-gray-800">{invoice.project.name}</h1>
+                                       )
+                                   )}
+                               </div>
+                           </div>
+                       )}
+ 
+                       {/* Client / Provider Details */}
+                       <div className={printLayout === 'FREE_FORM' ? 'mt-1' : 'mt-4'}>
+                           <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2 print:mb-0.5">
+                              {invoice.type === 'INVOICE' ? 'Cliente' : 'Proveedor'}
+                           </h3>
+                           <div className={`text-gray-800 text-sm ${printLayout === 'FREE_FORM' ? 'space-y-0.5 text-xs' : 'space-y-1'}`}>
+                               <p className={`font-bold ${printLayout === 'FREE_FORM' ? 'text-sm mb-0.5' : 'text-lg mb-1'}`}>{contactName}</p>
+                               {contact?.taxId && <p>RIF/NIT: {contact.taxId}</p>}
+                               {contact?.address && <p className="max-w-md">Dirección: {contact.address}</p>}
+                               {contact?.phone && <p>Teléfono: {contact.phone}</p>}
+                               {contact?.email && <p>Email: {contact.email}</p>}
+                           </div>
+                       </div>
+                   </div>
+ 
+                   {/* Right Column: Invoice Type, Code, Status & Dates/OC */}
+                   <div className="text-right flex flex-col items-end">
+                       <h2 className={`font-light text-gray-800 ${printLayout === 'FREE_FORM' ? 'text-lg mb-0.5' : 'text-3xl mb-2'}`}>
+                          {viewMode === 'DELIVERY_NOTE' ? 'Nota de Entrega' : getTypeLabel(invoice.type)}
+                       </h2>
+                       <p className={`font-mono text-gray-600 ${printLayout === 'FREE_FORM' ? 'text-sm mb-0.5' : 'text-lg mb-2'}`}>#{invoice.code}</p>
+                       <div className={printLayout === 'FREE_FORM' ? 'mb-1 print:hidden' : 'mb-4'}>
+                           {getStatusBadge(invoice.status, invoice.type)}
+                       </div>
+                       
+                       {/* Dates and Purchase Order Info */}
+                       <div className={`${printLayout === 'FREE_FORM' ? 'text-xs space-y-0.5' : 'text-sm space-y-1'} text-gray-500 text-right`}>
+                           <p>Fecha de Emisión: {formatDate(invoice.issueDate)}</p>
+                           <p>Fecha de Vencimiento: {formatDate(invoice.dueDate)}</p>
+                           {invoice.purchaseOrder && (
+                               <p>
+                                   <span className="text-gray-400">
+                                       {invoice.purchaseOrder.startsWith('COT-') ? 'Cotización: ' : (invoice.type === 'BILL' ? 'Orden de Compra: ' : 'O.C. Cliente / Ref: ')}
+                                   </span>
+                                   <span className="font-mono font-bold text-gray-800">{invoice.purchaseOrder}</span>
+                               </p>
+                           )}
+                           {invoice.purchaseOrderDate && (
+                               <p>
+                                   <span className="text-gray-400">Fecha Ref/O.C.: </span>
+                                   <span className="font-medium text-gray-700">{invoice.purchaseOrderDate}</span>
+                               </p>
+                           )}
+                           {displayCurrency !== invoice.currency && (
+                               <p className="text-xs text-blue-600 font-semibold mt-1">
+                                   Tasa Ref: {getActiveRate().toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 4 })} {rateSource === 'BCV_EUR' ? 'BS/EUR' : 'BS/USD'}
+                               </p>
+                           )}
+                       </div>
+                   </div>
+               </div>
+ 
+               {/* Concept/Details (Only rendered if description is present) */}
+               {invoice.description && (
+                   <div className={`${printLayout === 'FREE_FORM' ? 'mt-2 pt-2' : 'mt-8 pt-6'} border-t border-gray-150`}>
+                       <h3 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Concepto</h3>
+                       <p className="text-gray-700 text-sm whitespace-pre-wrap">{invoice.description}</p>
+                   </div>
+               )}
+           </div>
+
+           {/* Items Table */}
+           <div className={printLayout === 'FREE_FORM' ? 'p-4 print:px-1 print:py-1' : 'p-8 md:p-12 print:px-4 print:py-2'}>
+               <table className="w-full text-left">
+                   <thead>
+                       <tr className="border-b border-gray-200">
+                           <th className={`${printLayout === 'FREE_FORM' ? 'py-1 text-xs' : 'py-3 text-xs'} font-bold text-gray-400 uppercase tracking-wider w-1/2`}>Descripción</th>
+                           <th className={`${printLayout === 'FREE_FORM' ? 'py-1 text-xs' : 'py-3 text-xs'} font-bold text-gray-400 uppercase tracking-wider text-right`}>Cant.</th>
+                           {(viewMode !== 'DELIVERY_NOTE' || showPricesInDeliveryNote) && (
+                              <>
+                                 <th className={`${printLayout === 'FREE_FORM' ? 'py-1 text-xs' : 'py-3 text-xs'} font-bold text-gray-400 uppercase tracking-wider text-right`}>Precio</th>
+                                 <th className={`${printLayout === 'FREE_FORM' ? 'py-1 text-xs' : 'py-3 text-xs'} font-bold text-gray-400 uppercase tracking-wider text-right`}>Total</th>
+                              </>
+                           )}
+                       </tr>
+                    </thead>
+                    <tbody>
+                       {(() => {
+                           const itemsToRender = invoice.items || [];
+                           const hasItems = itemsToRender.length > 0;
+                           const rows = [];
+
+                           if (hasItems) {
+                               const filteredItems = printLayout === 'FREE_FORM'
+                                   ? itemsToRender.filter((item) => {
+                                       const price = typeof item.unitPrice === 'number' ? item.unitPrice : (typeof item.price === 'number' ? item.price : 0);
+                                       const total = typeof item.total === 'number' ? item.total : 0;
+                                       return total !== 0 || price !== 0;
+                                     })
+                                   : itemsToRender;
+
+                               filteredItems.forEach((item) => {
+                                   rows.push(
+                                       <tr key={item.id} className="border-b border-gray-50 last:border-0">
+                                           <td className={`${printLayout === 'FREE_FORM' ? 'py-1.5' : 'py-4'} text-sm text-gray-800`}>
+                                               <p className="font-medium">{item.description || item.name || 'Ítem sin nombre'}</p>
+                                               {item.notes && (
+                                                  <p className="text-[10px] text-gray-400 mt-0.5 font-normal whitespace-pre-wrap leading-tight">
+                                                     {item.notes}
+                                                  </p>
+                                               )}
+                                           </td>
+                                           <td className={`${printLayout === 'FREE_FORM' ? 'py-1.5' : 'py-4'} text-sm text-gray-600 text-right`}>
+                                               <div>{item.quantity}</div>
+                                               {(() => {
+                                                  const prod = products.find(p => p.id === item.productId);
+                                                  if (prod && prod.empaqueCantidad && prod.empaqueCantidad > 1) {
+                                                     const bultos = item.quantity / prod.empaqueCantidad;
+                                                     const bultosStr = Number(bultos.toFixed(2)).toLocaleString('es-VE');
+                                                     const unit = (prod.unidad_empaque || 'bulto').trim();
+                                                     const finalUnit = bultos === 1 ? unit : (unit.endsWith('s') ? unit : `${unit}s`);
+                                                     return (
+                                                        <div className="text-[10px] text-gray-400 mt-0.5 font-normal">
+                                                           ({bultosStr} {finalUnit})
+                                                        </div>
+                                                     );
+                                                  }
+                                                  return null;
+                                               })()}
+                                           </td>
+                                           {(viewMode !== 'DELIVERY_NOTE' || showPricesInDeliveryNote) && (
+                                              <>
+                                                 <td className={`${printLayout === 'FREE_FORM' ? 'py-1.5' : 'py-4'} text-sm text-gray-600 text-right font-mono`}>
+                                                     {formatCurrency((typeof item.unitPrice === 'number' && !isNaN(item.unitPrice) ? item.unitPrice : (typeof item.price === 'number' && !isNaN(item.price) ? item.price : 0)) * conversionFactor, displayCurrency)}
+                                                 </td>
+                                                 <td className={`${printLayout === 'FREE_FORM' ? 'py-1.5' : 'py-4'} text-sm text-gray-800 text-right font-medium font-mono`}>
+                                                     {formatCurrency(item.total * conversionFactor, displayCurrency)}
+                                                 </td>
+                                              </>
+                                           )}
+                                       </tr>
+                                   );
+                               });
+                           } else {
+                               rows.push(
+                                   <tr key="fallback">
+                                      <td className="py-4 text-sm text-gray-800" colSpan={viewMode === 'DELIVERY_NOTE' && !showPricesInDeliveryNote ? 2 : 3}>
+                                          <p className="font-medium">{invoice.description || 'Servicios Profesionales'}</p>
+                                      </td>
+                                      {(viewMode !== 'DELIVERY_NOTE' || showPricesInDeliveryNote) && (
+                                         <td className="py-4 text-sm text-gray-800 text-right font-medium font-mono">
+                                             {formatCurrency(totals.subtotal * conversionFactor, displayCurrency)}
+                                         </td>
+                                      )}
+                                   </tr>
+                               );
+                           }
+
+                           // Pad up to 10 rows if in FREE_FORM printLayout
+                           if (printLayout === 'FREE_FORM' && rows.length < 10) {
+                               const padCount = 10 - rows.length;
+                               for (let i = 0; i < padCount; i++) {
+                                   rows.push(
+                                       <tr key={`pad-${i}`} className="border-b border-gray-50 last:border-0 print:border-0">
+                                           <td className="py-1.5 text-sm">&nbsp;</td>
+                                           <td className="py-1.5 text-sm">&nbsp;</td>
+                                           {(viewMode !== 'DELIVERY_NOTE' || showPricesInDeliveryNote) && (
+                                              <>
+                                                 <td className="py-1.5 text-sm">&nbsp;</td>
+                                                 <td className="py-1.5 text-sm">&nbsp;</td>
+                                              </>
+                                           )}
+                                       </tr>
+                                   );
+                               }
+                           }
+
+                           return rows;
+                       })()}</tbody>
+               </table>
+
+               {viewMode === 'DELIVERY_NOTE' && (() => {
+                 const itemsToSummarize = invoice.items || [];
+                 if (itemsToSummarize.length === 0) return null;
+
+                 // Build a map: productId → { description, totalQty, totalBultos, empaqueCantidad, unidadEmpaque }
+                 const summaryMap = new Map<string, {
+                   description: string;
+                   totalQty: number;
+                   empaqueCantidad: number;
+                   unidadEmpaque: string;
+                 }>();
+
+                 itemsToSummarize.forEach((item) => {
+                   const key = item.productId || `__no_product__${item.description || item.name || ''}`;
+                   const prod = products.find((p: any) => p.id === item.productId);
+                   const empaqQty = prod?.empaqueCantidad && prod.empaqueCantidad > 1 ? prod.empaqueCantidad : 0;
+                   const unidad = prod?.unidad_empaque || 'bulto';
+
+                   if (summaryMap.has(key)) {
+                     const entry = summaryMap.get(key)!;
+                     entry.totalQty += item.quantity;
+                   } else {
+                     summaryMap.set(key, {
+                       description: item.description || item.name || 'Sin nombre',
+                       totalQty: item.quantity,
+                       empaqueCantidad: empaqQty,
+                       unidadEmpaque: unidad,
+                     });
+                   }
+                 });
+
+                 const summaryRows = Array.from(summaryMap.values());
+                 const grandTotalQty = summaryRows.reduce((acc, r) => acc + r.totalQty, 0);
+                 const grandTotalBultos = summaryRows.reduce((acc, r) => {
+                   if (r.empaqueCantidad > 0) return acc + (r.totalQty / r.empaqueCantidad);
+                   return acc;
+                 }, 0);
+
+                 const hasBultos = summaryRows.some(r => r.empaqueCantidad > 0);
+
+                 return (
+                   <div className="mt-4 pt-3 border-t border-gray-200">
+                     <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                       Resumen de Despacho
+                     </h4>
+                     <table className="w-full text-left">
+                       <thead>
+                         <tr className="border-b border-gray-300">
+                           <th className="py-1 text-[9px] font-bold text-gray-400 uppercase tracking-wider w-1/2">Producto</th>
+                           <th className="py-1 text-[9px] font-bold text-gray-400 uppercase tracking-wider text-right">Unidades</th>
+                           {hasBultos && (
+                             <th className="py-1 text-[9px] font-bold text-gray-400 uppercase tracking-wider text-right">Bultos</th>
+                           )}
+                         </tr>
+                       </thead>
+                       <tbody>
+                         {summaryRows.map((row, idx) => {
+                           const bultosNum = row.empaqueCantidad > 0 ? row.totalQty / row.empaqueCantidad : null;
+                           const bultosStr = bultosNum !== null
+                             ? `${Number(bultosNum.toFixed(2)).toLocaleString('es-VE')} ${bultosNum === 1 ? row.unidadEmpaque : (row.unidadEmpaque.endsWith('s') ? row.unidadEmpaque : `${row.unidadEmpaque}s`)}`
+                             : '—';
+                           return (
+                             <tr key={idx} className="border-b border-gray-50 last:border-0">
+                               <td className="py-1 text-[10px] text-gray-700 font-medium leading-tight">{row.description}</td>
+                               <td className="py-1 text-[10px] text-gray-800 font-mono text-right font-semibold leading-tight">{row.totalQty.toLocaleString('es-VE')}</td>
+                               {hasBultos && (
+                                 <td className="py-1 text-[10px] text-gray-600 font-mono text-right leading-tight">{bultosStr}</td>
+                               )}
+                             </tr>
+                           );
+                         })}
+                       </tbody>
+                       <tfoot>
+                         <tr className="border-t border-gray-400">
+                           <td className="py-1 text-[9px] font-bold text-gray-500 uppercase">TOTAL DESPACHO</td>
+                           <td className="py-1 text-[10px] font-mono text-right font-bold text-gray-900">{grandTotalQty.toLocaleString('es-VE')}</td>
+                           {hasBultos && (
+                             <td className="py-1 text-[10px] font-mono text-right font-bold text-gray-700">
+                               {Number(grandTotalBultos.toFixed(2)).toLocaleString('es-VE')}
+                             </td>
+                           )}
+                         </tr>
+                       </tfoot>
+                     </table>
+                   </div>
+                 );
+               })()}
+
+              {(viewMode !== 'DELIVERY_NOTE' || showPricesInDeliveryNote) && (
+                 <div className="mt-8 flex justify-end">
+                     <div className="w-full md:w-5/12 space-y-3">
+                         <div className="flex justify-between text-sm text-gray-600">
+                             <span>Subtotal</span>
+                             <span className="font-mono">{formatCurrency(totals.subtotal * conversionFactor, displayCurrency)}</span>
+                         </div>
+                         {totals.taxAmount > 0 && (
+                             <div className="flex justify-between text-sm text-gray-600">
+                                 <span>IVA ({invoice.taxAmount > 0 && invoice.total > 0 ? `${Math.round((invoice.taxAmount / (invoice.total - invoice.taxAmount)) * 100)}%` : '16%'})</span>
+                                 <span className="font-mono">{formatCurrency(totals.taxAmount * conversionFactor, displayCurrency)}</span>
+                             </div>
+                         )}
+                         <div className="border-t border-gray-200 pt-3 flex justify-between text-lg font-bold text-gray-900">
+                             <span>Total</span>
+                             <span className="font-mono">{formatCurrency(totals.total * conversionFactor, displayCurrency)}</span>
+                         </div>
+                         {invoice.payments && invoice.payments.length > 0 && (
+                             <div className="flex justify-between text-sm font-semibold text-emerald-600">
+                                 <span>Total Abonado</span>
+                                 <span className="font-mono">
+                                   - {formatCurrency(invoice.payments.reduce((acc, curr) => acc + getPaymentAmountInInvoiceCurrency(curr), 0) * conversionFactor, displayCurrency)}
+                                 </span>
+                             </div>
+                         )}
+                         {totals.outstanding > 0 ? (
+                             <div className="flex justify-between text-sm font-bold text-orange-600 bg-orange-50/80 px-3 py-1.5 rounded-lg border border-orange-200">
+                                 <span>Saldo Pendiente</span>
+                                 <span className="font-mono">{formatCurrency(totals.outstanding * conversionFactor, displayCurrency)}</span>
+                             </div>
+                         ) : (
+                             <div className="flex justify-between text-xs font-bold text-green-700 bg-green-50 px-3 py-1.5 rounded-lg border border-green-200">
+                                 <span>Estado de Pago</span>
+                                 <span className="uppercase">PAGADA TOTALMENTE</span>
+                             </div>
+                         )}
+                     </div>
+                 </div>
+              )}
+
+              {/* Historial de Abonos / Pagos Realizados */}
+              {(viewMode !== 'DELIVERY_NOTE' || showPricesInDeliveryNote) && invoice.payments && invoice.payments.length > 0 && (
+                <div className="mt-8 pt-6 border-t border-gray-200">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                      <span>Historial de Abonos / Pagos</span>
+                      <span className="bg-emerald-100 text-emerald-800 text-[10px] font-semibold px-2 py-0.5 rounded-full">
+                        {invoice.payments.length} {invoice.payments.length === 1 ? 'abono registrado' : 'abonos registrados'}
+                      </span>
+                    </h3>
+                  </div>
+                  
+                  <div className="overflow-x-auto rounded-lg border border-gray-200">
+                    <table className="w-full text-left text-xs">
+                      <thead className="bg-gray-50 text-gray-600 font-semibold border-b border-gray-200">
+                        <tr>
+                          <th className="py-2.5 px-3">Fecha</th>
+                          <th className="py-2.5 px-3">Nro. Pago</th>
+                          <th className="py-2.5 px-3">Método</th>
+                          <th className="py-2.5 px-3">Referencia</th>
+                          <th className="py-2.5 px-3">Cuenta (Caja/Banco)</th>
+                          <th className="py-2.5 px-3 text-right">Monto Abonado</th>
+                          <th className="py-2.5 px-3 text-center print:hidden" data-html2canvas-ignore="true">Acción</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100 bg-white">
+                        {invoice.payments.map((alloc) => {
+                          const p = alloc.payment;
+                          const paymentIdToRevert = p?.id || alloc.paymentId;
+                          const isReverting = revertingPaymentId === paymentIdToRevert;
+                          return (
+                            <tr key={alloc.id} className="hover:bg-gray-50/50">
+                              <td className="py-2 px-3 text-gray-700 whitespace-nowrap">
+                                {formatDate(p?.date || alloc.createdAt)}
+                              </td>
+                              <td className="py-2 px-3 font-mono text-gray-600 font-medium">
+                                {p?.code || '-'}
+                              </td>
+                              <td className="py-2 px-3 text-gray-700">
+                                <span className="inline-flex items-center gap-1 font-medium">
+                                  {formatPaymentMethod(p?.method)}
+                                </span>
+                              </td>
+                              <td className="py-2 px-3 text-gray-600 font-mono">
+                                {p?.reference ? p.reference : <span className="text-gray-400 italic">Sin ref.</span>}
+                              </td>
+                              <td className="py-2 px-3 text-gray-700">
+                                {p?.account ? `${p.account.name} (${p.account.code})` : '-'}
+                              </td>
+                              <td className="py-2 px-3 text-right font-mono font-bold text-emerald-700 whitespace-nowrap">
+                                {formatCurrency(getPaymentAmountInInvoiceCurrency(alloc) * conversionFactor, displayCurrency)}
+                                {p?.currency && p.currency !== invoice.currency && (
+                                  <div className="text-[10px] text-gray-400 font-normal">
+                                    Orig: {formatCurrency(p.amount, p.currency)} {p.exchangeRate ? `(Tasa: ${Number(p.exchangeRate).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 4 })})` : ''}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="py-2 px-3 text-center print:hidden" data-html2canvas-ignore="true">
+                                <button
+                                  onClick={() => handleRevertPayment(paymentIdToRevert, p?.code || 'este pago')}
+                                  disabled={isReverting}
+                                  className="inline-flex items-center gap-1 px-2 py-1 text-[11px] font-medium text-rose-600 bg-rose-50 hover:bg-rose-100 border border-rose-200 rounded-md transition-colors disabled:opacity-50"
+                                  title="Revertir este abono y devolver saldo a la cuenta"
+                                >
+                                  <Undo2 size={12} />
+                                  <span>{isReverting ? 'Revirtiendo...' : 'Revertir'}</span>
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                      <tfoot className="bg-gray-50/80 border-t border-gray-200 font-semibold">
+                        <tr>
+                          <td colSpan={5} className="py-2 px-3 text-gray-600 text-right uppercase text-[10px]">
+                            Total Abonado
+                          </td>
+                          <td className="py-2 px-3 text-right font-mono text-emerald-700 font-bold">
+                            {formatCurrency(
+                              invoice.payments.reduce((acc, curr) => acc + getPaymentAmountInInvoiceCurrency(curr), 0) * conversionFactor,
+                              displayCurrency
+                            )}
+                          </td>
+                          <td className="print:hidden" data-html2canvas-ignore="true"></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                </div>
+              )}
+           </div>
+           
+           <div className="bg-gray-50 px-8 py-6 border-t border-gray-200 text-center text-xs text-gray-400 print:hidden" data-html2canvas-ignore="true">
+                Documento generado por Sistema FINK
+           </div>
+       </div>
+
+       {/* Panel Interno de Rentabilidad (Sólo para vista de Factura, NUNCA en Nota de Entrega, y fuera del documento imprimible/PDF) */}
+       {viewMode === 'INVOICE' && invoice.type === 'INVOICE' && (invoice.totalCost !== undefined && invoice.totalCost > 0) && (
+          <div className="max-w-4xl mx-auto mt-6 bg-slate-50 border border-slate-200 rounded-xl p-5 print:hidden shadow-sm" data-html2canvas-ignore="true">
+              <div className="flex items-center justify-between mb-3 border-b border-slate-200 pb-2">
+                  <h4 className="text-xs font-bold text-slate-600 uppercase tracking-wider flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                      <span>Panel Interno de Rentabilidad (Uso Administrativo)</span>
+                  </h4>
+                  <span className="text-[10px] text-slate-400 font-medium">Exclusivo interno - no visible para clientes ni en PDF</span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="bg-white p-3 rounded-lg border border-slate-200">
+                      <span className="text-xs text-gray-500 block mb-1">Costo Total del Pedido</span>
+                      <span className="font-mono text-gray-800 font-semibold text-base">
+                          {formatCurrency((invoice.totalCost || 0) * conversionFactor, displayCurrency)}
+                      </span>
+                  </div>
+                  <div className="bg-white p-3 rounded-lg border border-slate-200">
+                      <span className="text-xs text-gray-500 block mb-1">Utilidad Neta</span>
+                      <span className={`font-mono font-semibold text-base ${(invoice.netProfit || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {formatCurrency((invoice.netProfit || 0) * conversionFactor, displayCurrency)}
+                      </span>
+                  </div>
+                  <div className="bg-white p-3 rounded-lg border border-slate-200">
+                      <span className="text-xs text-gray-500 block mb-1">Margen de Ganancia</span>
+                      <span className={`font-semibold text-base ${(invoice.netProfit || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                          {(() => {
+                              const tax = totals.taxAmount;
+                              const netSales = Math.max(0.01, totals.total - tax);
+                              const margin = ((invoice.netProfit || 0) / netSales) * 100;
+                              return `${margin.toFixed(1)}%`;
+                          })()}
+                      </span>
+                  </div>
+              </div>
+          </div>
+       )}
+
+      {/* Payment Modal */}
+      {isPaymentModalOpen && (
+         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50 print:hidden">
+            <div className="bg-white rounded-xl shadow-xl border border-gray-200 max-w-md w-full overflow-hidden animate-in fade-in zoom-in duration-200">
+               <div className="bg-gray-50 px-6 py-4 border-b border-gray-150 flex justify-between items-center">
+                  <h3 className="font-bold text-gray-800 text-lg">
+                     {invoice.type === 'INVOICE' ? 'Registrar Cobro de Venta' : 'Registrar Pago de Compra'}
+                  </h3>
+                  <button 
+                     onClick={() => setIsPaymentModalOpen(false)}
+                     className="text-gray-400 hover:text-gray-600 text-xl font-bold"
+                  >
+                     &times;
+                  </button>
+               </div>
+               
+               <form onSubmit={handleRegisterPayment} className="p-6 space-y-4">
+                  {paymentError && (
+                     <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg flex items-center gap-2">
+                        <span>⚠️</span>
+                        <span>{paymentError}</span>
+                     </div>
+                  )}
+
+                  <div>
+                     <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">
+                        {invoice.type === 'INVOICE' ? 'Fecha del Cobro' : 'Fecha del Pago'} *
+                     </label>
+                     <input 
+                        type="date" 
+                        required
+                        value={paymentDate}
+                        onChange={(e) => setPaymentDate(e.target.value)}
+                        className="w-full border border-gray-300 px-3 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-gray-800"
+                     />
+                  </div>
+
+                  <div>
+                     <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Monto a Registrar ({invoice.currency})</label>
+                     <input 
+                        type="number" 
+                        step="0.01" 
+                        required
+                        max={invoice.outstanding}
+                        min="0.01"
+                        value={paymentAmount}
+                        onChange={(e) => setPaymentAmount(e.target.value)}
+                        className="w-full border border-gray-300 px-3 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-gray-800 font-mono"
+                     />
+                     <p className="text-xs text-gray-400 mt-1">Pendiente total: {formatCurrency(invoice.outstanding, invoice.currency)}</p>
+                  </div>
+
+                  <div>
+                     <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Cuenta de Banco / Caja</label>
+                     <select 
+                        required
+                        value={paymentAccountId}
+                        onChange={(e) => setPaymentAccountId(e.target.value)}
+                        className="w-full border border-gray-300 px-3 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white text-gray-800"
+                     >
+                        {accounts.length === 0 ? (
+                           <option value="">No hay cuentas activas</option>
+                        ) : (
+                           accounts.map(acc => (
+                              <option key={acc.id} value={acc.id}>
+                                 {acc.code} - {acc.name} ({acc.currency})
+                              </option>
+                           ))
+                        )}
+                     </select>
+                  </div>
+
+                  <div>
+                     <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Método de Pago</label>
+                     <select 
+                        value={paymentMethod}
+                        onChange={(e) => setPaymentMethod(e.target.value)}
+                        className="w-full border border-gray-300 px-3 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none bg-white text-gray-800"
+                     >
+                        <option value="BANK_TRANSFER">Transferencia Bancaria</option>
+                        <option value="CASH">Efectivo</option>
+                        <option value="CARD">Tarjeta de Débito/Crédito</option>
+                        <option value="MOBILE_PAYMENT">Pago Móvil</option>
+                        <option value="OTHER">Otro</option>
+                     </select>
+                  </div>
+
+                  <div>
+                     <label className="block text-xs font-semibold text-gray-500 uppercase mb-1">Referencia / Comprobante</label>
+                     <input 
+                        type="text" 
+                        value={paymentReference}
+                        onChange={(e) => setPaymentReference(e.target.value)}
+                        placeholder="Ej. Nro. de transferencia o depósito"
+                        className="w-full border border-gray-300 px-3 py-2 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-gray-800"
+                     />
+                  </div>
+
+                  <div className="pt-4 border-t border-gray-150 flex justify-end gap-3">
+                     <button 
+                        type="button"
+                        onClick={() => setIsPaymentModalOpen(false)}
+                        className="px-4 py-2 text-gray-500 hover:text-gray-700 text-sm font-medium transition"
+                     >
+                        Cancelar
+                     </button>
+                     <button 
+                        type="submit"
+                        disabled={submittingPayment || accounts.length === 0}
+                        className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition flex items-center gap-1.5 shadow-sm disabled:opacity-50"
+                     >
+                        {submittingPayment ? (
+                           <>
+                              <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                              <span>Registrando...</span>
+                           </>
+                        ) : (
+                           <>
+                              <CheckCircle size={15} />
+                              <span>Confirmar</span>
+                           </>
+                        )}
+                     </button>
+                  </div>
+               </form>
+            </div>
+         </div>
+      )}
+    </div>
+  );
+}
