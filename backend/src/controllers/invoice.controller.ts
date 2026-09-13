@@ -812,3 +812,156 @@ export const getInvoiceById = async (req: Request, res: Response) => {
     res.status(500).json({ success: false, error: { message: error.message } });
   }
 };
+
+export const getInvoicePdf = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const invoice = await prisma.invoice.findFirst({
+      where: { OR: [{ id }, { code: id }] },
+      include: { project: true }
+    });
+
+    if (!invoice) {
+      return res.status(404).json({ success: false, error: { message: 'Factura no encontrada' } });
+    }
+
+    const isOC = invoice.code?.toUpperCase().startsWith('OC-') || invoice.type === 'BILL';
+    const contactId = invoice.vendorId || invoice.customerId;
+    const contact = contactId ? await prisma.contactPerson.findUnique({ where: { id: contactId } }) : null;
+
+    // Obtener tasa BCV reciente
+    const bcvRate = await prisma.exchangeRate.findFirst({
+      where: { source: 'BCV' },
+      orderBy: { date: 'desc' },
+    });
+    const tasaBCV = bcvRate?.usdToBs || 832.48;
+
+    let parsedLines: any = { items: [] };
+    try {
+      if (invoice.lines) {
+        parsedLines = typeof invoice.lines === 'string' ? JSON.parse(invoice.lines) : invoice.lines;
+      }
+    } catch (_) {}
+
+    const itemsList = Array.isArray(parsedLines) ? parsedLines : (parsedLines.items || []);
+
+    // 1. NOTA DE ENTREGA (NE-...) O VISTA COMO NOTA DE ENTREGA
+    const isDeliveryNote = invoice.code?.toUpperCase().startsWith('NE-') || invoice.code?.toUpperCase().startsWith('NE') || req.query.viewMode === 'DELIVERY_NOTE';
+    if (isDeliveryNote) {
+      const productIds = itemsList.map((i: any) => i.productId).filter(Boolean);
+      let productMap: Record<string, any> = {};
+      if (productIds.length > 0) {
+        const dbProducts = await prisma.product.findMany({
+          where: { id: { in: productIds } },
+          select: { id: true, sku: true, name: true, empaqueCantidad: true, unidad_empaque: true }
+        });
+        dbProducts.forEach(p => { productMap[p.id] = p; });
+      }
+
+      const showPrices = req.query.showPrices === 'true' || req.query.showPrices === '1';
+
+      const enrichedItems = itemsList.map((it: any) => {
+        const prod = it.productId ? productMap[it.productId] : null;
+        const sku = it.sku || prod?.sku || '';
+        const name = it.description || it.name || prod?.name || 'Producto';
+        const empaqueCantidad = prod?.empaqueCantidad && prod.empaqueCantidad > 1 ? prod.empaqueCantidad : 0;
+        const unidadEmpaque = prod?.unidad_empaque || 'bulto';
+
+        return {
+          sku,
+          description: name,
+          quantity: Number(it.quantity || 1),
+          unit: it.unit || 'UNIDAD',
+          unitPrice: Number(it.unitPrice || it.price || 0),
+          total: Number(it.total || (Number(it.quantity || 1) * Number(it.unitPrice || it.price || 0))),
+          empaqueCantidad,
+          unidadEmpaque,
+          notes: it.notes || ''
+        };
+      });
+
+      const { generateDeliveryNotePDFBuffer } = require('../services/deliveryNotePdf.service');
+      const { buffer, noteNumber } = await generateDeliveryNotePDFBuffer({
+        noteNumber: invoice.code,
+        clientName: contact?.name || invoice.clientName || 'CLIENTE ESTIMADO',
+        clientTaxId: contact?.taxId || '',
+        clientPhone: contact?.phone || '',
+        clientEmail: contact?.email || '',
+        clientAddress: contact?.address || '',
+        companyName: invoice.project?.name || 'Inversiones Lucem C.A. / Grupo Aludra',
+        deliveryAddress: contact?.address || 'Almacén Principal / Transporte',
+        issueDate: invoice.issueDate ? invoice.issueDate.toString() : undefined,
+        tasaBCV,
+        items: enrichedItems,
+        showPrices,
+        notes: invoice.notes || ''
+      });
+
+      const filename = `Nota_Entrega_${noteNumber}.pdf`;
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+      return res.send(buffer);
+    }
+
+    // 2. ORDEN DE COMPRA (OC-...) O FACTURA DE COMPRA / GASTO (BILL)
+    if (isOC) {
+      const productIds = itemsList.map((i: any) => i.productId).filter(Boolean);
+      let productMap: Record<string, any> = {};
+      if (productIds.length > 0) {
+        const dbProducts = await prisma.product.findMany({
+          where: { id: { in: productIds } },
+          select: { id: true, sku: true, name: true }
+        });
+        dbProducts.forEach(p => { productMap[p.id] = p; });
+      }
+
+      const enrichedItems = itemsList.map((it: any) => {
+        const prod = it.productId ? productMap[it.productId] : null;
+        const sku = it.sku || prod?.sku || '';
+        let supplierCode = it.supplierCode || prod?.supplierCode || '';
+        let name = it.name || it.description || 'Producto';
+        
+        if (name.includes('| Ref:')) {
+          const parts = name.split('| Ref:');
+          name = parts[0].trim();
+          if (!supplierCode && parts[1]) {
+            supplierCode = parts[1].trim();
+          }
+        }
+
+        return {
+          sku,
+          supplierCode,
+          name,
+          quantity: Number(it.quantity || 1),
+          unit: it.unit || 'UNIDAD',
+          costPrice: Number(it.unitPrice || it.price || 0),
+          notes: it.notes || ''
+        };
+      });
+
+      const { generatePurchaseOrderPDFBuffer } = require('../services/purchaseOrderPdf.service');
+      const { buffer, orderNumber } = await generatePurchaseOrderPDFBuffer({
+        orderNumber: invoice.code,
+        supplierName: contact?.name || 'PROVEEDOR',
+        supplierTaxId: contact?.taxId || 'J-00000000-0',
+        supplierPhone: contact?.phone || '',
+        supplierAddress: contact?.address || '',
+        companyName: invoice.project?.name || 'Inversiones Lucem C.A.',
+        tasaBCV,
+        items: enrichedItems,
+        notes: invoice.notes || ''
+      });
+
+      const filename = `${orderNumber}.pdf`;
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `inline; filename="${filename}"`);
+      return res.send(buffer);
+    }
+
+    return res.status(400).json({ success: false, error: { message: 'Tipo no soportado para PDF directo' } });
+  } catch (err: any) {
+    console.error('Error generating invoice PDF:', err);
+    return res.status(500).json({ success: false, error: { message: err.message } });
+  }
+};

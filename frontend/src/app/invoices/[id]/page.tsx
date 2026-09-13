@@ -491,6 +491,16 @@ export default function InvoiceDetailsPage() {
         return;
       }
 
+      // Si es una Nota de Entrega (NE- o vista modo Nota de Entrega), descargar PDF vectorial corporativo (~5 KB)
+      const isDelivery = viewMode === 'DELIVERY_NOTE' || invoice.code?.toUpperCase().startsWith('NE');
+      if (isDelivery) {
+        const url = `/backend-api/api/invoices/${invoice.id}/pdf?viewMode=DELIVERY_NOTE&showPrices=${showPricesInDeliveryNote ? 'true' : 'false'}`;
+        window.open(url, '_blank');
+        return;
+      }
+
+      // Para Facturas de Venta (INVOICE), se preserva intacto el formato de Forma Libre actual
+
       const element = document.getElementById('invoice-paper-printable');
       if (!element) {
         window.print();
