@@ -349,6 +349,10 @@ export const quotationsAPI = {
     apiClient.post(`/api/quotations/${id}/generate-po`, data, { responseType: 'blob' }),
 };
 
+export const traceabilityAPI = {
+  getTrace: (codeOrId: string) => apiClient.get(`/api/traceability/${encodeURIComponent(codeOrId)}`),
+};
+
 const api = {
   auth: authAPI,
   projects: projectsAPI,
@@ -376,6 +380,7 @@ const api = {
   loans: loansAPI,
   pos: posAPI,
   quotations: quotationsAPI,
+  traceability: traceabilityAPI,
 }
 
 export default api

@@ -38,7 +38,7 @@ function getHistoryPaths(): string[] {
   ];
 }
 
-function loadAllQuotes(): any[] {
+export function loadAllQuotes(): any[] {
   const paths = getHistoryPaths();
   for (const p of paths) {
     if (fs.existsSync(p)) {

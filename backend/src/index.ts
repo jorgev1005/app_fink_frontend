@@ -134,6 +134,8 @@ app.use('/api/recurring', recurringRoutes);
 app.use('/api/pos', posRoutes);
 app.use('/api/quotations', quotationRoutes);
 app.use('/api/cotizaciones', quotationRoutes);
+import traceabilityRoutes from './routes/traceability.routes';
+app.use('/api/traceability', traceabilityRoutes);
 app.use('/api', auditRoutes);
 
 app.use('/api/entries', entryRoutes);

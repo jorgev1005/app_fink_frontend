@@ -10,8 +10,9 @@ import {
     ShoppingCart, Truck, Plus, Eye, Download, Filter, 
     RefreshCw, ExternalLink, ArrowUpRight, DollarSign,
     Package, Check, ArrowRight, Receipt, FileSpreadsheet,
-    HelpCircle, ShieldAlert
+    HelpCircle, ShieldAlert, GitFork
 } from 'lucide-react';
+import TraceabilityModal from '@/components/TraceabilityModal';
 
 // Tipos de pestañas disponibles
 type DocTabType = 'ALL' | 'DELIVERY_NOTE' | 'INVOICE' | 'QUOTATION' | 'PURCHASE_ORDER' | 'BILL' | 'POS';
@@ -72,6 +73,13 @@ function InvoicesPageContent() {
     const [dueFilter, setDueFilter] = useState('');
     const [search, setSearch] = useState('');
     const [kpiFilter, setKpiFilter] = useState<string | null>(null);
+    const [traceModalOpen, setTraceModalOpen] = useState(false);
+    const [selectedTraceDocCode, setSelectedTraceDocCode] = useState('');
+
+    const openTraceModal = (code: string) => {
+        setSelectedTraceDocCode(code);
+        setTraceModalOpen(true);
+    };
 
     const tableContainerRef = useRef<HTMLDivElement>(null);
 
@@ -439,6 +447,13 @@ function InvoicesPageContent() {
                     </p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
+                    <button 
+                        onClick={() => openTraceModal(search || (filteredDocs.length > 0 ? filteredDocs[0].code : 'COT-'))}
+                        className="bg-purple-700 hover:bg-purple-800 text-white px-3 py-2 rounded-lg transition font-medium text-xs sm:text-sm flex items-center gap-1.5 shadow-sm cursor-pointer"
+                        title="Ver mapa interactivo de trazabilidad comercial y logística"
+                    >
+                        <GitFork className="w-4 h-4" /> 🗺️ Trazabilidad
+                    </button>
                     <Link href="/quotations" className="bg-sky-700 hover:bg-sky-800 text-white px-3 py-2 rounded-lg transition font-medium text-xs sm:text-sm flex items-center gap-1.5 shadow-sm">
                         📋 Cotizaciones
                     </Link>
@@ -1029,6 +1044,17 @@ function InvoicesPageContent() {
                                                 {/* 8. ACCIONES */}
                                                 <td className="px-4 py-3.5 whitespace-nowrap text-right font-medium sticky right-0 bg-white group-hover:bg-gray-50/95 z-5 shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.06)]">
                                                     <div className="flex gap-1.5 justify-end items-center">
+                                                        {/* Botón Trazabilidad */}
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => openTraceModal(doc.code)}
+                                                            className="text-purple-700 hover:text-purple-900 border border-purple-200 hover:bg-purple-50 px-2 py-1 rounded text-xs font-semibold transition flex items-center gap-1 cursor-pointer"
+                                                            title="Ver mapa interactivo de trazabilidad comercial y logística"
+                                                        >
+                                                            <GitFork className="w-3 h-3 text-purple-600" />
+                                                            <span>Trazabilidad</span>
+                                                        </button>
+
                                                         {/* Botón Ver */}
                                                         {isQuote ? (
                                                             <Link 
@@ -1139,6 +1165,13 @@ function InvoicesPageContent() {
                     </div>
                 </div>
             )}
+
+            {/* Modal de Trazabilidad Integral */}
+            <TraceabilityModal 
+                isOpen={traceModalOpen} 
+                onClose={() => setTraceModalOpen(false)} 
+                initialDocCode={selectedTraceDocCode} 
+            />
         </div>
     );
 }
