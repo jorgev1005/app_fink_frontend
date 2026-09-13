@@ -35,6 +35,8 @@ export interface DeliveryNotePDFOptions {
     showPrices?: boolean;
     currency?: 'USD' | 'BS';
     notes?: string;
+    dispatchStatus?: 'PENDING_DISPATCH' | 'DISPATCHED' | 'DELIVERED';
+    invoicedAsCode?: string;
 }
 
 export async function generateDeliveryNotePDFBuffer(options: DeliveryNotePDFOptions): Promise<{ buffer: Buffer; noteNumber: string }> {
@@ -58,7 +60,9 @@ export async function generateDeliveryNotePDFBuffer(options: DeliveryNotePDFOpti
         items,
         showPrices = false,
         currency = 'USD',
-        notes
+        notes,
+        dispatchStatus = 'PENDING_DISPATCH',
+        invoicedAsCode
     } = options;
 
     const qrUrl = `https://wa.me/584122711859?text=${encodeURIComponent(`Consulta Nota de Entrega ${noteNumber} - ${clientName}`)}`;
@@ -181,11 +185,26 @@ export async function generateDeliveryNotePDFBuffer(options: DeliveryNotePDFOpti
         const rawDestTitle = destinationCity ? `Destino: ${destinationCity.toUpperCase()}` : (deliveryAddress || 'Recepción en Almacén / Transporte');
         const cleanDestTitle = rawDestTitle.replace(/[\r\n]+/g, ', ').replace(/\s+/g, ' ').trim();
         doc.fontSize(7.5).fillColor(DARK).font('Helvetica-Bold')
-           .text(cleanDestTitle, col2X + 10, y + 16, { width: boxW - 16, height: 20, ellipsis: true });
+           .text(cleanDestTitle, col2X + 10, y + 16, { width: boxW - 16, height: 16, ellipsis: true });
 
-        doc.fontSize(6.5).fillColor(GRAY).font('Helvetica')
-           .text('Verificar mercancía, bultos y precintos al momento de recibir.', col2X + 10, y + 38, { width: boxW - 16, lineBreak: false })
-           .text('Firma y sello requeridos en el talón de conformidad inferior.', col2X + 10, y + 49, { width: boxW - 16, lineBreak: false });
+        // Estado logístico de despacho
+        const statusLabel = dispatchStatus === 'DELIVERED' 
+            ? 'ENTREGADA AL CLIENTE' 
+            : (dispatchStatus === 'DISPATCHED' ? 'DESPACHADA / EN TRÁNSITO' : 'PENDIENTE DE DESPACHO');
+        const statusColor = dispatchStatus === 'DELIVERED' 
+            ? '#059669' 
+            : (dispatchStatus === 'DISPATCHED' ? '#0284c7' : '#d97706');
+
+        doc.fontSize(6.5).fillColor(statusColor).font('Helvetica-Bold')
+           .text(`ESTADO: ${statusLabel}`, col2X + 10, y + 34, { width: boxW - 16, lineBreak: false });
+
+        if (invoicedAsCode) {
+            doc.fontSize(6.5).fillColor('#4338ca').font('Helvetica-Bold')
+               .text(`FACTURA FISCAL: #${invoicedAsCode}`, col2X + 10, y + 46, { width: boxW - 16, lineBreak: false });
+        } else {
+            doc.fontSize(6).fillColor(GRAY).font('Helvetica')
+               .text('Firma y sello requeridos en el talón de conformidad inferior.', col2X + 10, y + 46, { width: boxW - 16, lineBreak: false });
+        }
 
         y += boxH + 10;
 

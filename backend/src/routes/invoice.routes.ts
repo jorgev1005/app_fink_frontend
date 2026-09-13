@@ -1,5 +1,16 @@
 import { Router } from 'express';
-import { createInvoice, getInvoices, postInvoice, deleteInvoice, getInvoiceById, updateInvoice, getInvoicePdf, getNextInvoiceCodeEndpoint } from '../controllers/invoice.controller';
+import { 
+  createInvoice, 
+  getInvoices, 
+  postInvoice, 
+  deleteInvoice, 
+  getInvoiceById, 
+  updateInvoice, 
+  getInvoicePdf, 
+  getNextInvoiceCodeEndpoint,
+  issueInvoiceFromDeliveryNote,
+  updateDispatchStatus
+} from '../controllers/invoice.controller';
 import { payInvoice } from '../controllers/payment.controller';
 import { authenticate } from '../middleware/auth';
 
@@ -14,6 +25,8 @@ router.get('/next-code', getNextInvoiceCodeEndpoint);
 router.get('/', getInvoices);
 router.get('/:id', getInvoiceById);
 router.put('/:id', updateInvoice);
+router.patch('/:id/dispatch-status', updateDispatchStatus);
+router.post('/:id/issue-invoice', issueInvoiceFromDeliveryNote);
 router.post('/:id/post', postInvoice);
 router.post('/:id/pay', payInvoice);
 router.delete('/:id', deleteInvoice);

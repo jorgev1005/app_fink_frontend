@@ -453,6 +453,300 @@ export const createInvoice = async (req: Request, res: Response) => {
   }
 };
 
+export const issueInvoiceFromDeliveryNote = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const user = (req as any).user;
+    const { customCode, issueDate, dueDate, notes: additionalNotes } = req.body;
+
+    const deliveryNote = await prisma.invoice.findUnique({
+      where: { id },
+      include: {
+        payments: true,
+        project: true
+      }
+    });
+
+    if (!deliveryNote) {
+      return res.status(404).json({ success: false, error: { message: 'Nota de Entrega no encontrada' } });
+    }
+
+    const hasAccess = await checkProjectWriteAccess(user, deliveryNote.projectId);
+    if (!hasAccess) {
+      return res.status(403).json({ success: false, error: { message: 'No tienes permisos para emitir facturas en este proyecto' } });
+    }
+
+    // Validar que sea una Nota de Entrega
+    const isNE = deliveryNote.code.toUpperCase().startsWith('NE');
+    if (!isNE) {
+      return res.status(400).json({ success: false, error: { message: 'Solo se pueden facturar documentos que sean Notas de Entrega (NE)' } });
+    }
+
+    // Parsear líneas de la nota de entrega
+    let parsedLines: any = { items: [], taxAmount: 0, description: '' };
+    try {
+      if (deliveryNote.lines) {
+        parsedLines = typeof deliveryNote.lines === 'string' ? JSON.parse(deliveryNote.lines) : deliveryNote.lines;
+        if (Array.isArray(parsedLines)) {
+          parsedLines = { items: parsedLines, taxAmount: 0, description: '' };
+        }
+      }
+    } catch (e) {
+      console.error('Error parseando líneas de NE:', e);
+    }
+
+    // Verificar si ya fue facturada y la factura aún existe
+    if (parsedLines.invoicedAsId) {
+      const existingInvoice = await prisma.invoice.findUnique({ where: { id: parsedLines.invoicedAsId } });
+      if (existingInvoice) {
+        return res.status(400).json({
+          success: false,
+          error: { message: `Esta Nota de Entrega ya fue facturada bajo la Factura #${existingInvoice.code}` }
+        });
+      }
+    }
+
+    // Determinar correlativo de la nueva Factura oficial e independiente
+    let invoiceCode = customCode ? String(customCode).trim() : '';
+    if (!invoiceCode) {
+      invoiceCode = await getNextInvoiceCode(deliveryNote.projectId, false);
+    }
+
+    // Asegurar unicidad global del código en la tabla invoices
+    let attempts = 0;
+    while (await prisma.invoice.findUnique({ where: { code: invoiceCode } })) {
+      attempts++;
+      const match = invoiceCode.match(/(\d+)$/);
+      if (match) {
+        const numStr = match[1];
+        const nextVal = parseInt(numStr, 10) + attempts;
+        const paddedNumStr = String(nextVal).padStart(numStr.length, '0');
+        const prefix = invoiceCode.substring(0, invoiceCode.length - numStr.length);
+        invoiceCode = `${prefix}${paddedNumStr}`;
+      } else {
+        invoiceCode = `${invoiceCode}-${Date.now()}`;
+      }
+    }
+
+    // Fechas
+    const issueDateToStore = issueDate ? new Date(issueDate) : new Date();
+    const dueDateToStore = dueDate ? new Date(dueDate) : (deliveryNote.dueDate ? new Date(deliveryNote.dueDate) : null);
+
+    // Preparar objeto de líneas para la nueva Factura (marcado para no descontar inventario duplicado)
+    const newInvoiceLines: any = {
+      items: parsedLines.items || [],
+      taxAmount: parsedLines.taxAmount || 0,
+      description: parsedLines.description || '',
+      sourceDeliveryNoteId: deliveryNote.id,
+      sourceDeliveryNoteCode: deliveryNote.code,
+      skipInventoryDeduction: true,
+      issuedFromDeliveryNoteAt: new Date().toISOString()
+    };
+
+    // Notas cruzadas de trazabilidad
+    const refText = `Despacho amparado bajo Nota de Entrega ${deliveryNote.code}`;
+    const cleanNotes = [deliveryNote.notes, refText, additionalNotes].filter(Boolean).join(' | ');
+
+    // Cuentas por cobrar: transferir allocations si la NE ya tenía abonos
+    const hasPayments = deliveryNote.payments && deliveryNote.payments.length > 0;
+    const targetStatus = hasPayments ? deliveryNote.status : (deliveryNote.status === 'DRAFT' ? 'OPEN' : deliveryNote.status);
+    const targetOutstanding = hasPayments ? deliveryNote.outstanding : deliveryNote.total;
+
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Crear Factura Oficial (SIN descontar inventario, pues ya lo descontó la NE)
+      const createdInvoice = await tx.invoice.create({
+        data: {
+          project: { connect: { id: deliveryNote.projectId } },
+          code: invoiceCode,
+          type: 'INVOICE',
+          vendorId: null,
+          customerId: deliveryNote.customerId,
+          issueDate: issueDateToStore,
+          dueDate: dueDateToStore,
+          currency: deliveryNote.currency,
+          total: Number(deliveryNote.total),
+          outstanding: Number(targetOutstanding),
+          status: targetStatus,
+          lines: JSON.stringify(newInvoiceLines),
+          totalCost: deliveryNote.totalCost || 0,
+          netProfit: deliveryNote.netProfit || 0,
+          createdBy: user.id,
+          purchaseOrder: deliveryNote.purchaseOrder || deliveryNote.code,
+          purchaseOrderDate: deliveryNote.purchaseOrderDate || null,
+          notes: cleanNotes
+        }
+      });
+
+      // 2. Transferir pagos/abonos de la Nota de Entrega a la Factura (si existen)
+      if (hasPayments) {
+        await tx.paymentAllocation.updateMany({
+          where: { invoiceId: deliveryNote.id },
+          data: { invoiceId: createdInvoice.id }
+        });
+      }
+
+      // 3. Actualizar Nota de Entrega: vincular a la Factura, saldo en 0 y marcar como facturada
+      const updatedNELines = {
+        ...parsedLines,
+        invoicedAsId: createdInvoice.id,
+        invoicedAsCode: createdInvoice.code,
+        invoicedAt: new Date().toISOString()
+      };
+
+      const neNotes = [deliveryNote.notes, `Facturado bajo Factura #${createdInvoice.code}`].filter(Boolean).join(' | ');
+
+      await tx.invoice.update({
+        where: { id: deliveryNote.id },
+        data: {
+          lines: JSON.stringify(updatedNELines),
+          outstanding: 0,
+          status: 'PAID', // Saldo transferido y cubierto por la Factura formal
+          notes: neNotes
+        }
+      });
+
+      // 4. Actualizar correlativo de Factura en el proyecto
+      await tx.project.update({
+        where: { id: deliveryNote.projectId },
+        data: { lastInvoiceNumber: invoiceCode }
+      });
+
+      return createdInvoice;
+    });
+
+    // Registrar log de actividad
+    try {
+      const { logActivity } = await import('../services/activityLog.service');
+      await logActivity(
+        user.id,
+        'CREATE',
+        'Invoice',
+        result.id,
+        `Emisión de Factura ${result.code} a partir de Nota de Entrega ${deliveryNote.code}`,
+        {
+          sourceDeliveryNoteId: deliveryNote.id,
+          sourceDeliveryNoteCode: deliveryNote.code,
+          invoiceCode: result.code,
+          total: result.total,
+          currency: result.currency,
+          projectId: deliveryNote.projectId,
+          customerId: deliveryNote.customerId
+        },
+        req.ip,
+        req.headers['user-agent'] as string
+      );
+    } catch (err) {
+      console.error('Error registrando log de actividad (issueInvoiceFromDeliveryNote):', err);
+    }
+
+    return res.status(201).json({
+      success: true,
+      data: result,
+      message: `Factura ${result.code} emitida exitosamente a partir de Nota de Entrega ${deliveryNote.code}`
+    });
+  } catch (error: any) {
+    console.error('[issueInvoiceFromDeliveryNote] error', error);
+    return res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
+export const updateDispatchStatus = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const user = (req as any).user;
+    const { status, dispatchNotes } = req.body;
+
+    const validStatuses = ['PENDING_DISPATCH', 'DISPATCHED', 'DELIVERED'];
+    if (!status || !validStatuses.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        error: { message: `Estado inválido. Debe ser uno de: ${validStatuses.join(', ')}` }
+      });
+    }
+
+    const invoice = await prisma.invoice.findUnique({ where: { id } });
+    if (!invoice) {
+      return res.status(404).json({ success: false, error: { message: 'Documento no encontrado' } });
+    }
+
+    const hasAccess = await checkProjectWriteAccess(user, invoice.projectId);
+    if (!hasAccess) {
+      return res.status(403).json({ success: false, error: { message: 'No tienes permisos para modificar este documento' } });
+    }
+
+    let parsedLines: any = {};
+    try {
+      if (invoice.lines) {
+        parsedLines = typeof invoice.lines === 'string' ? JSON.parse(invoice.lines) : invoice.lines;
+        if (Array.isArray(parsedLines)) {
+          parsedLines = { items: parsedLines };
+        }
+      }
+    } catch (e) {
+      parsedLines = { items: [] };
+    }
+
+    const nowIso = new Date().toISOString();
+    parsedLines.dispatchStatus = status;
+
+    if (status === 'DISPATCHED') {
+      if (!parsedLines.dispatchedAt) parsedLines.dispatchedAt = nowIso;
+    } else if (status === 'DELIVERED') {
+      if (!parsedLines.dispatchedAt) parsedLines.dispatchedAt = nowIso;
+      parsedLines.deliveredAt = nowIso;
+    } else if (status === 'PENDING_DISPATCH') {
+      parsedLines.dispatchedAt = null;
+      parsedLines.deliveredAt = null;
+    }
+
+    if (dispatchNotes !== undefined) {
+      parsedLines.dispatchNotes = dispatchNotes;
+    }
+
+    const updated = await prisma.invoice.update({
+      where: { id },
+      data: {
+        lines: JSON.stringify(parsedLines)
+      }
+    });
+
+    try {
+      const { logActivity } = await import('../services/activityLog.service');
+      await logActivity(
+        user.id,
+        'UPDATE',
+        'Invoice',
+        invoice.id,
+        `Actualización de estado logístico en ${invoice.code} a ${status}`,
+        {
+          previousStatus: parsedLines.dispatchStatus,
+          newStatus: status,
+          dispatchNotes
+        },
+        req.ip,
+        req.headers['user-agent'] as string
+      );
+    } catch (err) {
+      console.error('Error registrando log de actividad (updateDispatchStatus):', err);
+    }
+
+    return res.json({
+      success: true,
+      data: {
+        ...updated,
+        dispatchStatus: parsedLines.dispatchStatus,
+        dispatchedAt: parsedLines.dispatchedAt,
+        deliveredAt: parsedLines.deliveredAt,
+        dispatchNotes: parsedLines.dispatchNotes
+      },
+      message: `Estado de despacho actualizado a ${status}`
+    });
+  } catch (error: any) {
+    console.error('[updateDispatchStatus] error', error);
+    return res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
 export const updateInvoice = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
@@ -669,8 +963,10 @@ export const deleteInvoice = async (req: Request, res: Response) => {
         }
       }
 
-      // 1. Revert stock changes
+      // 1. Revert stock changes (SOLO si no fue emitida desde una nota de entrega)
       let items: any[] = [];
+      let isInvoiceFromDelivery = false;
+      let sourceDeliveryNoteId: string | null = null;
       try {
         if (invoice.lines) {
           const parsed = typeof invoice.lines === 'string' ? JSON.parse(invoice.lines) : invoice.lines;
@@ -679,6 +975,10 @@ export const deleteInvoice = async (req: Request, res: Response) => {
               items = parsed;
             } else if (parsed.items && Array.isArray(parsed.items)) {
               items = parsed.items;
+              if (parsed.skipInventoryDeduction || parsed.sourceDeliveryNoteId) {
+                isInvoiceFromDelivery = true;
+                sourceDeliveryNoteId = parsed.sourceDeliveryNoteId || null;
+              }
             }
           }
         }
@@ -686,7 +986,7 @@ export const deleteInvoice = async (req: Request, res: Response) => {
         console.error('Failed to parse invoice lines on delete', e);
       }
 
-      if (invoice.status !== 'DRAFT' && items.length > 0) {
+      if (invoice.status !== 'DRAFT' && items.length > 0 && !isInvoiceFromDelivery) {
         for (const line of items) {
           if (line.productId && line.productId !== 'CUSTOM' && line.quantity) {
             const qty = Number(line.quantity);
@@ -701,6 +1001,29 @@ export const deleteInvoice = async (req: Request, res: Response) => {
               }
             });
           }
+        }
+      }
+
+      // Si la factura provenía de una nota de entrega, desvincularla para permitir volver a facturarla
+      if (sourceDeliveryNoteId) {
+        try {
+          const sourceNE = await tx.invoice.findUnique({ where: { id: sourceDeliveryNoteId } });
+          if (sourceNE && sourceNE.lines) {
+            const neParsed = typeof sourceNE.lines === 'string' ? JSON.parse(sourceNE.lines) : sourceNE.lines;
+            delete neParsed.invoicedAsId;
+            delete neParsed.invoicedAsCode;
+            delete neParsed.invoicedAt;
+            await tx.invoice.update({
+              where: { id: sourceDeliveryNoteId },
+              data: {
+                lines: JSON.stringify(neParsed),
+                status: 'OPEN',
+                outstanding: sourceNE.total
+              }
+            });
+          }
+        } catch (neErr) {
+          console.error('Error desvinculando nota de entrega origen:', neErr);
         }
       }
 
@@ -803,13 +1126,32 @@ export const getInvoices = async (req: Request, res: Response) => {
         projectMap = new Map(projects.map(p => [p.id, p]));
     }
 
-    const enrichedInvoices = invoices.map((inv: any) => ({
+    const enrichedInvoices = invoices.map((inv: any) => {
+      let meta: any = {};
+      try {
+        if (inv.lines) {
+          const parsed = typeof inv.lines === 'string' ? JSON.parse(inv.lines) : inv.lines;
+          if (parsed && typeof parsed === 'object') {
+            meta = {
+              dispatchStatus: parsed.dispatchStatus || (inv.code?.startsWith('NE') ? 'PENDING_DISPATCH' : undefined),
+              invoicedAsCode: parsed.invoicedAsCode || undefined,
+              invoicedAsId: parsed.invoicedAsId || undefined,
+              sourceDeliveryNoteCode: parsed.sourceDeliveryNoteCode || undefined,
+              sourceDeliveryNoteId: parsed.sourceDeliveryNoteId || undefined
+            };
+          }
+        }
+      } catch (_) {}
+
+      return {
         ...inv,
         vendor: inv.vendorId ? contactMap.get(inv.vendorId) : null,
         customer: inv.customerId ? contactMap.get(inv.customerId) : null,
         contact: inv.vendorId ? contactMap.get(inv.vendorId) : (inv.customerId ? contactMap.get(inv.customerId) : null),
-        project: inv.projectId ? projectMap.get(inv.projectId) : null
-    }));
+        project: inv.projectId ? projectMap.get(inv.projectId) : null,
+        ...meta
+      };
+    });
 
     res.json({ success: true, data: enrichedInvoices, pagination: { page: Number(page), limit: Number(limit), total } });
   } catch (error: any) {
@@ -884,12 +1226,28 @@ export const getInvoiceById = async (req: Request, res: Response) => {
             where: { id: contactId }
         });
     }
+
+    let parsedLinesData: any = {};
+    try {
+      if (invoice.lines) {
+        parsedLinesData = typeof invoice.lines === 'string' ? JSON.parse(invoice.lines) : invoice.lines;
+      }
+    } catch (_) {}
     
     res.json({ 
       success: true, 
       data: {
         ...invoice,
-        contact
+        contact,
+        dispatchStatus: parsedLinesData.dispatchStatus || (invoice.code?.startsWith('NE') ? 'PENDING_DISPATCH' : undefined),
+        dispatchedAt: parsedLinesData.dispatchedAt || null,
+        deliveredAt: parsedLinesData.deliveredAt || null,
+        dispatchNotes: parsedLinesData.dispatchNotes || null,
+        invoicedAsId: parsedLinesData.invoicedAsId || null,
+        invoicedAsCode: parsedLinesData.invoicedAsCode || null,
+        invoicedAt: parsedLinesData.invoicedAt || null,
+        sourceDeliveryNoteId: parsedLinesData.sourceDeliveryNoteId || null,
+        sourceDeliveryNoteCode: parsedLinesData.sourceDeliveryNoteCode || null
       } 
     });
   } catch (error: any) {
@@ -1058,7 +1416,9 @@ export const getInvoicePdf = async (req: Request, res: Response) => {
         items: enrichedItems,
         showPrices,
         currency: targetCurrency,
-        notes: invoice.notes || ''
+        notes: invoice.notes || '',
+        dispatchStatus: parsedLines.dispatchStatus || 'PENDING_DISPATCH',
+        invoicedAsCode: parsedLines.invoicedAsCode || undefined
       });
 
       const filename = `Nota_Entrega_${noteNumber}.pdf`;

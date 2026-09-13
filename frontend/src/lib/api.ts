@@ -294,6 +294,8 @@ export const invoicesAPI = {
   getById: (id: string) => apiClient.get(`/api/invoices/${id}`),
   delete: (id: string) => apiClient.delete(`/api/invoices/${id}`),
   pay: (id: string, data: any) => apiClient.post(`/api/invoices/${id}/pay`, data),
+  issueInvoice: (id: string, data?: { customCode?: string; issueDate?: string; dueDate?: string; notes?: string }) => apiClient.post(`/api/invoices/${id}/issue-invoice`, data),
+  updateDispatchStatus: (id: string, data: { status: 'PENDING_DISPATCH' | 'DISPATCHED' | 'DELIVERED'; dispatchNotes?: string }) => apiClient.patch(`/api/invoices/${id}/dispatch-status`, data),
 }
 
 export const paymentsAPI = {

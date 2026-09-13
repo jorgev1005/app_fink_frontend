@@ -345,9 +345,34 @@ export default function InvoicesPage() {
                                                                 NE
                                                             </span>
                                                         )}
+                                                        {isNE && inv.dispatchStatus === 'DELIVERED' && (
+                                                            <span className="text-[9.5px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded border border-emerald-200">
+                                                                ✓ Entregada
+                                                            </span>
+                                                        )}
+                                                        {isNE && inv.dispatchStatus === 'DISPATCHED' && (
+                                                            <span className="text-[9.5px] bg-blue-100 text-blue-800 font-bold px-1.5 py-0.5 rounded border border-blue-200">
+                                                                🚚 Despachada
+                                                            </span>
+                                                        )}
+                                                        {isNE && (!inv.dispatchStatus || inv.dispatchStatus === 'PENDING_DISPATCH') && (
+                                                            <span className="text-[9.5px] bg-amber-50 text-amber-700 font-medium px-1.5 py-0.5 rounded border border-amber-200">
+                                                                🕒 Pend. Despacho
+                                                            </span>
+                                                        )}
+                                                        {isNE && inv.invoicedAsCode && (
+                                                            <span className="text-[9.5px] bg-indigo-100 text-indigo-800 font-mono font-bold px-1.5 py-0.5 rounded border border-indigo-200" title={`Facturado formalmente bajo Factura #${inv.invoicedAsCode}`}>
+                                                                📄 Fac: #{inv.invoicedAsCode}
+                                                            </span>
+                                                        )}
                                                         {isSaleInvoice && (
                                                             <span className="text-[10px] bg-blue-100 text-blue-800 font-bold px-1.5 py-0.5 rounded border border-blue-200">
                                                                 FACTURA
+                                                            </span>
+                                                        )}
+                                                        {isSaleInvoice && inv.sourceDeliveryNoteCode && (
+                                                            <span className="text-[9.5px] bg-purple-100 text-purple-800 font-mono font-bold px-1.5 py-0.5 rounded border border-purple-200" title={`Despachado bajo Nota de Entrega #${inv.sourceDeliveryNoteCode}`}>
+                                                                🚚 NE: #{inv.sourceDeliveryNoteCode}
                                                             </span>
                                                         )}
                                                     </div>
