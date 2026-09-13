@@ -158,18 +158,18 @@ export async function generateDeliveryNotePDFBuffer(options: DeliveryNotePDFOpti
         // ── 3. TABLA DE ÍTEMS DESPACHADOS ─────────────────────────
         const cols = {
             sku: LEFT,
-            desc: LEFT + (showPrices ? 65 : 75),
-            cant: LEFT + (showPrices ? 275 : 360),
-            bultos: LEFT + (showPrices ? 325 : 425),
+            desc: LEFT + (showPrices ? 85 : 95),
+            cant: LEFT + (showPrices ? 285 : 365),
+            bultos: LEFT + (showPrices ? 335 : 430),
             precio: LEFT + 385,
             total: LEFT + 440
         };
 
         const colWidths = {
-            sku: showPrices ? 60 : 70,
-            desc: showPrices ? 205 : 280,
+            sku: showPrices ? 80 : 90,
+            desc: showPrices ? 195 : 265,
             cant: showPrices ? 45 : 60,
-            bultos: showPrices ? 55 : 80,
+            bultos: showPrices ? 45 : 75,
             precio: 50,
             total: 65
         };
@@ -211,9 +211,11 @@ export async function generateDeliveryNotePDFBuffer(options: DeliveryNotePDFOpti
                 bultosStr = `${Number(bVal.toFixed(2)).toLocaleString('es-VE')} ${bVal === 1 ? unidad : `${unidad}s`}`;
             }
 
-            doc.fontSize(7.5).font('Helvetica');
+            doc.fontSize(7).font('Helvetica');
             const descHeight = doc.heightOfString(item.description, { width: colWidths.desc - 5 });
-            const rowHeight = Math.max(18, descHeight + 6);
+            doc.fontSize(6.5).font('Helvetica-Bold');
+            const skuHeight = doc.heightOfString(item.sku || 'N/A', { width: colWidths.sku - 4 });
+            const rowHeight = Math.max(18, Math.max(descHeight, skuHeight) + 6);
 
             // Verificar salto de página
             if (y + rowHeight > doc.page.height - 130) {
@@ -229,7 +231,7 @@ export async function generateDeliveryNotePDFBuffer(options: DeliveryNotePDFOpti
             doc.rect(LEFT, y, W, rowHeight).stroke(BORDER);
 
             doc.fontSize(6.5).fillColor(DARK).font('Helvetica-Bold')
-               .text(item.sku || 'N/A', cols.sku + 3, y + 4, { width: colWidths.sku - 4, lineBreak: false });
+               .text(item.sku || 'N/A', cols.sku + 3, y + 4, { width: colWidths.sku - 4 });
 
             doc.fontSize(7).fillColor(DARK).font('Helvetica')
                .text(item.description, cols.desc + 3, y + 4, { width: colWidths.desc - 5 });
