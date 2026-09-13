@@ -859,6 +859,8 @@ export const getInvoicePdf = async (req: Request, res: Response) => {
       }
 
       const showPrices = req.query.showPrices === 'true' || req.query.showPrices === '1';
+      const targetCurrency: 'USD' | 'BS' = (req.query.currency === 'BS' || req.query.currency === 'VES') ? 'BS' : 'USD';
+      const conversionRate = Number(req.query.rate) || tasaBCV || 1;
 
       const enrichedItems = itemsList.map((it: any) => {
         const prod = it.productId ? productMap[it.productId] : null;
@@ -867,13 +869,30 @@ export const getInvoicePdf = async (req: Request, res: Response) => {
         const empaqueCantidad = prod?.empaqueCantidad && prod.empaqueCantidad > 1 ? prod.empaqueCantidad : 0;
         const unidadEmpaque = prod?.unidad_empaque || 'bulto';
 
+        const qty = Number(it.quantity || 1);
+        let rawUnitPrice = Number(it.unitPrice || it.price || 0);
+        let rawTotal = Number(it.total !== undefined ? it.total : (qty * rawUnitPrice));
+
+        // Si la factura base está en USD y se solicita mostrar en Bolívares
+        const invCurr = invoice.currency === 'VES' ? 'BS' : (invoice.currency || 'USD');
+        let finalUnitPrice = rawUnitPrice;
+        let finalTotal = rawTotal;
+
+        if (targetCurrency === 'BS' && invCurr === 'USD') {
+          finalUnitPrice = rawUnitPrice * conversionRate;
+          finalTotal = rawTotal * conversionRate;
+        } else if (targetCurrency === 'USD' && invCurr === 'BS') {
+          finalUnitPrice = conversionRate > 0 ? rawUnitPrice / conversionRate : rawUnitPrice;
+          finalTotal = conversionRate > 0 ? rawTotal / conversionRate : rawTotal;
+        }
+
         return {
           sku,
           description: name,
-          quantity: Number(it.quantity || 1),
+          quantity: qty,
           unit: it.unit || 'UNIDAD',
-          unitPrice: Number(it.unitPrice || it.price || 0),
-          total: Number(it.total || (Number(it.quantity || 1) * Number(it.unitPrice || it.price || 0))),
+          unitPrice: finalUnitPrice,
+          total: finalTotal,
           empaqueCantidad,
           unidadEmpaque,
           notes: it.notes || ''
@@ -894,6 +913,7 @@ export const getInvoicePdf = async (req: Request, res: Response) => {
         tasaBCV,
         items: enrichedItems,
         showPrices,
+        currency: targetCurrency,
         notes: invoice.notes || ''
       });
 

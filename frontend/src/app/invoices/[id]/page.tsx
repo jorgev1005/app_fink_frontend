@@ -494,7 +494,9 @@ export default function InvoiceDetailsPage() {
       // Si es una Nota de Entrega (NE- o vista modo Nota de Entrega), descargar PDF vectorial corporativo (~5 KB)
       const isDelivery = viewMode === 'DELIVERY_NOTE' || invoice.code?.toUpperCase().startsWith('NE');
       if (isDelivery) {
-        const url = `/backend-api/api/invoices/${invoice.id}/pdf?viewMode=DELIVERY_NOTE&showPrices=${showPricesInDeliveryNote ? 'true' : 'false'}`;
+        const curParam = displayCurrency === 'VES' ? 'BS' : (displayCurrency || 'USD');
+        const rateParam = getActiveRate();
+        const url = `/backend-api/api/invoices/${invoice.id}/pdf?viewMode=DELIVERY_NOTE&showPrices=${showPricesInDeliveryNote ? 'true' : 'false'}&currency=${curParam}&rate=${rateParam}`;
         window.open(url, '_blank');
         return;
       }

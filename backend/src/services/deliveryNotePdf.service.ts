@@ -31,6 +31,7 @@ export interface DeliveryNotePDFOptions {
     tasaBCV?: number;
     items: DeliveryNoteItem[];
     showPrices?: boolean;
+    currency?: 'USD' | 'BS';
     notes?: string;
 }
 
@@ -53,6 +54,7 @@ export async function generateDeliveryNotePDFBuffer(options: DeliveryNotePDFOpti
         tasaBCV,
         items,
         showPrices = false,
+        currency = 'USD',
         notes
     } = options;
 
@@ -84,6 +86,9 @@ export async function generateDeliveryNotePDFBuffer(options: DeliveryNotePDFOpti
         const W       = doc.page.width - 90; // 505.28 pt
         const LEFT    = 45;
 
+        const isBs = currency === 'BS';
+        const currSym = isBs ? 'Bs.' : '$';
+
         const fmtDate = (dateStr?: string) => {
             if (!dateStr) return new Date().toLocaleDateString('es-VE');
             try {
@@ -91,6 +96,10 @@ export async function generateDeliveryNotePDFBuffer(options: DeliveryNotePDFOpti
             } catch (_) {
                 return dateStr;
             }
+        };
+
+        const fmtMoney = (amount: number) => {
+            return `${currSym} ${amount.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
         };
 
         // ── 1. ENCABEZADO CORPORATIVO OSCURO ──────────────────────
@@ -117,15 +126,15 @@ export async function generateDeliveryNotePDFBuffer(options: DeliveryNotePDFOpti
         // ── 2. DESTINATARIO Y LUGAR DE ENTREGA (2 COLUMNAS) ──────
         let y = 135;
         const boxW = (W - 10) / 2;
+        const boxH = 68;
 
         // Caja Destinatario / Cliente
-        const boxH = 68;
         doc.rect(LEFT, y, boxW, boxH).fill(LGRAY);
         doc.rect(LEFT, y, 4, boxH).fill(PRIMARY);
         doc.fontSize(6.5).fillColor(PRIMARY).font('Helvetica-Bold')
            .text('CONSIGNADO / CLIENTE:', LEFT + 10, y + 6, { lineBreak: false });
         doc.fontSize(8.5).fillColor(DARK).font('Helvetica-Bold')
-           .text(clientName.toUpperCase(), LEFT + 10, y + 16, { width: boxW - 16, ellipsis: true });
+           .text(clientName.toUpperCase(), LEFT + 10, y + 16, { width: boxW - 16, height: 11, ellipsis: true });
 
         const clientDocPhone = [
             clientTaxId ? `RIF/CI: ${clientTaxId}` : '',
@@ -136,11 +145,12 @@ export async function generateDeliveryNotePDFBuffer(options: DeliveryNotePDFOpti
            .text(clientDocPhone || 'Cliente Registrado', LEFT + 10, y + 29, { width: boxW - 16, lineBreak: false });
         
         if (clientEmail) {
-            doc.text(`Email: ${clientEmail}`, LEFT + 10, y + 39, { width: boxW - 16, ellipsis: true });
+            doc.text(`Email: ${clientEmail}`, LEFT + 10, y + 39, { width: boxW - 16, height: 9, ellipsis: true });
         }
         if (clientAddress) {
+            const cleanClientAddress = clientAddress.replace(/[\r\n]+/g, ', ').replace(/\s+/g, ' ').trim();
             doc.fontSize(6).fillColor('#4b5563')
-               .text(`Dir: ${clientAddress}`, LEFT + 10, clientEmail ? y + 49 : y + 40, { width: boxW - 16, height: 16, ellipsis: true });
+               .text(`Dir: ${cleanClientAddress}`, LEFT + 10, clientEmail ? y + 49 : y + 40, { width: boxW - 16, height: 18, ellipsis: true });
         }
 
         // Caja Lugar de Despacho y Recepción
@@ -150,33 +160,35 @@ export async function generateDeliveryNotePDFBuffer(options: DeliveryNotePDFOpti
         doc.fontSize(6.5).fillColor('#059669').font('Helvetica-Bold')
            .text('CONDICIÓN Y DESTINO DE DESPACHO:', col2X + 10, y + 6, { lineBreak: false });
         
-        const destTitle = destinationCity ? `Destino: ${destinationCity.toUpperCase()}` : (deliveryAddress || 'Recepción en Almacén / Transporte');
-        doc.fontSize(8).fillColor(DARK).font('Helvetica-Bold')
-           .text(destTitle, col2X + 10, y + 16, { width: boxW - 16, ellipsis: true });
+        const rawDestTitle = destinationCity ? `Destino: ${destinationCity.toUpperCase()}` : (deliveryAddress || 'Recepción en Almacén / Transporte');
+        const cleanDestTitle = rawDestTitle.replace(/[\r\n]+/g, ', ').replace(/\s+/g, ' ').trim();
+        doc.fontSize(7.5).fillColor(DARK).font('Helvetica-Bold')
+           .text(cleanDestTitle, col2X + 10, y + 16, { width: boxW - 16, height: 20, ellipsis: true });
 
         doc.fontSize(6.5).fillColor(GRAY).font('Helvetica')
-           .text('Verificar mercancía, bultos y precintos al momento de recibir.', col2X + 10, y + 33, { width: boxW - 16, lineBreak: false })
-           .text('Firma y sello requeridos en el talón de conformidad inferior.', col2X + 10, y + 44, { width: boxW - 16, lineBreak: false });
+           .text('Verificar mercancía, bultos y precintos al momento de recibir.', col2X + 10, y + 38, { width: boxW - 16, lineBreak: false })
+           .text('Firma y sello requeridos en el talón de conformidad inferior.', col2X + 10, y + 49, { width: boxW - 16, lineBreak: false });
 
         y += boxH + 10;
 
         // ── 3. TABLA DE ÍTEMS DESPACHADOS ─────────────────────────
+        // Si mostramos precios en Bs., damos un poco más de ancho a las columnas de precio
         const cols = {
             sku: LEFT,
-            desc: LEFT + (showPrices ? 85 : 95),
-            cant: LEFT + (showPrices ? 285 : 365),
-            bultos: LEFT + (showPrices ? 335 : 430),
-            precio: LEFT + 385,
-            total: LEFT + 440
+            desc: LEFT + (showPrices ? (isBs ? 75 : 85) : 95),
+            cant: LEFT + (showPrices ? (isBs ? 260 : 285) : 365),
+            bultos: LEFT + (showPrices ? (isBs ? 305 : 335) : 430),
+            precio: LEFT + (showPrices ? (isBs ? 360 : 385) : 385),
+            total: LEFT + (showPrices ? (isBs ? 430 : 440) : 440)
         };
 
         const colWidths = {
-            sku: showPrices ? 80 : 90,
-            desc: showPrices ? 195 : 265,
-            cant: showPrices ? 45 : 60,
-            bultos: showPrices ? 45 : 75,
-            precio: 50,
-            total: 65
+            sku: showPrices ? (isBs ? 72 : 80) : 90,
+            desc: showPrices ? (isBs ? 180 : 195) : 265,
+            cant: showPrices ? 42 : 45,
+            bultos: showPrices ? (isBs ? 52 : 45) : 75,
+            precio: isBs ? 68 : 50,
+            total: isBs ? 75 : 65
         };
 
         function drawTableHeader(currentY: number) {
@@ -187,8 +199,10 @@ export async function generateDeliveryNotePDFBuffer(options: DeliveryNotePDFOpti
             doc.text('CANTIDAD', cols.cant, currentY + 5, { width: colWidths.cant, align: 'center', lineBreak: false });
             doc.text('EMPAQUE / BULTOS', cols.bultos, currentY + 5, { width: colWidths.bultos, align: 'center', lineBreak: false });
             if (showPrices) {
-                doc.text('P.U. ($)', cols.precio, currentY + 5, { width: colWidths.precio, align: 'right', lineBreak: false });
-                doc.text('TOTAL ($)', cols.total, currentY + 5, { width: colWidths.total, align: 'right', lineBreak: false });
+                const puTitle = isBs ? 'P.U. (Bs.)' : 'P.U. ($)';
+                const totTitle = isBs ? 'TOTAL (Bs.)' : 'TOTAL ($)';
+                doc.text(puTitle, cols.precio, currentY + 5, { width: colWidths.precio, align: 'right', lineBreak: false });
+                doc.text(totTitle, cols.total, currentY + 5, { width: colWidths.total, align: 'right', lineBreak: false });
             }
             return currentY + 16;
         }
@@ -202,7 +216,7 @@ export async function generateDeliveryNotePDFBuffer(options: DeliveryNotePDFOpti
         items.forEach((item, idx) => {
             const qty = item.quantity || 1;
             const unitPrice = item.unitPrice || 0;
-            const lineTotal = item.total || (unitPrice * qty);
+            const lineTotal = item.total !== undefined ? item.total : (unitPrice * qty);
 
             totalUnidades += qty;
             totalMonto += lineTotal;
@@ -248,10 +262,10 @@ export async function generateDeliveryNotePDFBuffer(options: DeliveryNotePDFOpti
                .text(bultosStr, cols.bultos, y + 4, { width: colWidths.bultos, align: 'center', lineBreak: false });
 
             if (showPrices) {
-                doc.fontSize(7).fillColor(DARK).font('Helvetica')
-                   .text(`$${unitPrice.toFixed(2)}`, cols.precio, y + 4, { width: colWidths.precio - 4, align: 'right', lineBreak: false });
-                doc.fontSize(7.5).fillColor(DARK).font('Helvetica-Bold')
-                   .text(`$${lineTotal.toFixed(2)}`, cols.total, y + 4, { width: colWidths.total - 4, align: 'right', lineBreak: false });
+                doc.fontSize(6.5).fillColor(DARK).font('Helvetica')
+                   .text(fmtMoney(unitPrice), cols.precio, y + 4, { width: colWidths.precio - 4, align: 'right', lineBreak: false });
+                doc.fontSize(7).fillColor(DARK).font('Helvetica-Bold')
+                   .text(fmtMoney(lineTotal), cols.total, y + 4, { width: colWidths.total - 4, align: 'right', lineBreak: false });
             }
 
             y += rowHeight;
@@ -272,8 +286,8 @@ export async function generateDeliveryNotePDFBuffer(options: DeliveryNotePDFOpti
         }
 
         if (showPrices) {
-            doc.fontSize(8.5).fillColor('#059669').font('Helvetica-Bold')
-               .text(`$${totalMonto.toFixed(2)}`, cols.total, y + 4, { width: colWidths.total - 4, align: 'right', lineBreak: false });
+            doc.fontSize(8).fillColor('#059669').font('Helvetica-Bold')
+               .text(fmtMoney(totalMonto), cols.total, y + 4, { width: colWidths.total - 4, align: 'right', lineBreak: false });
         }
 
         y += 28;
