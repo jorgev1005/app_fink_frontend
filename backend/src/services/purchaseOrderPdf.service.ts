@@ -1,5 +1,6 @@
 import PDFDocument from 'pdfkit';
 import QRCode from 'qrcode';
+import fs from 'fs';
 
 export interface PurchaseOrderItem {
     sku?: string;
@@ -24,6 +25,8 @@ export interface PurchaseOrderPDFOptions {
     companyTaxId?: string;
     companyAddress?: string;
     companyPhone?: string;
+    companyEmail?: string;
+    logoPath?: string;
     deliveryAddress?: string;
     expectedDate?: string;
     paymentTerms?: string;
@@ -53,6 +56,8 @@ export async function generatePurchaseOrderPDFBuffer(options: PurchaseOrderPDFOp
         companyTaxId = 'J-40500250-6',
         companyAddress = 'Ciudad de La Victoria, Estado Aragua, Venezuela',
         companyPhone = '+58 412-271-1859',
+        companyEmail = 'admin@grupoaludra.com',
+        logoPath,
         deliveryAddress = 'Almacén Principal La Victoria, Aragua',
         expectedDate = 'Inmediata / 24-48 horas',
         paymentTerms = 'Contado / Según acuerdo comercial',
@@ -64,7 +69,7 @@ export async function generatePurchaseOrderPDFBuffer(options: PurchaseOrderPDFOp
     const qrUrl = `https://wa.me/584122711859?text=${encodeURIComponent(`Orden de Compra ${orderNumber} para ${supplierName}`)}`;
     const qrBuffer = await QRCode.toBuffer(qrUrl, { 
         margin: 1, 
-        width: 140,
+        width: 140, 
         color: { dark: '#1e293b', light: '#ffffff' }
     });
 
@@ -99,15 +104,30 @@ export async function generatePurchaseOrderPDFBuffer(options: PurchaseOrderPDFOp
         // ── 1. ENCABEZADO DE ORDEN DE COMPRA ──────────────────────
         doc.rect(LEFT, 40, W, 85).fill(DARK);
 
-        doc.fontSize(20).fillColor('#38bdf8').font('Helvetica-Bold')
-           .text('ORDEN DE COMPRA', LEFT + 20, 52, { lineBreak: false });
+        const hasLogo = !!(logoPath && fs.existsSync(logoPath));
+        if (hasLogo) {
+            try {
+                doc.image(logoPath, LEFT + 12, 47, { fit: [55, 55], align: 'center', valign: 'center' });
+            } catch (e) {
+                console.error('Error al insertar logo en PDF de Orden de Compra:', e);
+            }
+        }
 
-        doc.fontSize(8).fillColor('white').font('Helvetica-Bold')
-           .text(companyName.toUpperCase(), LEFT + 20, 76, { lineBreak: false });
+        const textX = hasLogo ? LEFT + 75 : LEFT + 20;
+        const textW = hasLogo ? 245 : 290;
 
-        doc.fontSize(7).fillColor('#94a3b8').font('Helvetica')
-           .text(`RIF: ${companyTaxId}  |  ${companyAddress}`, LEFT + 20, 88, { lineBreak: false })
-           .text(`Tel: ${companyPhone}  |  admin@grupoaludra.com`, LEFT + 20, 98, { lineBreak: false });
+        doc.fontSize(18).fillColor('#38bdf8').font('Helvetica-Bold')
+           .text('ORDEN DE COMPRA', textX, 48, { lineBreak: false });
+
+        doc.fontSize(8.5).fillColor('white').font('Helvetica-Bold')
+           .text(companyName.toUpperCase(), textX, 70, { width: textW, ellipsis: true });
+
+        const compDetails1 = [companyTaxId ? `RIF: ${companyTaxId}` : '', companyAddress].filter(Boolean).join('  |  ');
+        const compDetails2 = [companyPhone ? `Tel: ${companyPhone}` : '', companyEmail].filter(Boolean).join('  |  ');
+
+        doc.fontSize(6.5).fillColor('#94a3b8').font('Helvetica')
+           .text(compDetails1, textX, 82, { width: textW, ellipsis: true })
+           .text(compDetails2, textX, 94, { width: textW, ellipsis: true });
 
         // Bloque derecho de datos del documento
         doc.fontSize(13).fillColor('#38bdf8').font('Helvetica-Bold')

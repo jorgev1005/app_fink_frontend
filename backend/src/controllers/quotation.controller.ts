@@ -621,12 +621,80 @@ export const generatePOFromQuotation = async (req: Request, res: Response) => {
       };
     }));
 
+    // Obtener información del proyecto para logo y datos de empresa
+    let companyName: string | undefined;
+    let companyTaxId: string | undefined;
+    let companyAddress: string | undefined;
+    let companyPhone: string | undefined;
+    let companyEmail: string | undefined;
+    let logoPath: string | undefined;
+
+    try {
+      const activeProjectId = (quote as any).projectId;
+      const project = activeProjectId
+        ? await prisma.project.findUnique({ where: { id: activeProjectId } })
+        : await prisma.project.findFirst({ orderBy: { createdAt: 'asc' } });
+
+      if (project) {
+        const resolveLogoPath = (logoUrl?: string | null): string | null => {
+          if (!logoUrl) return null;
+          const clean = logoUrl.startsWith('/') ? logoUrl.slice(1) : logoUrl;
+          const candidates = [
+            path.join(process.cwd(), clean),
+            path.join(process.cwd(), 'uploads', path.basename(clean)),
+            path.join(process.cwd(), 'backend', clean),
+            path.join(process.cwd(), 'backend', 'uploads', path.basename(clean)),
+            path.join(__dirname, '..', '..', clean),
+            path.join('/home/fink/app_fink/backend', clean)
+          ];
+          for (const p of candidates) {
+            if (fs.existsSync(p)) return p;
+          }
+          return null;
+        };
+
+        logoPath = resolveLogoPath(project.logoUrl) || undefined;
+        companyName = project.name;
+
+        if (project.description) {
+          const rawLines = project.description.split('\n').map(l => l.trim()).filter(Boolean);
+          if (rawLines.length > 0) {
+            companyName = rawLines[0];
+            const addrLines: string[] = [];
+            for (let i = 1; i < rawLines.length; i++) {
+              const line = rawLines[i];
+              if (/^[JVEGjveg]-?\d{8,9}(-\d)?/i.test(line)) {
+                companyTaxId = line;
+              } else if (/@/.test(line)) {
+                companyEmail = line;
+              } else if (/^(tel|telf|tel[eé]fono|tlf|cel|whatsapp)/i.test(line)) {
+                companyPhone = line;
+              } else {
+                addrLines.push(line.replace(/^direcci[oó]n:\s*/i, ''));
+              }
+            }
+            if (addrLines.length > 0) {
+              companyAddress = addrLines.join(', ');
+            }
+          }
+        }
+      }
+    } catch (e) {
+      console.error('Error al resolver proyecto para Orden de Compra desde cotización:', e);
+    }
+
     // Generar PDF formal de Orden de Compra
     const { buffer, orderNumber } = await generatePurchaseOrderPDFBuffer({
       supplierName,
       supplierTaxId,
       supplierPhone,
       supplierAddress,
+      companyName,
+      companyTaxId,
+      companyAddress,
+      companyPhone,
+      companyEmail,
+      logoPath,
       deliveryAddress,
       expectedDate,
       paymentTerms,

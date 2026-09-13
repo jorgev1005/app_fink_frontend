@@ -1,5 +1,6 @@
 import PDFDocument from 'pdfkit';
 import QRCode from 'qrcode';
+import fs from 'fs';
 
 export interface DeliveryNoteItem {
     sku?: string;
@@ -26,6 +27,7 @@ export interface DeliveryNotePDFOptions {
     companyAddress?: string;
     companyPhone?: string;
     companyEmail?: string;
+    logoPath?: string;
     deliveryAddress?: string;
     issueDate?: string;
     tasaBCV?: number;
@@ -49,6 +51,7 @@ export async function generateDeliveryNotePDFBuffer(options: DeliveryNotePDFOpti
         companyAddress = 'Ciudad de La Victoria, Estado Aragua, Venezuela',
         companyPhone = '+58 412-271-1859',
         companyEmail = 'admin@grupoaludra.com',
+        logoPath,
         deliveryAddress,
         issueDate,
         tasaBCV,
@@ -105,15 +108,30 @@ export async function generateDeliveryNotePDFBuffer(options: DeliveryNotePDFOpti
         // ── 1. ENCABEZADO CORPORATIVO OSCURO ──────────────────────
         doc.rect(LEFT, 40, W, 85).fill(DARK);
 
-        doc.fontSize(20).fillColor('#38bdf8').font('Helvetica-Bold')
-           .text('NOTA DE ENTREGA', LEFT + 20, 52, { lineBreak: false });
+        const hasLogo = !!(logoPath && fs.existsSync(logoPath));
+        if (hasLogo) {
+            try {
+                doc.image(logoPath, LEFT + 12, 47, { fit: [55, 55], align: 'center', valign: 'center' });
+            } catch (e) {
+                console.error('Error al insertar logo en PDF de Nota de Entrega:', e);
+            }
+        }
+
+        const textX = hasLogo ? LEFT + 75 : LEFT + 20;
+        const textW = hasLogo ? 245 : 290;
+
+        doc.fontSize(18).fillColor('#38bdf8').font('Helvetica-Bold')
+           .text('NOTA DE ENTREGA', textX, 48, { lineBreak: false });
 
         doc.fontSize(8.5).fillColor('white').font('Helvetica-Bold')
-           .text(companyName.toUpperCase(), LEFT + 20, 76, { lineBreak: false });
+           .text(companyName.toUpperCase(), textX, 70, { width: textW, ellipsis: true });
 
-        doc.fontSize(7).fillColor('#94a3b8').font('Helvetica')
-           .text(`RIF: ${companyTaxId}  |  ${companyAddress}`, LEFT + 20, 88, { lineBreak: false })
-           .text(`Tel: ${companyPhone}  |  ${companyEmail}`, LEFT + 20, 98, { lineBreak: false });
+        const compDetails1 = [companyTaxId ? `RIF: ${companyTaxId}` : '', companyAddress].filter(Boolean).join('  |  ');
+        const compDetails2 = [companyPhone ? `Tel: ${companyPhone}` : '', companyEmail].filter(Boolean).join('  |  ');
+
+        doc.fontSize(6.5).fillColor('#94a3b8').font('Helvetica')
+           .text(compDetails1, textX, 82, { width: textW, ellipsis: true })
+           .text(compDetails2, textX, 94, { width: textW, ellipsis: true });
 
         // Bloque derecho: Número y fechas
         doc.fontSize(14).fillColor('#38bdf8').font('Helvetica-Bold')

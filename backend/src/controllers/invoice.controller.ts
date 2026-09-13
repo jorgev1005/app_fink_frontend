@@ -829,6 +829,55 @@ export const getInvoicePdf = async (req: Request, res: Response) => {
     const contactId = invoice.vendorId || invoice.customerId;
     const contact = contactId ? await prisma.contactPerson.findUnique({ where: { id: contactId } }) : null;
 
+    // Resolver datos de empresa y logo desde el proyecto
+    const resolveLogoPath = (logoUrl?: string | null): string | null => {
+      if (!logoUrl) return null;
+      const clean = logoUrl.startsWith('/') ? logoUrl.slice(1) : logoUrl;
+      const candidates = [
+        path.join(process.cwd(), clean),
+        path.join(process.cwd(), 'uploads', path.basename(clean)),
+        path.join(process.cwd(), 'backend', clean),
+        path.join(process.cwd(), 'backend', 'uploads', path.basename(clean)),
+        path.join(__dirname, '..', '..', clean),
+        path.join('/home/fink/app_fink/backend', clean)
+      ];
+      for (const p of candidates) {
+        if (fs.existsSync(p)) return p;
+      }
+      return null;
+    };
+
+    const logoPath = resolveLogoPath(invoice.project?.logoUrl) || undefined;
+
+    let companyName = invoice.project?.name || 'Inversiones Lucem C.A.';
+    let companyTaxId = 'J-40500250-6';
+    let companyAddress = 'Ciudad de La Victoria, Estado Aragua, Venezuela';
+    let companyPhone = '+58 412-271-1859';
+    let companyEmail = 'admin@grupoaludra.com';
+
+    if (invoice.project?.description) {
+      const rawLines = invoice.project.description.split('\n').map(l => l.trim()).filter(Boolean);
+      if (rawLines.length > 0) {
+        companyName = rawLines[0];
+        const addrLines: string[] = [];
+        for (let i = 1; i < rawLines.length; i++) {
+          const line = rawLines[i];
+          if (/^[JVEGjveg]-?\d{8,9}(-\d)?/i.test(line)) {
+            companyTaxId = line;
+          } else if (/@/.test(line)) {
+            companyEmail = line;
+          } else if (/^(tel|telf|tel[eé]fono|tlf|cel|whatsapp)/i.test(line)) {
+            companyPhone = line;
+          } else {
+            addrLines.push(line.replace(/^direcci[oó]n:\s*/i, ''));
+          }
+        }
+        if (addrLines.length > 0) {
+          companyAddress = addrLines.join(', ');
+        }
+      }
+    }
+
     // Obtener tasa BCV reciente
     const bcvRate = await prisma.exchangeRate.findFirst({
       where: { source: 'BCV' },
@@ -858,23 +907,28 @@ export const getInvoicePdf = async (req: Request, res: Response) => {
         dbProducts.forEach(p => { productMap[p.id] = p; });
       }
 
+      // Parámetros de visualización: precios y moneda
       const showPrices = req.query.showPrices === 'true' || req.query.showPrices === '1';
-      const targetCurrency: 'USD' | 'BS' = (req.query.currency === 'BS' || req.query.currency === 'VES') ? 'BS' : 'USD';
-      const conversionRate = Number(req.query.rate) || tasaBCV || 1;
+      const targetCurrency = (req.query.currency as string)?.toUpperCase() === 'BS' ? 'BS' : 'USD';
+      const invCurr = (invoice.currency || 'USD').toUpperCase();
+      const rawExchangeRate = (invoice as any).exchangeRate;
+      const conversionRate = rawExchangeRate && Number(rawExchangeRate) > 0 
+        ? Number(rawExchangeRate) 
+        : (Number(req.query.rate) || tasaBCV || 1);
 
       const enrichedItems = itemsList.map((it: any) => {
         const prod = it.productId ? productMap[it.productId] : null;
         const sku = it.sku || prod?.sku || '';
-        const name = it.description || it.name || prod?.name || 'Producto';
-        const empaqueCantidad = prod?.empaqueCantidad && prod.empaqueCantidad > 1 ? prod.empaqueCantidad : 0;
-        const unidadEmpaque = prod?.unidad_empaque || 'bulto';
-
+        const name = it.name || it.description || 'Producto';
         const qty = Number(it.quantity || 1);
-        let rawUnitPrice = Number(it.unitPrice || it.price || 0);
-        let rawTotal = Number(it.total !== undefined ? it.total : (qty * rawUnitPrice));
+        const empaqueCantidad = Number(it.empaqueCantidad || prod?.empaqueCantidad || 0);
+        const unidadEmpaque = it.unidadEmpaque || it.unidad_empaque || prod?.unidad_empaque || '';
 
-        // Si la factura base está en USD y se solicita mostrar en Bolívares
-        const invCurr = invoice.currency === 'VES' ? 'BS' : (invoice.currency || 'USD');
+        // Precios base
+        const rawUnitPrice = Number(it.unitPrice || it.price || 0);
+        const rawTotal = Number(it.total || (rawUnitPrice * qty));
+
+        // Conversión según la moneda solicitada para la Nota de Entrega
         let finalUnitPrice = rawUnitPrice;
         let finalTotal = rawTotal;
 
@@ -907,7 +961,12 @@ export const getInvoicePdf = async (req: Request, res: Response) => {
         clientPhone: contact?.phone || '',
         clientEmail: contact?.email || '',
         clientAddress: contact?.address || '',
-        companyName: invoice.project?.name || 'Inversiones Lucem C.A. / Grupo Aludra',
+        companyName,
+        companyTaxId,
+        companyAddress,
+        companyPhone,
+        companyEmail,
+        logoPath,
         deliveryAddress: contact?.address || 'Almacén Principal / Transporte',
         issueDate: invoice.issueDate ? invoice.issueDate.toString() : undefined,
         tasaBCV,
@@ -967,7 +1026,12 @@ export const getInvoicePdf = async (req: Request, res: Response) => {
         supplierTaxId: contact?.taxId || 'J-00000000-0',
         supplierPhone: contact?.phone || '',
         supplierAddress: contact?.address || '',
-        companyName: invoice.project?.name || 'Inversiones Lucem C.A.',
+        companyName,
+        companyTaxId,
+        companyAddress,
+        companyPhone,
+        companyEmail,
+        logoPath,
         tasaBCV,
         items: enrichedItems,
         notes: invoice.notes || ''
