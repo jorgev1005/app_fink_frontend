@@ -1,9 +1,13 @@
 import { Router } from 'express';
-import { createInvoice, getInvoices, postInvoice, deleteInvoice, getInvoiceById, updateInvoice } from '../controllers/invoice.controller';
+import { createInvoice, getInvoices, postInvoice, deleteInvoice, getInvoiceById, updateInvoice, getInvoicePdf } from '../controllers/invoice.controller';
 import { payInvoice } from '../controllers/payment.controller';
 import { authenticate } from '../middleware/auth';
 
 const router = Router();
+
+// Endpoint público para descargar / visualizar PDF vectorial (OC, NE, etc.)
+router.get('/:id/pdf', getInvoicePdf);
+
 router.use(authenticate);
 
 router.get('/', getInvoices);
