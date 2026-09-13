@@ -287,6 +287,7 @@ export const settingsAPI = {
 
 export const invoicesAPI = {
   getAll: (params?: any) => apiClient.get('/api/invoices', { params }),
+  getNextCode: (params: { projectId: string; isDeliveryNote?: boolean }) => apiClient.get('/api/invoices/next-code', { params }),
   create: (data: any) => apiClient.post('/api/invoices', data),
   update: (id: string, data: any) => apiClient.put(`/api/invoices/${id}`, data),
   post: (id: string) => apiClient.post(`/api/invoices/${id}/post`),

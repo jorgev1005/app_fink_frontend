@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { createInvoice, getInvoices, postInvoice, deleteInvoice, getInvoiceById, updateInvoice, getInvoicePdf } from '../controllers/invoice.controller';
+import { createInvoice, getInvoices, postInvoice, deleteInvoice, getInvoiceById, updateInvoice, getInvoicePdf, getNextInvoiceCodeEndpoint } from '../controllers/invoice.controller';
 import { payInvoice } from '../controllers/payment.controller';
 import { authenticate } from '../middleware/auth';
 
@@ -10,6 +10,7 @@ router.get('/:id/pdf', getInvoicePdf);
 
 router.use(authenticate);
 
+router.get('/next-code', getNextInvoiceCodeEndpoint);
 router.get('/', getInvoices);
 router.get('/:id', getInvoiceById);
 router.put('/:id', updateInvoice);

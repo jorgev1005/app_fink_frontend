@@ -21,12 +21,13 @@ function NewInvoiceContent() {
   
   const [error, setError] = useState<string | null>(null);
 
-  // Form State
   const [projectId, setProjectId] = useState('');
   const [type, setType] = useState('BILL'); // BILL (Gasto/Compra) or INVOICE (Venta)
   const [code, setCode] = useState('');
   const [isDeliveryNote, setIsDeliveryNote] = useState(false);
   const [isPurchaseOrder, setIsPurchaseOrder] = useState(true); // Default to Purchase Order when in BILL mode
+  const [suggestedCode, setSuggestedCode] = useState<string>('');
+  const [loadingSuggestedCode, setLoadingSuggestedCode] = useState<boolean>(false);
   
   // Items Mode
   const [useItemsMode, setUseItemsMode] = useState(false);
@@ -148,6 +149,35 @@ function NewInvoiceContent() {
       setIsDeliveryNote(false);
     }
   }, [searchParams]);
+
+  // Consulta en tiempo real del siguiente correlativo automático independiente
+  useEffect(() => {
+    if (!projectId || type !== 'INVOICE') {
+      setSuggestedCode('');
+      return;
+    }
+
+    let isMounted = true;
+    const fetchNextCode = async () => {
+      setLoadingSuggestedCode(true);
+      try {
+        const res = await api.invoices.getNextCode({ projectId, isDeliveryNote });
+        if (isMounted && res.data?.success && res.data.data?.nextCode) {
+          setSuggestedCode(res.data.data.nextCode);
+        }
+      } catch (e) {
+        console.error('Error al obtener siguiente código correlativo:', e);
+      } finally {
+        if (isMounted) setLoadingSuggestedCode(false);
+      }
+    };
+
+    fetchNextCode();
+
+    return () => {
+      isMounted = false;
+    };
+  }, [projectId, type, isDeliveryNote]);
 
   // Quotation Import State
   const [showQuoteModal, setShowQuoteModal] = useState(false);
@@ -723,24 +753,58 @@ function NewInvoiceContent() {
 
                     {/* Code */}
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                            {type === 'BILL' 
-                                ? (isPurchaseOrder ? 'Nro. de Orden de Compra' : 'Nro. Factura Proveedor / Control') 
-                                : (isDeliveryNote ? 'Nro. de Nota de Entrega' : 'Nro. de Factura / Control')}
-                        </label>
-                        <input 
-                            className="w-full p-2.5 bg-white border border-gray-200 focus:ring-2 focus:ring-blue-100 rounded-xl transition-all outline-none"
-                            placeholder={
-                                type === 'BILL' 
-                                    ? (isPurchaseOrder ? 'Ej. OC-20260905-1234 (Automático)' : 'Ej. FAC-0009876') 
-                                    : (isDeliveryNote ? 'Ej. NE-0008 (Automático)' : 'Ej. 000123')
-                            }
-                            value={code}
-                            onChange={(e) => setCode(e.target.value)}
-                        />
-                         <p className="text-xs text-gray-400 mt-1">
-                            {code ? 'Código personalizado' : 'Opcional (se genera automáticamente con formato oficial si se deja vacío)'}
-                         </p>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-sm font-medium text-gray-700">
+                              {type === 'BILL' 
+                                  ? (isPurchaseOrder ? 'Nro. de Orden de Compra' : 'Nro. Factura Proveedor / Control') 
+                                  : (isDeliveryNote ? 'Nro. de Nota de Entrega' : 'Nro. de Factura / Control')}
+                          </label>
+                          {type === 'INVOICE' && suggestedCode && (
+                            <span className="inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded-full bg-blue-50 text-blue-700 border border-blue-200 animate-in fade-in">
+                              <Sparkles className="w-3 h-3 text-blue-500" />
+                              Siguiente: <span className="font-mono font-bold">{suggestedCode}</span>
+                            </span>
+                          )}
+                        </div>
+                        <div className="relative flex items-center">
+                          <input 
+                              className="w-full p-2.5 bg-white border border-gray-200 focus:ring-2 focus:ring-blue-100 rounded-xl transition-all outline-none pr-28 font-mono text-sm"
+                              placeholder={
+                                  type === 'BILL' 
+                                      ? (isPurchaseOrder ? 'Ej. OC-20260905-1234 (Automático)' : 'Ej. FAC-0009876') 
+                                      : (suggestedCode ? `Ej. ${suggestedCode} (Automático)` : (isDeliveryNote ? 'Ej. NE-0001 (Automático)' : 'Ej. 0001 (Automático)'))
+                              }
+                              value={code}
+                              onChange={(e) => setCode(e.target.value)}
+                          />
+                          {type === 'INVOICE' && suggestedCode && code !== suggestedCode && (
+                            <button
+                              type="button"
+                              onClick={() => setCode(suggestedCode)}
+                              className="absolute right-2 px-2.5 py-1 text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 rounded-lg transition border border-blue-200 shadow-sm"
+                              title="Asignar siguiente correlativo sugerido"
+                            >
+                              Usar {suggestedCode}
+                            </button>
+                          )}
+                          {code && (
+                            <button
+                              type="button"
+                              onClick={() => setCode('')}
+                              className="absolute right-2 text-xs text-gray-400 hover:text-gray-600 px-1"
+                              title="Limpiar para usar automático"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-400 mt-1">
+                          {code 
+                            ? 'Código personalizado asignado.' 
+                            : (type === 'INVOICE' && suggestedCode 
+                                ? `Se asignará automáticamente el correlativo ${suggestedCode} al guardar.` 
+                                : 'Opcional (se genera automáticamente con formato oficial si se deja vacío)')}
+                        </p>
                     </div>
 
                     {/* Dates & Quick Credit Terms */}

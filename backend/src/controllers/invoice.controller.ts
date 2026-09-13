@@ -7,88 +7,172 @@ import { getLatestExchangeRate } from '../services/exchangeRate.service';
 import { checkProjectWriteAccess, getProjectAccessFilter } from '../utils/projectAccess';
 import { calculateInvoiceProfitability } from '../services/profitability.service';
 
-async function getNextInvoiceCode(projectId: string, isDeliveryNote: boolean = false): Promise<string> {
-  // 1. Fetch project to see if general settings has a value
+export async function getNextInvoiceCode(projectId: string, isDeliveryNote: boolean = false): Promise<string> {
   const project = await prisma.project.findUnique({
     where: { id: projectId },
     select: { lastInvoiceNumber: true, lastDeliveryNoteNumber: true }
   });
 
-  const lastSavedCode = isDeliveryNote 
-    ? project?.lastDeliveryNoteNumber 
-    : project?.lastInvoiceNumber;
-
   let candidate = '';
 
-  if (lastSavedCode) {
-    const cleanCode = lastSavedCode.trim();
-    const match = cleanCode.match(/(\d+)$/);
-    if (match) {
-      const numStr = match[1];
-      const numVal = parseInt(numStr, 10);
-      const nextVal = numVal + 1;
-      const paddedNumStr = String(nextVal).padStart(numStr.length, '0');
-      const prefix = cleanCode.substring(0, cleanCode.length - numStr.length);
-      candidate = `${prefix}${paddedNumStr}`;
+  if (isDeliveryNote) {
+    // 1. NOTA DE ENTREGA: Prefijo garantizado NE- y formato NE-0001
+    const lastSaved = project?.lastDeliveryNoteNumber?.trim();
+    if (lastSaved && /NE-?\d+/i.test(lastSaved)) {
+      const match = lastSaved.match(/(\d+)$/);
+      if (match) {
+        const numStr = match[1];
+        const nextVal = parseInt(numStr, 10) + 1;
+        const padLength = Math.max(numStr.length, 4);
+        candidate = `NE-${String(nextVal).padStart(padLength, '0')}`;
+      }
     }
-  }
 
-  if (!candidate) {
-    // 2. Fallback to querying recent invoices in DB if no setting exists
-    const lastInvoices = await prisma.invoice.findMany({
-      where: {
-        projectId,
-        type: 'INVOICE',
-        ...(isDeliveryNote ? {
+    if (!candidate) {
+      // Buscar en BD la nota de entrega más alta de este proyecto
+      const lastNEs = await prisma.invoice.findMany({
+        where: {
+          projectId,
+          type: 'INVOICE',
           code: { startsWith: 'NE' }
-        } : {
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 50
+      });
+
+      let maxNum = 0;
+      let maxPad = 4;
+      for (const inv of lastNEs) {
+        const m = inv.code.trim().match(/(\d+)$/);
+        if (m) {
+          const val = parseInt(m[1], 10);
+          if (val > maxNum) {
+            maxNum = val;
+            maxPad = Math.max(m[1].length, 4);
+          }
+        }
+      }
+
+      if (maxNum > 0) {
+        candidate = `NE-${String(maxNum + 1).padStart(maxPad, '0')}`;
+      } else {
+        candidate = 'NE-0001';
+      }
+    }
+
+    // Asegurar unicidad global en la tabla invoices
+    while (await prisma.invoice.findUnique({ where: { code: candidate } })) {
+      const match = candidate.match(/(\d+)$/);
+      if (match) {
+        const numStr = match[1];
+        const nextVal = parseInt(numStr, 10) + 1;
+        const padLength = Math.max(numStr.length, 4);
+        candidate = `NE-${String(nextVal).padStart(padLength, '0')}`;
+      } else {
+        candidate = `${candidate}-${Date.now()}`;
+      }
+    }
+  } else {
+    // 2. FACTURA DE VENTA: Correlativo numérico independiente (ej: 0204)
+    const lastSaved = project?.lastInvoiceNumber?.trim();
+    // Descartar si por error se guardó un código con prefijo NE o POS
+    if (lastSaved && !/^NE/i.test(lastSaved) && !/^POS/i.test(lastSaved)) {
+      const match = lastSaved.match(/(\d+)$/);
+      if (match) {
+        const numStr = match[1];
+        const nextVal = parseInt(numStr, 10) + 1;
+        const padLength = Math.max(numStr.length, 4);
+        const prefix = lastSaved.substring(0, lastSaved.length - numStr.length);
+        candidate = `${prefix}${String(nextVal).padStart(padLength, '0')}`;
+      }
+    }
+
+    if (!candidate) {
+      // Buscar en BD las facturas de venta (excluyendo notas de entrega y ventas POS)
+      const lastInvoices = await prisma.invoice.findMany({
+        where: {
+          projectId,
+          type: 'INVOICE',
           AND: [
             { code: { not: { startsWith: 'NE' } } },
             { code: { not: { startsWith: 'POS-' } } }
           ]
-        })
-      },
-      orderBy: {
-        createdAt: 'desc'
-      },
-      take: 50
-    });
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 50
+      });
 
-    for (const inv of lastInvoices) {
-      const cleanCode = inv.code.trim();
-      const match = cleanCode.match(/(\d+)$/);
-      if (match) {
-        const numStr = match[1];
-        const numVal = parseInt(numStr, 10);
-        const nextVal = numVal + 1;
-        const paddedNumStr = String(nextVal).padStart(numStr.length, '0');
-        const prefix = cleanCode.substring(0, cleanCode.length - numStr.length);
-        candidate = `${prefix}${paddedNumStr}`;
-        break;
+      let maxNum = 0;
+      let maxPad = 4;
+      let detectedPrefix = '';
+      for (const inv of lastInvoices) {
+        const clean = inv.code.trim();
+        const m = clean.match(/(\d+)$/);
+        if (m) {
+          const val = parseInt(m[1], 10);
+          if (val > maxNum) {
+            maxNum = val;
+            maxPad = Math.max(m[1].length, 4);
+            detectedPrefix = clean.substring(0, clean.length - m[1].length);
+          }
+        }
+      }
+
+      if (maxNum > 0) {
+        candidate = `${detectedPrefix}${String(maxNum + 1).padStart(maxPad, '0')}`;
+      } else {
+        candidate = '0001';
       }
     }
-  }
 
-  if (!candidate) {
-    candidate = isDeliveryNote ? 'NE-0001' : '0001';
-  }
-
-  // 3. Ensure global uniqueness across the invoices table
-  while (await prisma.invoice.findUnique({ where: { code: candidate } })) {
-    const match = candidate.match(/(\d+)$/);
-    if (match) {
-      const numStr = match[1];
-      const nextVal = parseInt(numStr, 10) + 1;
-      const paddedNumStr = String(nextVal).padStart(numStr.length, '0');
-      const prefix = candidate.substring(0, candidate.length - numStr.length);
-      candidate = `${prefix}${paddedNumStr}`;
-    } else {
-      candidate = `${candidate}-${Date.now()}`;
+    // Asegurar unicidad global en la tabla invoices
+    while (await prisma.invoice.findUnique({ where: { code: candidate } })) {
+      const match = candidate.match(/(\d+)$/);
+      if (match) {
+        const numStr = match[1];
+        const nextVal = parseInt(numStr, 10) + 1;
+        const padLength = Math.max(numStr.length, 4);
+        const prefix = candidate.substring(0, candidate.length - numStr.length);
+        candidate = `${prefix}${String(nextVal).padStart(padLength, '0')}`;
+      } else {
+        candidate = `${candidate}-${Date.now()}`;
+      }
     }
   }
 
   return candidate;
 }
+
+// GET /api/invoices/next-code?projectId=xxx&isDeliveryNote=true
+export const getNextInvoiceCodeEndpoint = async (req: Request, res: Response) => {
+  try {
+    const projectId = req.query.projectId as string;
+    const isDeliveryNote = req.query.isDeliveryNote === 'true' || req.query.isDeliveryNote === '1';
+
+    if (!projectId) {
+      return res.status(400).json({ success: false, error: { message: 'projectId es requerido' } });
+    }
+
+    const nextCode = await getNextInvoiceCode(projectId, isDeliveryNote);
+
+    const project = await prisma.project.findUnique({
+      where: { id: projectId },
+      select: { lastInvoiceNumber: true, lastDeliveryNoteNumber: true }
+    });
+
+    return res.json({
+      success: true,
+      data: {
+        nextCode,
+        lastCode: isDeliveryNote ? project?.lastDeliveryNoteNumber : project?.lastInvoiceNumber,
+        isDeliveryNote
+      }
+    });
+  } catch (error: any) {
+    console.error('Error al obtener siguiente código de factura/nota:', error);
+    return res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
 
 export const createInvoice = async (req: Request, res: Response) => {
   try {
@@ -206,9 +290,10 @@ export const createInvoice = async (req: Request, res: Response) => {
         }
       });
 
-      // Update Project general settings sequence numbers
+      // Update Project general settings sequence numbers de forma estrictamente independiente
       if (type === 'INVOICE') {
-        if (isDeliveryNote) {
+        const isActuallyDeliveryNote = invoiceCode.toUpperCase().startsWith('NE') || !!isDeliveryNote;
+        if (isActuallyDeliveryNote) {
           await tx.project.update({
             where: { id: projectId },
             data: { lastDeliveryNoteNumber: invoiceCode }
