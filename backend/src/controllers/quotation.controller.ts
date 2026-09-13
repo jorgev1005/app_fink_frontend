@@ -536,6 +536,70 @@ export const updateQuotationStatus = async (req: Request, res: Response) => {
   }
 };
 
+async function resolveProjectCompanyData(projectId?: string) {
+  let companyName = 'Inversiones Lucem C.A. / Grupo Aludra';
+  let companyTaxId = 'J-40500250-6';
+  let companyAddress = 'Ciudad de La Victoria, Estado Aragua, Venezuela';
+  let companyPhone = '+58 412-271-1859';
+  let companyEmail = 'admin@grupoaludra.com';
+  let logoPath: string | undefined;
+
+  try {
+    const project = projectId
+      ? await prisma.project.findUnique({ where: { id: projectId } })
+      : await prisma.project.findFirst({ orderBy: { createdAt: 'asc' } });
+
+    if (project) {
+      const resolveLogoPath = (logoUrl?: string | null): string | null => {
+        if (!logoUrl) return null;
+        const clean = logoUrl.startsWith('/') ? logoUrl.slice(1) : logoUrl;
+        const candidates = [
+          path.join(process.cwd(), clean),
+          path.join(process.cwd(), 'uploads', path.basename(clean)),
+          path.join(process.cwd(), 'backend', clean),
+          path.join(process.cwd(), 'backend', 'uploads', path.basename(clean)),
+          path.join(__dirname, '..', '..', clean),
+          path.join('/home/fink/app_fink/backend', clean)
+        ];
+        for (const p of candidates) {
+          if (fs.existsSync(p)) return p;
+        }
+        return null;
+      };
+
+      logoPath = resolveLogoPath(project.logoUrl) || undefined;
+      companyName = project.name;
+
+      if (project.description) {
+        const rawLines = project.description.split('\n').map(l => l.trim()).filter(Boolean);
+        if (rawLines.length > 0) {
+          companyName = rawLines[0];
+          const addrLines: string[] = [];
+          for (let i = 1; i < rawLines.length; i++) {
+            const line = rawLines[i];
+            if (/^[JVEGjveg]-?\d{8,9}(-\d)?/i.test(line)) {
+              companyTaxId = line;
+            } else if (/@/.test(line)) {
+              companyEmail = line;
+            } else if (/^(tel|telf|tel[eé]fono|tlf|cel|whatsapp)/i.test(line)) {
+              companyPhone = line;
+            } else {
+              addrLines.push(line.replace(/^direcci[oó]n:\s*/i, ''));
+            }
+          }
+          if (addrLines.length > 0) {
+            companyAddress = addrLines.join(', ');
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.error('Error al resolver proyecto para documento:', e);
+  }
+
+  return { companyName, companyTaxId, companyAddress, companyPhone, companyEmail, logoPath };
+}
+
 // POST /api/quotations/:id/generate-po
 export const generatePOFromQuotation = async (req: Request, res: Response) => {
   try {
@@ -622,66 +686,14 @@ export const generatePOFromQuotation = async (req: Request, res: Response) => {
     }));
 
     // Obtener información del proyecto para logo y datos de empresa
-    let companyName: string | undefined;
-    let companyTaxId: string | undefined;
-    let companyAddress: string | undefined;
-    let companyPhone: string | undefined;
-    let companyEmail: string | undefined;
-    let logoPath: string | undefined;
-
-    try {
-      const activeProjectId = (quote as any).projectId;
-      const project = activeProjectId
-        ? await prisma.project.findUnique({ where: { id: activeProjectId } })
-        : await prisma.project.findFirst({ orderBy: { createdAt: 'asc' } });
-
-      if (project) {
-        const resolveLogoPath = (logoUrl?: string | null): string | null => {
-          if (!logoUrl) return null;
-          const clean = logoUrl.startsWith('/') ? logoUrl.slice(1) : logoUrl;
-          const candidates = [
-            path.join(process.cwd(), clean),
-            path.join(process.cwd(), 'uploads', path.basename(clean)),
-            path.join(process.cwd(), 'backend', clean),
-            path.join(process.cwd(), 'backend', 'uploads', path.basename(clean)),
-            path.join(__dirname, '..', '..', clean),
-            path.join('/home/fink/app_fink/backend', clean)
-          ];
-          for (const p of candidates) {
-            if (fs.existsSync(p)) return p;
-          }
-          return null;
-        };
-
-        logoPath = resolveLogoPath(project.logoUrl) || undefined;
-        companyName = project.name;
-
-        if (project.description) {
-          const rawLines = project.description.split('\n').map(l => l.trim()).filter(Boolean);
-          if (rawLines.length > 0) {
-            companyName = rawLines[0];
-            const addrLines: string[] = [];
-            for (let i = 1; i < rawLines.length; i++) {
-              const line = rawLines[i];
-              if (/^[JVEGjveg]-?\d{8,9}(-\d)?/i.test(line)) {
-                companyTaxId = line;
-              } else if (/@/.test(line)) {
-                companyEmail = line;
-              } else if (/^(tel|telf|tel[eé]fono|tlf|cel|whatsapp)/i.test(line)) {
-                companyPhone = line;
-              } else {
-                addrLines.push(line.replace(/^direcci[oó]n:\s*/i, ''));
-              }
-            }
-            if (addrLines.length > 0) {
-              companyAddress = addrLines.join(', ');
-            }
-          }
-        }
-      }
-    } catch (e) {
-      console.error('Error al resolver proyecto para Orden de Compra desde cotización:', e);
-    }
+    const {
+      companyName,
+      companyTaxId,
+      companyAddress,
+      companyPhone,
+      companyEmail,
+      logoPath
+    } = await resolveProjectCompanyData((quote as any).projectId);
 
     // Generar PDF formal de Orden de Compra
     const { buffer, orderNumber } = await generatePurchaseOrderPDFBuffer({
@@ -756,14 +768,30 @@ export const viewQuotationPDF = async (req: Request, res: Response) => {
 
     const tasaBCV = Number(quote.rates?.bcv || bcvRate?.usdToBs || 771.07);
 
+    // Obtener información del proyecto para logo y datos de empresa
+    const {
+      companyName,
+      companyTaxId,
+      companyAddress,
+      companyPhone,
+      companyEmail,
+      logoPath
+    } = await resolveProjectCompanyData((quote as any).projectId);
+
     const { buffer, quotationNumber } = await generateQuotationPDFBuffer({
       quotationNumber: quote.correlative || quote.id,
       clientName: quote.customer?.name || quote.clientName || 'CLIENTE ESTIMADO',
       clientTaxId: quote.customer?.taxId || quote.clientTaxId,
       clientPhone: quote.customer?.phone || quote.clientPhone,
       clientEmail: quote.customer?.email || quote.clientEmail,
+      clientAddress: quote.customer?.address || quote.clientAddress,
       destinationCity: quote.customer?.city || quote.destinationCity,
-      projectName: 'Inversiones Lucem C.A. / Grupo Aludra',
+      companyName,
+      companyTaxId,
+      companyAddress,
+      companyPhone,
+      companyEmail,
+      logoPath,
       tasaBCV,
       tasaParalelo: Number(quote.rates?.paralelo || undefined),
       tasaEUR: Number(quote.rates?.eur || undefined),

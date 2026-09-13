@@ -1,5 +1,6 @@
 import PDFDocument from 'pdfkit';
 import QRCode from 'qrcode';
+import fs from 'fs';
 
 export interface QuotationItem {
     sku?: string;
@@ -23,6 +24,12 @@ export interface QuotationPDFOptions {
     clientEmail?: string;
     clientAddress?: string;
     destinationCity?: string;
+    companyName?: string;
+    companyTaxId?: string;
+    companyAddress?: string;
+    companyPhone?: string;
+    companyEmail?: string;
+    logoPath?: string;
     freightAdjustmentPercent?: number;
     minOrderForFreeFreight?: number;
     freightCost?: number;
@@ -56,6 +63,12 @@ export async function generateQuotationPDFBuffer(options: QuotationPDFOptions): 
         clientEmail,
         clientAddress,
         destinationCity,
+        companyName = 'Inversiones Lucem C.A. / Grupo Aludra',
+        companyTaxId = 'J-40500250-6',
+        companyAddress = 'Ciudad de La Victoria, Estado Aragua, Venezuela',
+        companyPhone = '+58 412-271-1859',
+        companyEmail = 'admin@grupoaludra.com',
+        logoPath,
         freightAdjustmentPercent = 0,
         minOrderForFreeFreight,
         freightCost,
@@ -83,7 +96,7 @@ export async function generateQuotationPDFBuffer(options: QuotationPDFOptions): 
             size: 'A4', 
             margin: 0, 
             bufferPages: true,
-            info: { Title: quotationNumber, Author: 'Grupo Aludra - FINK' } 
+            info: { Title: quotationNumber, Author: companyName } 
         });
 
         const buffers: Buffer[] = [];
@@ -91,12 +104,14 @@ export async function generateQuotationPDFBuffer(options: QuotationPDFOptions): 
         doc.on('end', () => resolve({ buffer: Buffer.concat(buffers), quotationNumber }));
         doc.on('error', (err: any) => reject(err));
 
-        const GREEN  = '#10b981';
-        const DARK   = '#1f2937';
-        const GRAY   = '#6b7280';
-        const LGRAY  = '#f3f4f6';
-        const W      = doc.page.width - 90; // 505.28 pt
-        const LEFT   = 45;
+        const PRIMARY = '#0284c7';
+        const GREEN   = '#10b981';
+        const DARK    = '#0f172a';
+        const GRAY    = '#64748b';
+        const LGRAY   = '#f8fafc';
+        const BORDER  = '#e2e8f0';
+        const W       = doc.page.width - 90; // 505.28 pt
+        const LEFT    = 45;
 
         const ahora = new Date();
         const vigencia = new Date(ahora.getTime() + 48 * 60 * 60 * 1000);
@@ -104,43 +119,51 @@ export async function generateQuotationPDFBuffer(options: QuotationPDFOptions): 
             timeZone: 'America/Caracas', 
             day: '2-digit', 
             month: '2-digit', 
-            year: 'numeric', 
-            hour: '2-digit', 
-            minute: '2-digit', 
-            hour12: true 
+            year: 'numeric'
         });
 
-        // ── 1. ENCABEZADO CORPORATIVO ─────────────────────────────
+        // ── 1. ENCABEZADO CORPORATIVO OSCURO ──────────────────────
         doc.rect(LEFT, 40, W, 85).fill(DARK);
 
-        doc.fontSize(22).fillColor(GREEN).font('Helvetica-Bold')
-           .text('ALUDRA', LEFT + 20, 52, { continued: true, lineBreak: false })
-           .fillColor('white').font('Helvetica')
-           .text('GROUP', { continued: false, lineBreak: false });
+        const hasLogo = !!(logoPath && fs.existsSync(logoPath));
+        if (hasLogo) {
+            try {
+                doc.image(logoPath, LEFT + 12, 47, { fit: [55, 55], align: 'center', valign: 'center' });
+            } catch (e) {
+                console.error('Error al insertar logo en PDF de Cotización:', e);
+            }
+        }
 
-        doc.fontSize(7).fillColor('#9ca3af')
-           .text('SOLUCIONES INDUSTRIALES Y COMERCIALES', LEFT + 20, 78, { lineBreak: false });
+        const textX = hasLogo ? LEFT + 75 : LEFT + 20;
+        const textW = hasLogo ? 245 : 290;
 
-        const lucemY = 90;
-        doc.fontSize(7).fillColor('#9ca3af')
-           .text('Inversiones Lucem C.A.  RIF: J-40500250-6  |  Ciudad de La Victoria, Aragua, Venezuela', LEFT + 20, lucemY, { lineBreak: false });
-        doc.text('+58 412-271-1859  |  admin@grupoaludra.com  |  www.grupoaludra.com', LEFT + 20, lucemY + 10, { lineBreak: false });
+        doc.fontSize(18).fillColor('#38bdf8').font('Helvetica-Bold')
+           .text('COTIZACIÓN FORMAL', textX, 48, { lineBreak: false });
+
+        doc.fontSize(8.5).fillColor('white').font('Helvetica-Bold')
+           .text(companyName.toUpperCase(), textX, 70, { width: textW, lineBreak: false, ellipsis: true });
+
+        const compDetails1 = [companyTaxId ? `RIF: ${companyTaxId}` : '', companyAddress].filter(Boolean).join('  |  ');
+        const compDetails2 = [companyPhone ? `Tel: ${companyPhone}` : '', companyEmail].filter(Boolean).join('  |  ');
+
+        doc.fontSize(6.5).fillColor('#94a3b8').font('Helvetica')
+           .text(compDetails1, textX, 83, { width: textW, height: 9, lineBreak: false, ellipsis: true })
+           .text(compDetails2, textX, 94, { width: textW, height: 9, lineBreak: false, ellipsis: true });
 
         // Bloque derecho de cotización
-        doc.fontSize(10).fillColor('white').font('Helvetica-Bold')
-           .text('COTIZACIÓN FORMAL', 330, 52, { width: 200, align: 'right', lineBreak: false });
-        doc.fontSize(12).fillColor(GREEN).font('Helvetica-Bold')
-           .text(quotationNumber, 330, 66, { width: 200, align: 'right', lineBreak: false });
-        doc.fontSize(7).fillColor('#9ca3af').font('Helvetica')
-           .text(`Emitida: ${fmtDate(ahora)}`, 330, 83, { width: 200, align: 'right', lineBreak: false })
-           .text(`Válida hasta: ${fmtDate(vigencia)} (48 horas)`, 330, 95, { width: 200, align: 'right', lineBreak: false });
+        doc.fontSize(14).fillColor('#38bdf8').font('Helvetica-Bold')
+           .text(quotationNumber, 330, 52, { width: 200, align: 'right', lineBreak: false });
+        doc.fontSize(7.5).fillColor('#94a3b8').font('Helvetica')
+           .text(`Emitida: ${fmtDate(ahora)}`, 330, 72, { width: 200, align: 'right', lineBreak: false })
+           .text(`Válida hasta: ${fmtDate(vigencia)} (48 horas)`, 330, 84, { width: 200, align: 'right', lineBreak: false })
+           .text(`Tasa BCV: Bs. ${tasaBCV.toFixed(2)}/USD`, 330, 96, { width: 200, align: 'right', lineBreak: false });
 
         // ── 2. BLOQUE DE DATOS DEL CLIENTE Y DESTINO ─────────────
         let y = 135;
         doc.rect(LEFT, y, W, 42).fill(LGRAY);
-        doc.rect(LEFT, y, 4, 42).fill(GREEN);
+        doc.rect(LEFT, y, 4, 42).fill(PRIMARY);
         
-        doc.fontSize(6.5).fillColor(GRAY).font('Helvetica-Bold')
+        doc.fontSize(6.5).fillColor(PRIMARY).font('Helvetica-Bold')
            .text('COTIZACIÓN PREPARADA PARA:', LEFT + 12, y + 6, { lineBreak: false });
         doc.fontSize(11).fillColor(DARK).font('Helvetica-Bold')
            .text(clientName.toUpperCase(), LEFT + 12, y + 15, { width: 330, lineBreak: false });
@@ -190,7 +213,7 @@ export async function generateQuotationPDFBuffer(options: QuotationPDFOptions): 
         // ── 5. TABLA DE PRODUCTOS COTIZADOS ───────────────────────
         const cols = {
             sku: LEFT,
-            nombre: LEFT + 58,
+            nombre: LEFT + 68,
             cant: LEFT + 248,
             puDivisas: LEFT + 283,
             puBcv: LEFT + 338,
@@ -198,8 +221,8 @@ export async function generateQuotationPDFBuffer(options: QuotationPDFOptions): 
             totBs: LEFT + 448
         };
         const colWidths = {
-            sku: 55,
-            nombre: 186,
+            sku: 65,
+            nombre: 176,
             cant: 32,
             puDivisas: 52,
             puBcv: 52,
@@ -380,7 +403,7 @@ export async function generateQuotationPDFBuffer(options: QuotationPDFOptions): 
         }
 
         doc.rect(qrX - 5, qrY, 85, 68).fill(LGRAY);
-        doc.rect(qrX - 5, qrY, 2, 68).fill(GREEN);
+        doc.rect(qrX - 5, qrY, 2, 68).fill(PRIMARY);
 
         doc.fontSize(6).fillColor(DARK).font('Helvetica-Bold')
            .text('CONFIRMAR PEDIDO', qrX - 5, qrY + 5, { width: 85, align: 'center', lineBreak: false });
@@ -396,9 +419,9 @@ export async function generateQuotationPDFBuffer(options: QuotationPDFOptions): 
             doc.switchToPage(i);
             const yFooter = doc.page.height - 30;
             doc.save();
-            doc.moveTo(LEFT, yFooter).lineTo(LEFT + W, yFooter).strokeColor(GREEN).lineWidth(0.5).stroke();
+            doc.moveTo(LEFT, yFooter).lineTo(LEFT + W, yFooter).strokeColor(BORDER).lineWidth(0.5).stroke();
             doc.fontSize(6.5).fillColor(GRAY).font('Helvetica')
-               .text(`Grupo Aludra © ${ahora.getFullYear()} | Inversiones Lucem C.A. | Cotización generada desde FINK`, LEFT, yFooter + 4, { width: W - 70, align: 'left', lineBreak: false });
+               .text(`${companyName} | Cotización emitida desde FINK`, LEFT, yFooter + 4, { width: W - 70, align: 'left', lineBreak: false });
             doc.text(`Página ${i + 1} de ${range.count}`, LEFT + W - 60, yFooter + 4, { width: 60, align: 'right', lineBreak: false });
             doc.restore();
         }
