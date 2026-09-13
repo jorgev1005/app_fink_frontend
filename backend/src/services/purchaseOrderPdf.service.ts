@@ -120,14 +120,14 @@ export async function generatePurchaseOrderPDFBuffer(options: PurchaseOrderPDFOp
            .text('ORDEN DE COMPRA', textX, 48, { lineBreak: false });
 
         doc.fontSize(8.5).fillColor('white').font('Helvetica-Bold')
-           .text(companyName.toUpperCase(), textX, 70, { width: textW, ellipsis: true });
+           .text(companyName.toUpperCase(), textX, 70, { width: textW, lineBreak: false, ellipsis: true });
 
         const compDetails1 = [companyTaxId ? `RIF: ${companyTaxId}` : '', companyAddress].filter(Boolean).join('  |  ');
         const compDetails2 = [companyPhone ? `Tel: ${companyPhone}` : '', companyEmail].filter(Boolean).join('  |  ');
 
         doc.fontSize(6.5).fillColor('#94a3b8').font('Helvetica')
-           .text(compDetails1, textX, 82, { width: textW, ellipsis: true })
-           .text(compDetails2, textX, 94, { width: textW, ellipsis: true });
+           .text(compDetails1, textX, 83, { width: textW, height: 9, lineBreak: false, ellipsis: true })
+           .text(compDetails2, textX, 94, { width: textW, height: 9, lineBreak: false, ellipsis: true });
 
         // Bloque derecho de datos del documento
         doc.fontSize(13).fillColor('#38bdf8').font('Helvetica-Bold')
