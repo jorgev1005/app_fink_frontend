@@ -119,41 +119,46 @@ export async function generateDeliveryNotePDFBuffer(options: DeliveryNotePDFOpti
         const boxW = (W - 10) / 2;
 
         // Caja Destinatario / Cliente
-        doc.rect(LEFT, y, boxW, 56).fill(LGRAY);
-        doc.rect(LEFT, y, 4, 56).fill(PRIMARY);
-        doc.fontSize(7).fillColor(PRIMARY).font('Helvetica-Bold')
+        const boxH = 68;
+        doc.rect(LEFT, y, boxW, boxH).fill(LGRAY);
+        doc.rect(LEFT, y, 4, boxH).fill(PRIMARY);
+        doc.fontSize(6.5).fillColor(PRIMARY).font('Helvetica-Bold')
            .text('CONSIGNADO / CLIENTE:', LEFT + 10, y + 6, { lineBreak: false });
-        doc.fontSize(10).fillColor(DARK).font('Helvetica-Bold')
-           .text(clientName.toUpperCase(), LEFT + 10, y + 17, { width: boxW - 15, lineBreak: false });
+        doc.fontSize(8.5).fillColor(DARK).font('Helvetica-Bold')
+           .text(clientName.toUpperCase(), LEFT + 10, y + 16, { width: boxW - 16, ellipsis: true });
 
-        const clientDetails = [
-            clientTaxId ? `RIF/Cédula: ${clientTaxId}` : '',
-            clientPhone ? `Tel: ${clientPhone}` : '',
-            clientEmail ? `Email: ${clientEmail}` : ''
-        ].filter(Boolean).join('  |  ');
+        const clientDocPhone = [
+            clientTaxId ? `RIF/CI: ${clientTaxId}` : '',
+            clientPhone ? `Tel: ${clientPhone}` : ''
+        ].filter(Boolean).join('   |   ');
 
         doc.fontSize(6.5).fillColor(GRAY).font('Helvetica')
-           .text(clientDetails || 'Cliente Registrado', LEFT + 10, y + 32, { width: boxW - 15, lineBreak: false });
+           .text(clientDocPhone || 'Cliente Registrado', LEFT + 10, y + 29, { width: boxW - 16, lineBreak: false });
+        
+        if (clientEmail) {
+            doc.text(`Email: ${clientEmail}`, LEFT + 10, y + 39, { width: boxW - 16, ellipsis: true });
+        }
         if (clientAddress) {
-            doc.text(clientAddress, LEFT + 10, y + 42, { width: boxW - 15, lineBreak: false });
+            doc.fontSize(6).fillColor('#4b5563')
+               .text(`Dir: ${clientAddress}`, LEFT + 10, clientEmail ? y + 49 : y + 40, { width: boxW - 16, height: 16, ellipsis: true });
         }
 
         // Caja Lugar de Despacho y Recepción
         const col2X = LEFT + boxW + 10;
-        doc.rect(col2X, y, boxW, 56).fill(LGRAY);
-        doc.rect(col2X, y, 4, 56).fill('#10b981'); // Verde
-        doc.fontSize(7).fillColor('#059669').font('Helvetica-Bold')
+        doc.rect(col2X, y, boxW, boxH).fill(LGRAY);
+        doc.rect(col2X, y, 4, boxH).fill('#10b981'); // Verde
+        doc.fontSize(6.5).fillColor('#059669').font('Helvetica-Bold')
            .text('CONDICIÓN Y DESTINO DE DESPACHO:', col2X + 10, y + 6, { lineBreak: false });
         
         const destTitle = destinationCity ? `Destino: ${destinationCity.toUpperCase()}` : (deliveryAddress || 'Recepción en Almacén / Transporte');
-        doc.fontSize(8.5).fillColor(DARK).font('Helvetica-Bold')
-           .text(destTitle, col2X + 10, y + 17, { width: boxW - 15, lineBreak: false });
+        doc.fontSize(8).fillColor(DARK).font('Helvetica-Bold')
+           .text(destTitle, col2X + 10, y + 16, { width: boxW - 16, ellipsis: true });
 
         doc.fontSize(6.5).fillColor(GRAY).font('Helvetica')
-           .text('Verificar mercancía, bultos y precintos al momento de recibir.', col2X + 10, y + 33, { width: boxW - 15, lineBreak: false })
-           .text('Firma y sello requerido en el talón de conformidad inferior.', col2X + 10, y + 43, { width: boxW - 15, lineBreak: false });
+           .text('Verificar mercancía, bultos y precintos al momento de recibir.', col2X + 10, y + 33, { width: boxW - 16, lineBreak: false })
+           .text('Firma y sello requeridos en el talón de conformidad inferior.', col2X + 10, y + 44, { width: boxW - 16, lineBreak: false });
 
-        y += 66;
+        y += boxH + 10;
 
         // ── 3. TABLA DE ÍTEMS DESPACHADOS ─────────────────────────
         const cols = {
