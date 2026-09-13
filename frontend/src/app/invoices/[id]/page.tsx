@@ -545,8 +545,7 @@ export default function InvoiceDetailsPage() {
         heightLeft -= pageHeight;
       }
 
-      const isDeliveryDoc = viewMode === 'DELIVERY_NOTE' || invoice.code?.toUpperCase().startsWith('NE');
-      const docPrefix = isDeliveryDoc ? 'Nota_Entrega' : (isPurchaseOrder ? 'Orden_Compra' : (invoice.type === 'INVOICE' ? 'Factura' : 'Factura_Compra'));
+      const docPrefix = invoice.type === 'INVOICE' ? 'Factura' : 'Factura_Compra';
       const filename = `${docPrefix}_${invoice.code}.pdf`;
       pdf.save(filename);
     } catch (error) {
