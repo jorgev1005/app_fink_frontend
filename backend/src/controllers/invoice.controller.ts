@@ -883,7 +883,7 @@ export const getInvoicePdf = async (req: Request, res: Response) => {
       const { generateDeliveryNotePDFBuffer } = require('../services/deliveryNotePdf.service');
       const { buffer, noteNumber } = await generateDeliveryNotePDFBuffer({
         noteNumber: invoice.code,
-        clientName: contact?.name || invoice.clientName || 'CLIENTE ESTIMADO',
+        clientName: contact?.name || (invoice as any).clientName || 'CLIENTE ESTIMADO',
         clientTaxId: contact?.taxId || '',
         clientPhone: contact?.phone || '',
         clientEmail: contact?.email || '',
