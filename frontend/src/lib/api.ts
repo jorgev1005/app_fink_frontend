@@ -296,6 +296,7 @@ export const invoicesAPI = {
   pay: (id: string, data: any) => apiClient.post(`/api/invoices/${id}/pay`, data),
   issueInvoice: (id: string, data?: { customCode?: string; issueDate?: string; dueDate?: string; notes?: string }) => apiClient.post(`/api/invoices/${id}/issue-invoice`, data),
   updateDispatchStatus: (id: string, data: { status: 'PENDING_DISPATCH' | 'DISPATCHED' | 'DELIVERED'; dispatchNotes?: string }) => apiClient.patch(`/api/invoices/${id}/dispatch-status`, data),
+  createReturn: (id: string, data: any) => apiClient.post(`/api/invoices/${id}/returns`, data),
 }
 
 export const paymentsAPI = {

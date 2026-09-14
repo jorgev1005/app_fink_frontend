@@ -9,7 +9,8 @@ import {
   getInvoicePdf, 
   getNextInvoiceCodeEndpoint,
   issueInvoiceFromDeliveryNote,
-  updateDispatchStatus
+  updateDispatchStatus,
+  createInvoiceReturn
 } from '../controllers/invoice.controller';
 import { payInvoice } from '../controllers/payment.controller';
 import { authenticate } from '../middleware/auth';
@@ -27,6 +28,7 @@ router.get('/:id', getInvoiceById);
 router.put('/:id', updateInvoice);
 router.patch('/:id/dispatch-status', updateDispatchStatus);
 router.post('/:id/issue-invoice', issueInvoiceFromDeliveryNote);
+router.post('/:id/returns', createInvoiceReturn);
 router.post('/:id/post', postInvoice);
 router.post('/:id/pay', payInvoice);
 router.delete('/:id', deleteInvoice);

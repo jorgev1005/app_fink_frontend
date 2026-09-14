@@ -10,12 +10,12 @@ import {
     ShoppingCart, Truck, Plus, Eye, Download, Filter, 
     RefreshCw, ExternalLink, ArrowUpRight, DollarSign,
     Package, Check, ArrowRight, Receipt, FileSpreadsheet,
-    HelpCircle, ShieldAlert, GitFork
+    HelpCircle, ShieldAlert, GitFork, RotateCcw, Undo2
 } from 'lucide-react';
 import TraceabilityModal from '@/components/TraceabilityModal';
 
 // Tipos de pestañas disponibles
-type DocTabType = 'ALL' | 'DELIVERY_NOTE' | 'INVOICE' | 'QUOTATION' | 'PURCHASE_ORDER' | 'BILL' | 'POS';
+type DocTabType = 'ALL' | 'DELIVERY_NOTE' | 'INVOICE' | 'QUOTATION' | 'PURCHASE_ORDER' | 'BILL' | 'POS' | 'RETURNS';
 
 const calculateDueStatus = (dueDateStr?: string, status?: string) => {
     if (!dueDateStr) return null;
@@ -190,6 +190,8 @@ function InvoicesPageContent() {
                 notes: inv.notes,
                 netProfit: inv.netProfit,
                 lines: inv.lines,
+                returns: inv.returns || [],
+                hasReturns: Boolean(inv.hasReturns || (inv.returns && inv.returns.length > 0)),
                 rawDoc: inv,
                 createdAt: inv.createdAt
             });
@@ -245,12 +247,14 @@ function InvoicesPageContent() {
             PURCHASE_ORDER: unifiedDocs.filter(d => d.docCategory === 'PURCHASE_ORDER').length,
             BILL: unifiedDocs.filter(d => d.docCategory === 'BILL').length,
             POS: unifiedDocs.filter(d => d.docCategory === 'POS').length,
+            RETURNS: unifiedDocs.filter(d => d.hasReturns).length,
         };
     }, [unifiedDocs]);
 
     // Documentos que aplican a la pestaña activa (para calcular las tarjetas KPI de esa pestaña)
     const docsInActiveTab = useMemo(() => {
         if (activeTab === 'ALL') return unifiedDocs;
+        if (activeTab === 'RETURNS') return unifiedDocs.filter(d => d.hasReturns);
         return unifiedDocs.filter(d => d.docCategory === activeTab);
     }, [unifiedDocs, activeTab]);
 
@@ -310,6 +314,18 @@ function InvoicesPageContent() {
                 { id: 'ALL', label: activeTab === 'PURCHASE_ORDER' ? 'Total O.C.' : 'Total Facturas Compra', count: docsInActiveTab.length, color: 'text-purple-700 bg-purple-50 border-purple-200' },
                 { id: 'PENDING', label: '⏳ Por Pagar / Pendiente', count: pending, color: 'text-amber-700 bg-amber-50 border-amber-200' },
                 { id: 'PAID', label: '✅ Pagadas', count: paid, color: 'text-emerald-700 bg-emerald-50 border-emerald-200' },
+            ];
+        }
+
+        if (activeTab === 'RETURNS') {
+            const clientReturns = docsInActiveTab.filter(d => d.docCategory === 'INVOICE' || d.docCategory === 'DELIVERY_NOTE').length;
+            const supplierReturns = docsInActiveTab.filter(d => d.docCategory === 'BILL' || d.docCategory === 'PURCHASE_ORDER').length;
+            const totalReturnsCount = docsInActiveTab.reduce((acc, d) => acc + (d.returns?.length || 0), 0);
+            return [
+                { id: 'ALL', label: 'Docs con Devolución', count: docsInActiveTab.length, color: 'text-rose-700 bg-rose-50 border-rose-200' },
+                { id: 'CLIENT_RETURNS', label: '🔄 Devoluciones Clientes', count: clientReturns, color: 'text-amber-700 bg-amber-50 border-amber-200' },
+                { id: 'SUPPLIER_RETURNS', label: '↩️ Rechazos a Proveedor', count: supplierReturns, color: 'text-indigo-700 bg-indigo-50 border-indigo-200' },
+                { id: 'TOTAL_EVENTS', label: '📦 Total Devoluciones', count: totalReturnsCount, color: 'text-purple-700 bg-purple-50 border-purple-200' },
             ];
         }
 
@@ -567,6 +583,21 @@ function InvoicesPageContent() {
                     <span>POS (Caja)</span>
                     <span className={`text-xs px-1.5 py-0.5 rounded-full font-mono ${activeTab === 'POS' ? 'bg-emerald-800 text-emerald-100' : 'bg-emerald-100 text-emerald-800'}`}>
                         {counts.POS}
+                    </span>
+                </button>
+
+                <button
+                    onClick={() => { setActiveTab('RETURNS'); setKpiFilter(null); }}
+                    className={`px-3.5 py-2 rounded-lg font-semibold transition flex items-center gap-2 whitespace-nowrap cursor-pointer ${
+                        activeTab === 'RETURNS' 
+                            ? 'bg-rose-700 text-white shadow-sm' 
+                            : 'bg-white text-rose-700 hover:bg-rose-50 border border-rose-200'
+                    }`}
+                >
+                    <RotateCcw className="w-4 h-4" />
+                    <span>Devoluciones & Reversos</span>
+                    <span className={`text-xs px-1.5 py-0.5 rounded-full font-mono ${activeTab === 'RETURNS' ? 'bg-rose-800 text-rose-100' : 'bg-rose-100 text-rose-800'}`}>
+                        {counts.RETURNS}
                     </span>
                 </button>
             </div>
@@ -877,6 +908,16 @@ function InvoicesPageContent() {
                                                                 <FileText className="w-3 h-3 text-slate-500" />
                                                                 <span>Cotiz: <strong>{doc.purchaseOrder}</strong></span>
                                                             </button>
+                                                        )}
+
+                                                        {/* Badge de Devolución Activa en la fila */}
+                                                        {doc.hasReturns && doc.returns && doc.returns.length > 0 && (
+                                                            <div className="flex items-center gap-1 flex-wrap">
+                                                                <span className="text-[10px] bg-rose-100 text-rose-800 font-bold px-1.5 py-0.5 rounded border border-rose-300 flex items-center gap-1">
+                                                                    <RotateCcw className="w-2.5 h-2.5" />
+                                                                    <span>DEV: {doc.returns.map((r: any) => r.returnCode).join(', ')}</span>
+                                                                </span>
+                                                            </div>
                                                         )}
 
                                                         {/* Si es Cotización y tiene facturas asociadas */}

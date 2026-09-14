@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import api from '@/lib/api';
-import { Printer, ArrowLeft, Download, Edit, CreditCard, CheckCircle, FileText, Copy, Play, MessageCircle, Trash2, Undo2, AlertTriangle, Truck, Receipt, ExternalLink, Clock } from 'lucide-react';
+import { Printer, ArrowLeft, Download, Edit, CreditCard, CheckCircle, FileText, Copy, Play, MessageCircle, Trash2, Undo2, AlertTriangle, Truck, Receipt, ExternalLink, Clock, RotateCcw } from 'lucide-react';
 
 interface InvoiceItem {
   id: string;
@@ -99,6 +99,8 @@ interface Invoice {
   invoicedAt?: string;
   sourceDeliveryNoteId?: string;
   sourceDeliveryNoteCode?: string;
+  returns?: any[];
+  hasReturns?: boolean;
 }
 
 export default function InvoiceDetailsPage() {
@@ -143,6 +145,24 @@ export default function InvoiceDetailsPage() {
 
   // Dispatch Status State
   const [updatingDispatch, setUpdatingDispatch] = useState(false);
+
+  // Return / Reverse Modal States
+  const [isReturnModalOpen, setIsReturnModalOpen] = useState(false);
+  const [returnReason, setReturnReason] = useState('Mercancía defectuosa / Dañada');
+  const [customReturnReason, setCustomReturnReason] = useState('');
+  const [returnNotes, setReturnNotes] = useState('');
+  const [returnItemsState, setReturnItemsState] = useState<Array<{
+    productId?: string;
+    name: string;
+    originalQty: number;
+    alreadyReturned: number;
+    remainingQty: number;
+    returnQty: number;
+    unitPrice: number;
+    stockAction: 'RESTOCK' | 'QUARANTINE' | 'NONE';
+  }>>([]);
+  const [submittingReturn, setSubmittingReturn] = useState(false);
+  const [returnError, setReturnError] = useState<string | null>(null);
 
   const getActiveRate = () => {
     if (rateSource === 'MANUAL') return parseFloat(manualRate) || 1;
@@ -290,6 +310,8 @@ export default function InvoiceDetailsPage() {
          invoicedAt: invData.invoicedAt || extraLinesData.invoicedAt || null,
          sourceDeliveryNoteId: invData.sourceDeliveryNoteId || extraLinesData.sourceDeliveryNoteId || null,
          sourceDeliveryNoteCode: invData.sourceDeliveryNoteCode || extraLinesData.sourceDeliveryNoteCode || null,
+         returns: invData.returns || extraLinesData.returns || [],
+         hasReturns: Boolean((invData.returns && invData.returns.length > 0) || (extraLinesData.returns && extraLinesData.returns.length > 0))
       });
       setCalculateIVA(taxAmount > 0);
       setDisplayCurrency(invData.currency || 'USD');
@@ -413,6 +435,122 @@ export default function InvoiceDetailsPage() {
        setSubmittingIssueInvoice(false);
      }
   };
+
+   const openReturnModal = () => {
+      if (!invoice) return;
+      const prevReturns = invoice.returns || [];
+      const returnedQtyByItem: Record<string, number> = {};
+      prevReturns.forEach((ret: any) => {
+        if (Array.isArray(ret.items)) {
+          ret.items.forEach((it: any) => {
+            const key = it.productId || it.name;
+            returnedQtyByItem[key] = (returnedQtyByItem[key] || 0) + Number(it.quantity || 0);
+          });
+        }
+      });
+
+      const initialItems = (invoice.items || []).map(it => {
+        const key = it.productId || it.description || it.name || 'Producto';
+        const origQty = Number(it.quantity || 1);
+        const alreadyReturned = returnedQtyByItem[key] || 0;
+        const remaining = Math.max(0, origQty - alreadyReturned);
+
+        return {
+          productId: it.productId,
+          name: it.description || it.name || 'Producto',
+          originalQty: origQty,
+          alreadyReturned,
+          remainingQty: remaining,
+          returnQty: 0,
+          unitPrice: Number(it.unitPrice || it.price || 0),
+          stockAction: (invoice.type === 'INVOICE' ? 'RESTOCK' : 'NONE') as 'RESTOCK' | 'QUARANTINE' | 'NONE'
+        };
+      });
+
+      setReturnItemsState(initialItems);
+      setReturnReason('Mercancía defectuosa / Dañada');
+      setCustomReturnReason('');
+      setReturnNotes('');
+      setReturnError(null);
+      setIsReturnModalOpen(true);
+   };
+
+   const handleReturnAll = () => {
+      setReturnItemsState(prev => prev.map(it => ({
+        ...it,
+        returnQty: it.remainingQty
+      })));
+   };
+
+   const handleClearReturn = () => {
+      setReturnItemsState(prev => prev.map(it => ({
+        ...it,
+        returnQty: 0
+      })));
+   };
+
+   const handleReturnQtyChange = (index: number, val: number) => {
+      setReturnItemsState(prev => {
+        const next = [...prev];
+        const item = next[index];
+        const sanitizedVal = Math.max(0, Math.min(item.remainingQty, val));
+        next[index] = { ...item, returnQty: sanitizedVal };
+        return next;
+      });
+   };
+
+   const handleReturnActionChange = (index: number, action: 'RESTOCK' | 'QUARANTINE' | 'NONE') => {
+      setReturnItemsState(prev => {
+        const next = [...prev];
+        next[index] = { ...next[index], stockAction: action };
+        return next;
+      });
+   };
+
+   const handleConfirmReturn = async (e: React.FormEvent) => {
+      e.preventDefault();
+      if (!invoice) return;
+
+      const itemsToReturn = returnItemsState.filter(it => it.returnQty > 0);
+      if (itemsToReturn.length === 0) {
+        setReturnError('Debes ingresar al menos una cantidad mayor a cero en los productos a devolver.');
+        return;
+      }
+
+      const finalReason = returnReason === 'OTRO' ? customReturnReason : returnReason;
+      if (!finalReason) {
+        setReturnError('Por favor especifica el motivo de la devolución.');
+        return;
+      }
+
+      try {
+        setSubmittingReturn(true);
+        setReturnError(null);
+
+        await (api.invoices as any).createReturn(invoice.id, {
+          items: itemsToReturn.map(it => ({
+            productId: it.productId,
+            name: it.name,
+            quantity: it.returnQty,
+            unitPrice: it.unitPrice,
+            stockAction: it.stockAction,
+            reason: finalReason
+          })),
+          reason: finalReason,
+          notes: returnNotes || undefined,
+          returnDate: new Date().toISOString()
+        });
+
+        alert('Devolución registrada exitosamente. El inventario y saldos han sido actualizados.');
+        setIsReturnModalOpen(false);
+        await loadInvoice();
+      } catch (err: any) {
+        console.error(err);
+        setReturnError(err.response?.data?.error?.message || err.message || 'Error registrando la devolución');
+      } finally {
+        setSubmittingReturn(false);
+      }
+   };
 
   const handleUpdateDispatchStatus = async (newStatus: 'PENDING_DISPATCH' | 'DISPATCHED' | 'DELIVERED') => {
      if (!invoice || updatingDispatch) return;
@@ -900,6 +1038,17 @@ export default function InvoiceDetailsPage() {
                 <Copy size={13} /> Duplicar
              </button>
 
+             {/* Botón Registrar Devolución / Reverso */}
+             {invoice.status !== 'DRAFT' && invoice.status !== 'CANCELLED' && (
+                <button 
+                   onClick={openReturnModal}
+                   className="flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 rounded text-xs font-semibold transition cursor-pointer shadow-2xs"
+                   title="Registrar devolución parcial o total de productos (reversa de stock y ajuste de saldo)"
+                >
+                   <RotateCcw size={13} /> Registrar Devolución
+                </button>
+             )}
+
               {/* Edit Button if open, posted or draft (and unpaid) */}
               {(invoice.status === 'OPEN' || invoice.status === 'DRAFT' || (invoice.status === 'POSTED' && Number(invoice.outstanding) === Number(invoice.total))) && (
                  <button 
@@ -1094,6 +1243,61 @@ export default function InvoiceDetailsPage() {
                 <ExternalLink size={12} />
               </button>
             )}
+          </div>
+        )}
+
+        {/* Banner de Devoluciones / Reversos Registrados */}
+        {invoice.hasReturns && invoice.returns && invoice.returns.length > 0 && (
+          <div className="bg-rose-50 border border-rose-200 text-rose-950 px-4 py-3.5 rounded-xl shadow-xs space-y-2">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <RotateCcw className="w-4 h-4 text-rose-600 shrink-0" />
+                <span className="font-bold text-xs uppercase tracking-wide text-rose-900">
+                  {invoice.type === 'INVOICE' ? 'Devoluciones de Cliente Registradas' : 'Devoluciones a Proveedor Registradas'} ({invoice.returns.length})
+                </span>
+              </div>
+              <span className="text-[11px] font-semibold bg-rose-200/70 text-rose-800 px-2 py-0.5 rounded-md">
+                Logística Inversa Activa
+              </span>
+            </div>
+            
+            <div className="divide-y divide-rose-200/60 text-xs">
+              {invoice.returns.map((ret: any, idx: number) => (
+                <div key={idx} className="py-2 first:pt-1 last:pb-0 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                  <div>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono font-bold text-rose-700 bg-white px-1.5 py-0.5 rounded border border-rose-300">
+                        {ret.returnCode}
+                      </span>
+                      <span className="font-semibold text-gray-800">
+                        {ret.isTotalReturn ? 'Devolución Total' : 'Devolución Parcial'}
+                      </span>
+                      {ret.creditNoteCode && (
+                        <span className="text-[11px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded font-medium border border-emerald-300">
+                          {ret.creditNoteCode}
+                        </span>
+                      )}
+                    </div>
+                    <p className="text-gray-600 mt-1">
+                      <span className="font-medium text-gray-700">Motivo:</span> {ret.reason} {ret.notes ? `(${ret.notes})` : ''}
+                    </p>
+                    {ret.items && (
+                      <p className="text-[11px] text-gray-500 mt-0.5">
+                        Ítems: {ret.items.map((it: any) => `${it.quantity}x ${it.name} [${it.stockAction === 'RESTOCK' ? '+Stock' : (it.stockAction === 'QUARANTINE' ? 'Cuarentena' : 'Salida')}]`).join(', ')}
+                      </p>
+                    )}
+                  </div>
+                  <div className="text-right shrink-0">
+                    <span className="font-bold font-mono text-rose-700 text-sm">
+                      -{formatCurrency(ret.amount * conversionFactor, displayCurrency)}
+                    </span>
+                    <span className="block text-[10px] text-gray-400">
+                      {new Date(ret.returnDate || ret.createdAt).toLocaleDateString('es-VE')}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         )}
       </div>
@@ -1778,7 +1982,7 @@ export default function InvoiceDetailsPage() {
                      />
                   </div>
 
-                  <div className="pt-3 border-t border-gray-150 flex justify-end gap-2.5">
+                   <div className="pt-3 border-t border-gray-150 flex justify-end gap-2.5">
                      <button 
                         type="button"
                         onClick={() => setIsIssueInvoiceModalOpen(false)}
@@ -1800,6 +2004,243 @@ export default function InvoiceDetailsPage() {
                            <>
                               <CheckCircle size={14} />
                               <span>Emitir Factura Oficial</span>
+                           </>
+                        )}
+                     </button>
+                  </div>
+               </form>
+            </div>
+         </div>
+      )}
+
+      {/* Modal Registrar Devolución (Parcial o Total) */}
+      {isReturnModalOpen && invoice && (
+         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-3 sm:p-4 backdrop-blur-xs print:hidden animate-in fade-in">
+            <div className="bg-white rounded-2xl max-w-2xl w-full p-5 sm:p-6 shadow-2xl border border-gray-100 max-h-[92vh] flex flex-col overflow-hidden">
+               
+               {/* Modal Header */}
+               <div className="flex justify-between items-start pb-3 border-b border-gray-100 shrink-0">
+                  <div className="flex items-center gap-2.5">
+                     <div className="w-9 h-9 rounded-xl bg-rose-50 border border-rose-200 flex items-center justify-center text-rose-600 shrink-0">
+                        <RotateCcw size={18} />
+                     </div>
+                     <div>
+                        <h3 className="text-base font-bold text-gray-900">
+                           {invoice.type === 'INVOICE' ? 'Registrar Devolución de Cliente' : 'Registrar Devolución a Proveedor'}
+                        </h3>
+                        <p className="text-xs text-gray-500">Documento: #{invoice.code} &bull; {contactName}</p>
+                     </div>
+                  </div>
+                  <button 
+                     onClick={() => setIsReturnModalOpen(false)}
+                     className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 transition"
+                  >
+                     ✕
+                  </button>
+               </div>
+
+               {/* Modal Body (Scrollable) */}
+               <form onSubmit={handleConfirmReturn} className="flex-1 overflow-y-auto pr-1 py-4 space-y-4">
+                  {returnError && (
+                     <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg flex items-center gap-2">
+                        <AlertTriangle size={14} className="shrink-0" />
+                        <span>{returnError}</span>
+                     </div>
+                  )}
+
+                  {/* Motivo de la Devolución */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                     <div>
+                        <label className="block text-xs font-semibold text-gray-700 mb-1">
+                           Motivo de la Devolución *
+                        </label>
+                        <select
+                           value={returnReason}
+                           onChange={(e) => setReturnReason(e.target.value)}
+                           className="w-full border border-gray-300 px-3 py-2 rounded-lg text-xs bg-white focus:ring-2 focus:ring-rose-500 outline-none text-gray-800"
+                        >
+                           {invoice.type === 'INVOICE' ? (
+                              <>
+                                 <option value="Mercancía defectuosa / Dañada">Mercancía defectuosa / Dañada</option>
+                                 <option value="Garantía de producto">Garantía de producto</option>
+                                 <option value="Error en despacho (Ítem incorrecto)">Error en despacho (Ítem incorrecto)</option>
+                                 <option value="Desistimiento / Cancelación de cliente">Desistimiento / Cancelación de cliente</option>
+                                 <option value="Empaque roto durante transporte">Empaque roto durante transporte</option>
+                                 <option value="OTRO">Otro motivo personalizado...</option>
+                              </>
+                           ) : (
+                              <>
+                                 <option value="Rechazo en recepción / Empaque averiado">Rechazo en recepción / Empaque averiado</option>
+                                 <option value="No coincide con la Orden de Compra">No coincide con la Orden de Compra</option>
+                                 <option value="Defecto de calidad o falla de fábrica">Defecto de calidad o falla de fábrica</option>
+                                 <option value="Fecha de vencimiento próxima o caducada">Fecha de vencimiento próxima o caducada</option>
+                                 <option value="Sobredespacho no solicitado">Sobredespacho no solicitado</option>
+                                 <option value="OTRO">Otro motivo personalizado...</option>
+                              </>
+                           )}
+                        </select>
+                     </div>
+
+                     {returnReason === 'OTRO' && (
+                        <div>
+                           <label className="block text-xs font-semibold text-gray-700 mb-1">
+                              Especifique el motivo *
+                           </label>
+                           <input
+                              type="text"
+                              required
+                              value={customReturnReason}
+                              onChange={(e) => setCustomReturnReason(e.target.value)}
+                              placeholder="Ej. Cambio por modelo superior acordado"
+                              className="w-full border border-gray-300 px-3 py-2 rounded-lg text-xs focus:ring-2 focus:ring-rose-500 outline-none text-gray-800"
+                           />
+                        </div>
+                     )}
+
+                     <div>
+                        <label className="block text-xs font-semibold text-gray-700 mb-1">
+                           Observaciones adicionales
+                        </label>
+                        <input
+                           type="text"
+                           value={returnNotes}
+                           onChange={(e) => setReturnNotes(e.target.value)}
+                           placeholder="Detalles de inspección, nro de guía, etc."
+                           className="w-full border border-gray-300 px-3 py-2 rounded-lg text-xs focus:ring-2 focus:ring-rose-500 outline-none text-gray-800"
+                        />
+                     </div>
+                  </div>
+
+                  {/* Tabla de Productos con selección Parcial o Total */}
+                  <div className="border border-gray-200 rounded-xl overflow-hidden">
+                     <div className="bg-gray-50 px-3 py-2 border-b border-gray-200 flex items-center justify-between">
+                        <span className="text-xs font-bold text-gray-700 uppercase tracking-wide">
+                           Selección de Productos a Devolver
+                        </span>
+                        <div className="flex items-center gap-2">
+                           <button
+                              type="button"
+                              onClick={handleReturnAll}
+                              className="text-[11px] font-semibold text-rose-600 hover:text-rose-800 hover:underline cursor-pointer"
+                           >
+                              Devolver Todo (Total)
+                           </button>
+                           <span className="text-gray-300">|</span>
+                           <button
+                              type="button"
+                              onClick={handleClearReturn}
+                              className="text-[11px] font-semibold text-gray-500 hover:text-gray-700 hover:underline cursor-pointer"
+                           >
+                              Limpiar
+                           </button>
+                        </div>
+                     </div>
+
+                     <div className="divide-y divide-gray-100 max-h-60 overflow-y-auto">
+                        {returnItemsState.map((item, idx) => (
+                           <div key={idx} className={`p-3 transition ${item.returnQty > 0 ? 'bg-rose-50/40' : 'bg-white'}`}>
+                              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                                 <div className="flex-1 min-w-0">
+                                    <p className="text-xs font-bold text-gray-900 truncate">{item.name}</p>
+                                    <p className="text-[11px] text-gray-500">
+                                       Despachado: <span className="font-semibold text-gray-700">{item.originalQty}</span> | Ya devuelto: <span className="text-rose-600 font-semibold">{item.alreadyReturned}</span> | Remanente disponible: <span className="font-bold text-emerald-700">{item.remainingQty}</span>
+                                    </p>
+                                 </div>
+
+                                 <div className="flex items-center gap-3 shrink-0">
+                                    {/* Destino de Stock (Solo ventas) */}
+                                    {invoice.type === 'INVOICE' && (
+                                       <div className="text-right">
+                                          <label className="block text-[10px] text-gray-400 uppercase font-semibold">Destino</label>
+                                          <select
+                                             value={item.stockAction}
+                                             onChange={(e) => handleReturnActionChange(idx, e.target.value as any)}
+                                             className="text-[11px] border border-gray-200 rounded px-2 py-1 bg-white focus:ring-1 focus:ring-rose-500 outline-none font-medium text-gray-700"
+                                          >
+                                             <option value="RESTOCK">Reingreso a Stock Vendible</option>
+                                             <option value="QUARANTINE">Cuarentena / Averías (No vendible)</option>
+                                             <option value="NONE">Sin impacto en stock</option>
+                                          </select>
+                                       </div>
+                                    )}
+
+                                    {/* Input de Cantidad */}
+                                    <div className="text-right">
+                                       <label className="block text-[10px] text-gray-400 uppercase font-semibold">Cant. a Devolver</label>
+                                       <div className="flex items-center gap-1">
+                                          <input
+                                             type="number"
+                                             min="0"
+                                             max={item.remainingQty}
+                                             step="1"
+                                             disabled={item.remainingQty <= 0}
+                                             value={item.returnQty}
+                                             onChange={(e) => handleReturnQtyChange(idx, Number(e.target.value))}
+                                             className={`w-20 border px-2 py-1 rounded text-center font-mono font-bold text-xs outline-none focus:ring-2 focus:ring-rose-500 ${item.returnQty > 0 ? 'border-rose-400 bg-white text-rose-700' : 'border-gray-200 bg-gray-50 text-gray-600'}`}
+                                          />
+                                          <button
+                                             type="button"
+                                             disabled={item.remainingQty <= 0}
+                                             onClick={() => handleReturnQtyChange(idx, item.remainingQty)}
+                                             className="text-[10px] bg-gray-100 hover:bg-gray-200 text-gray-700 px-1.5 py-1 rounded font-medium border border-gray-200 cursor-pointer disabled:opacity-40"
+                                             title="Devolver todo de este ítem"
+                                          >
+                                             Max
+                                          </button>
+                                       </div>
+                                    </div>
+                                 </div>
+                              </div>
+                           </div>
+                        ))}
+                     </div>
+                  </div>
+
+                  {/* Resumen del Valor a Devolver */}
+                  {(() => {
+                     const totalReturnAmt = returnItemsState.reduce((sum, it) => sum + (it.returnQty * it.unitPrice), 0);
+                     const totalReturnUnits = returnItemsState.reduce((sum, it) => sum + it.returnQty, 0);
+                     return (
+                        <div className="bg-rose-50/80 border border-rose-200 rounded-xl p-3 text-xs flex items-center justify-between text-rose-950">
+                           <div>
+                              <span className="font-bold">Total a Devolver: </span>
+                              <span>{totalReturnUnits} unidades seleccionadas</span>
+                           </div>
+                           <div className="text-right">
+                              <span className="text-sm font-bold font-mono text-rose-700">
+                                 {formatCurrency(totalReturnAmt * conversionFactor, displayCurrency)}
+                              </span>
+                              <span className="block text-[10px] text-rose-600">
+                                 {invoice.type === 'INVOICE' ? 'Generará Nota de Crédito' : 'Disminuirá Cuenta por Pagar'}
+                              </span>
+                           </div>
+                        </div>
+                     );
+                  })()}
+
+                  {/* Footer con Acciones */}
+                  <div className="pt-3 border-t border-gray-150 flex justify-end gap-2.5 shrink-0">
+                     <button
+                        type="button"
+                        onClick={() => setIsReturnModalOpen(false)}
+                        className="px-4 py-2 text-gray-600 hover:text-gray-800 text-xs font-medium transition rounded-lg hover:bg-gray-100"
+                     >
+                        Cancelar
+                     </button>
+                     <button
+                        type="submit"
+                        disabled={submittingReturn || returnItemsState.every(it => it.returnQty === 0)}
+                        className="px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-lg text-xs font-semibold transition flex items-center gap-1.5 shadow-sm disabled:opacity-50 cursor-pointer"
+                     >
+                        {submittingReturn ? (
+                           <>
+                              <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                              <span>Procesando Devolución...</span>
+                           </>
+                        ) : (
+                           <>
+                              <RotateCcw size={14} />
+                              <span>Confirmar y Procesar Devolución</span>
                            </>
                         )}
                      </button>

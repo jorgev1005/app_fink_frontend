@@ -7,13 +7,13 @@ import {
     X, FileText, Truck, Receipt, DollarSign, ArrowDown, ChevronRight, 
     ChevronDown, CheckCircle2, Clock, AlertCircle, ExternalLink, 
     Download, RefreshCw, Layers, GitFork, ArrowRight, Eye, Calendar,
-    Building2, User, PackageCheck, ShoppingBag
+    Building2, User, PackageCheck, ShoppingBag, Undo2, RotateCcw
 } from 'lucide-react';
 
 interface TraceNode {
     id: string;
-    type: 'COTIZACION' | 'ORDEN_COMPRA' | 'FACTURA_COMPRA' | 'NOTA_ENTREGA' | 'FACTURA_VENTA' | 'PAGO_COBRO';
-    stream: 'COMMERCIAL' | 'LOGISTICS' | 'FINANCIAL';
+    type: 'COTIZACION' | 'ORDEN_COMPRA' | 'FACTURA_COMPRA' | 'NOTA_ENTREGA' | 'FACTURA_VENTA' | 'PAGO_COBRO' | 'DEVOLUCION_VENTA' | 'DEVOLUCION_COMPRA' | 'NOTA_CREDITO';
+    stream: 'COMMERCIAL' | 'LOGISTICS' | 'FINANCIAL' | 'REVERSE';
     code: string;
     title: string;
     subtitle: string;
@@ -138,6 +138,8 @@ export default function TraceabilityModal({ isOpen, onClose, initialDocCode }: T
 
     const getNodeStreamBadge = (stream: string) => {
         switch (stream) {
+            case 'REVERSE':
+                return <span className="text-[10px] bg-rose-100 text-rose-800 font-bold px-2 py-0.5 rounded-full border border-rose-300">🔴 LOGÍSTICA INVERSA</span>;
             case 'LOGISTICS':
                 return <span className="text-[10px] bg-purple-100 text-purple-800 font-bold px-2 py-0.5 rounded-full border border-purple-200">🟢 VÍA LOGÍSTICA</span>;
             case 'FINANCIAL':
@@ -162,6 +164,12 @@ export default function TraceabilityModal({ isOpen, onClose, initialDocCode }: T
                 return <Receipt className="w-5 h-5 text-blue-600" />;
             case 'PAGO_COBRO':
                 return <DollarSign className="w-5 h-5 text-emerald-600" />;
+            case 'DEVOLUCION_VENTA':
+                return <RotateCcw className="w-5 h-5 text-rose-600" />;
+            case 'DEVOLUCION_COMPRA':
+                return <Undo2 className="w-5 h-5 text-amber-600" />;
+            case 'NOTA_CREDITO':
+                return <DollarSign className="w-5 h-5 text-teal-600" />;
             default:
                 return <Layers className="w-5 h-5 text-gray-600" />;
         }

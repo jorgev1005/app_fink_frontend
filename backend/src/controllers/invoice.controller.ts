@@ -1137,7 +1137,9 @@ export const getInvoices = async (req: Request, res: Response) => {
               invoicedAsCode: parsed.invoicedAsCode || undefined,
               invoicedAsId: parsed.invoicedAsId || undefined,
               sourceDeliveryNoteCode: parsed.sourceDeliveryNoteCode || undefined,
-              sourceDeliveryNoteId: parsed.sourceDeliveryNoteId || undefined
+              sourceDeliveryNoteId: parsed.sourceDeliveryNoteId || undefined,
+              returns: parsed.returns || [],
+              hasReturns: Boolean(parsed.returns && parsed.returns.length > 0)
             };
           }
         }
@@ -1247,7 +1249,9 @@ export const getInvoiceById = async (req: Request, res: Response) => {
         invoicedAsCode: parsedLinesData.invoicedAsCode || null,
         invoicedAt: parsedLinesData.invoicedAt || null,
         sourceDeliveryNoteId: parsedLinesData.sourceDeliveryNoteId || null,
-        sourceDeliveryNoteCode: parsedLinesData.sourceDeliveryNoteCode || null
+        sourceDeliveryNoteCode: parsedLinesData.sourceDeliveryNoteCode || null,
+        returns: parsedLinesData.returns || [],
+        hasReturns: Boolean(parsedLinesData.returns && parsedLinesData.returns.length > 0)
       } 
     });
   } catch (error: any) {
@@ -1494,3 +1498,273 @@ export const getInvoicePdf = async (req: Request, res: Response) => {
     return res.status(500).json({ success: false, error: { message: err.message } });
   }
 };
+
+export async function getNextReturnCode(projectId: string, isCustomerReturn: boolean): Promise<string> {
+  const prefix = isCustomerReturn ? 'DEV-CLI' : 'DEV-PROV';
+  
+  // Buscar devoluciones existentes en el proyecto
+  const lastInvoices = await prisma.invoice.findMany({
+    where: {
+      projectId,
+      code: { startsWith: prefix }
+    },
+    orderBy: { createdAt: 'desc' },
+    take: 50
+  });
+
+  let maxNum = 0;
+  for (const inv of lastInvoices) {
+    const match = inv.code.trim().match(/(\d+)$/);
+    if (match) {
+      const val = parseInt(match[1], 10);
+      if (val > maxNum) {
+        maxNum = val;
+      }
+    }
+  }
+
+  let candidate = `${prefix}-${String(maxNum + 1).padStart(4, '0')}`;
+  while (await prisma.invoice.findUnique({ where: { code: candidate } })) {
+    maxNum++;
+    candidate = `${prefix}-${String(maxNum).padStart(4, '0')}`;
+  }
+
+  return candidate;
+}
+
+export const createInvoiceReturn = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const user = (req as any).user;
+    const { 
+      items, // Array<{ productId?: string; name: string; quantity: number; unitPrice: number; reason: string; stockAction: 'RESTOCK' | 'QUARANTINE' | 'NONE' }>
+      reason, // Motivo general
+      notes,
+      creditNoteCode, // Código de Nota de Crédito/Débito opcional
+      returnDate
+    } = req.body;
+
+    const sourceDoc = await prisma.invoice.findUnique({
+      where: { id },
+      include: {
+        project: true
+      }
+    });
+
+    if (!sourceDoc) {
+      return res.status(404).json({ success: false, error: { message: 'Documento original no encontrado' } });
+    }
+
+    const hasAccess = await checkProjectWriteAccess(user, sourceDoc.projectId);
+    if (!hasAccess) {
+      return res.status(403).json({ success: false, error: { message: 'No tienes permisos para registrar devoluciones en este proyecto' } });
+    }
+
+    if (!Array.isArray(items) || items.length === 0) {
+      return res.status(400).json({ success: false, error: { message: 'Debe especificar al menos un ítem a devolver con su cantidad' } });
+    }
+
+    // Parsear líneas y devoluciones previas del documento origen
+    let sourceLines: any = { items: [] };
+    try {
+      if (sourceDoc.lines) {
+        sourceLines = typeof sourceDoc.lines === 'string' ? JSON.parse(sourceDoc.lines) : sourceDoc.lines;
+        if (Array.isArray(sourceLines)) {
+          sourceLines = { items: sourceLines };
+        }
+      }
+    } catch (_) {
+      sourceLines = { items: [] };
+    }
+
+    const originalItems = sourceLines.items || [];
+    const previousReturns: any[] = sourceLines.returns || [];
+
+    // Calcular cuántas unidades ya se han devuelto de cada producto
+    const returnedQtyByItem: Record<string, number> = {};
+    previousReturns.forEach(ret => {
+      if (Array.isArray(ret.items)) {
+        ret.items.forEach((it: any) => {
+          const key = it.productId || it.name || it.description;
+          returnedQtyByItem[key] = (returnedQtyByItem[key] || 0) + Number(it.quantity || 0);
+        });
+      }
+    });
+
+    // Validar cantidades a devolver contra lo facturado/despachado remanente
+    let returnSubtotal = 0;
+    const validatedItems: any[] = [];
+
+    for (const item of items) {
+      const qtyToReturn = Number(item.quantity || 0);
+      if (qtyToReturn <= 0) continue;
+
+      const itemKey = item.productId || item.name || item.description;
+      // Buscar en items originales
+      const orig = originalItems.find((oi: any) => (oi.productId && oi.productId === item.productId) || oi.name === item.name || oi.description === item.name);
+      
+      const originalQty = orig ? Number(orig.quantity || 0) : qtyToReturn;
+      const alreadyReturned = returnedQtyByItem[itemKey] || 0;
+      const remainingAvailable = Math.max(0, originalQty - alreadyReturned);
+
+      if (qtyToReturn > remainingAvailable && remainingAvailable > 0) {
+        return res.status(400).json({
+          success: false,
+          error: {
+            message: `La cantidad a devolver (${qtyToReturn}) para "${item.name || itemKey}" excede la cantidad remanente disponible (${remainingAvailable}).`
+          }
+        });
+      }
+
+      const unitPrice = Number(item.unitPrice || orig?.unitPrice || orig?.price || 0);
+      const subtotal = Number(item.subtotal || (qtyToReturn * unitPrice));
+      returnSubtotal += subtotal;
+
+      validatedItems.push({
+        productId: item.productId || orig?.productId || null,
+        name: item.name || orig?.name || orig?.description || 'Producto',
+        quantity: qtyToReturn,
+        unitPrice,
+        subtotal,
+        unit: item.unit || orig?.unit || 'UNIDAD',
+        reason: item.reason || reason || 'Devolución de mercancía',
+        stockAction: item.stockAction || 'RESTOCK' // RESTOCK, QUARANTINE, NONE
+      });
+    }
+
+    if (validatedItems.length === 0) {
+      return res.status(400).json({ success: false, error: { message: 'No se indicaron cantidades válidas mayores a cero para devolver' } });
+    }
+
+    const isCustomerReturn = sourceDoc.type === 'INVOICE';
+    const returnCode = await getNextReturnCode(sourceDoc.projectId, isCustomerReturn);
+    const returnDateObj = returnDate ? new Date(returnDate) : new Date();
+
+    // Determinar si la devolución es parcial o total comparando cantidades globales
+    let totalOriginalQty = 0;
+    originalItems.forEach((oi: any) => { totalOriginalQty += Number(oi.quantity || 0); });
+
+    let totalReturnedSoFar = 0;
+    Object.values(returnedQtyByItem).forEach(q => { totalReturnedSoFar += q; });
+    validatedItems.forEach(vi => { totalReturnedSoFar += vi.quantity; });
+
+    const isTotalReturn = totalOriginalQty > 0 && totalReturnedSoFar >= totalOriginalQty;
+
+    const returnRecord = {
+      returnCode,
+      sourceDocId: sourceDoc.id,
+      sourceDocCode: sourceDoc.code,
+      sourceType: sourceDoc.type,
+      isCustomerReturn,
+      returnDate: returnDateObj.toISOString(),
+      isTotalReturn,
+      reason: reason || 'Devolución de mercancía',
+      notes: notes || '',
+      amount: returnSubtotal,
+      currency: sourceDoc.currency,
+      items: validatedItems,
+      creditNoteCode: creditNoteCode || (isCustomerReturn ? `NC-${returnCode.replace('DEV-CLI-', '')}` : `ND-${returnCode.replace('DEV-PROV-', '')}`),
+      createdBy: user.id,
+      createdAt: new Date().toISOString()
+    };
+
+    // Operación transaccional
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Ajustar Inventario de productos según el destino seleccionado
+      for (const it of validatedItems) {
+        if (it.productId && it.productId !== 'CUSTOM') {
+          const qty = Number(it.quantity);
+
+          if (isCustomerReturn) {
+            // DEVOLUCIÓN DE CLIENTE:
+            // Si el stockAction es 'RESTOCK', reingresa al inventario vendible (+ stock)
+            // Si es 'QUARANTINE', el producto entra a averías/cuarentena sin inflar el disponible
+            if (it.stockAction === 'RESTOCK') {
+              await tx.product.update({
+                where: { id: it.productId },
+                data: { stock: { increment: qty } }
+              });
+            }
+          } else {
+            // DEVOLUCIÓN A PROVEEDOR (COMPRAS):
+            // La mercancía sale del almacén hacia el proveedor (- stock)
+            if (it.stockAction !== 'NONE') {
+              await tx.product.update({
+                where: { id: it.productId },
+                data: { stock: { decrement: qty } }
+              });
+            }
+          }
+        }
+      }
+
+      // 2. Actualizar documento origen (guardar historial de devoluciones y ajustar saldo/estado)
+      const updatedReturnsList = [...previousReturns, returnRecord];
+      const updatedSourceLines = {
+        ...sourceLines,
+        returns: updatedReturnsList,
+        hasReturns: true,
+        lastReturnAt: returnRecord.createdAt
+      };
+
+      // Si el saldo pendiente era mayor a 0, rebajarlo con el valor de la devolución
+      const newOutstanding = Math.max(0, Number(sourceDoc.outstanding || 0) - returnSubtotal);
+      
+      let newStatus = sourceDoc.status;
+      if (isTotalReturn) {
+        newStatus = 'CANCELLED';
+      }
+
+      const updatedSourceDoc = await tx.invoice.update({
+        where: { id: sourceDoc.id },
+        data: {
+          lines: JSON.stringify(updatedSourceLines),
+          outstanding: newOutstanding,
+          status: newStatus,
+          notes: [sourceDoc.notes, `Devolución ${returnCode} registrada (${isTotalReturn ? 'Total' : 'Parcial'} por ${returnSubtotal.toFixed(2)} ${sourceDoc.currency})`].filter(Boolean).join(' | ')
+        }
+      });
+
+      return {
+        returnRecord,
+        updatedSourceDoc
+      };
+    });
+
+    // Registrar en log de auditoría
+    try {
+      const { logActivity } = await import('../services/activityLog.service');
+      await logActivity(
+        user.id,
+        'CREATE',
+        'InvoiceReturn',
+        result.returnRecord.returnCode,
+        `Registro de devolución ${result.returnRecord.returnCode} para ${sourceDoc.code} (${isTotalReturn ? 'TOTAL' : 'PARCIAL'})`,
+        {
+          sourceDocId: sourceDoc.id,
+          sourceDocCode: sourceDoc.code,
+          returnAmount: returnSubtotal,
+          currency: sourceDoc.currency,
+          isCustomerReturn,
+          isTotalReturn,
+          itemsCount: validatedItems.length
+        },
+        req.ip,
+        req.headers['user-agent'] as string
+      );
+    } catch (e) {
+      console.error('Error logActivity return:', e);
+    }
+
+    return res.status(201).json({
+      success: true,
+      data: result.returnRecord,
+      message: `Devolución ${result.returnRecord.returnCode} registrada exitosamente.`
+    });
+
+  } catch (error: any) {
+    console.error('[createInvoiceReturn] Error:', error);
+    return res.status(500).json({ success: false, error: { message: error.message || 'Error al procesar devolución' } });
+  }
+};
+

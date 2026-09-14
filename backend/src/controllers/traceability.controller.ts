@@ -4,8 +4,8 @@ import { loadAllQuotes } from './quotation.controller';
 
 interface TraceNode {
   id: string;
-  type: 'COTIZACION' | 'ORDEN_COMPRA' | 'FACTURA_COMPRA' | 'NOTA_ENTREGA' | 'FACTURA_VENTA' | 'PAGO_COBRO';
-  stream: 'COMMERCIAL' | 'LOGISTICS' | 'FINANCIAL';
+  type: 'COTIZACION' | 'ORDEN_COMPRA' | 'FACTURA_COMPRA' | 'NOTA_ENTREGA' | 'FACTURA_VENTA' | 'PAGO_COBRO' | 'DEVOLUCION_VENTA' | 'DEVOLUCION_COMPRA' | 'NOTA_CREDITO';
+  stream: 'COMMERCIAL' | 'LOGISTICS' | 'FINANCIAL' | 'REVERSE';
   code: string;
   title: string;
   subtitle: string;
@@ -595,7 +595,86 @@ export const getTraceability = async (req: Request, res: Response) => {
       });
     });
 
-    // 6. Vincular childrenIds en cada nodo padre
+    // NODO 6: REVERSOS Y DEVOLUCIONES (Logística Inversa)
+    clusterInvoices.forEach(inv => {
+      const meta = parseInvoiceMeta(inv);
+      if (meta.returns && Array.isArray(meta.returns) && meta.returns.length > 0) {
+        const parentDocId = inv.code?.toUpperCase().startsWith('NE') 
+          ? `node-ne-${inv.code || inv.id}` 
+          : (inv.type === 'BILL' ? `node-bill-${inv.code || inv.id}` : `node-fac-${inv.code || inv.id}`);
+
+        meta.returns.forEach((ret: any, rIdx: number) => {
+          const retNodeId = `node-ret-${ret.returnCode || `${inv.code}-RET-${rIdx + 1}`}`;
+          const isCust = ret.isCustomerReturn ?? (inv.type === 'INVOICE');
+          const isTot = Boolean(ret.isTotalReturn);
+          const contact = resolveContact(inv, meta);
+
+          const retItems = Array.isArray(ret.items) ? ret.items.map((it: any) => ({
+            name: it.name || 'Producto devuelto',
+            quantity: Number(it.quantity || 1),
+            unitPrice: Number(it.unitPrice || 0),
+            subtotal: Number(it.subtotal || 0),
+            unit: it.unit || 'UNIDAD'
+          })) : [];
+
+          // Nodo de Devolución
+          nodes.push({
+            id: retNodeId,
+            type: isCust ? 'DEVOLUCION_VENTA' : 'DEVOLUCION_COMPRA',
+            stream: 'REVERSE',
+            code: ret.returnCode,
+            title: isCust ? `Devolución de Cliente (${isTot ? 'TOTAL' : 'PARCIAL'})` : `Devolución / Rechazo a Proveedor (${isTot ? 'TOTAL' : 'PARCIAL'})`,
+            subtitle: isCust ? 'Mercancía retornada por cliente / Reingreso o Cuarentena' : 'Mercancía regresada a proveedor / Salida de almacén',
+            status: isTot ? 'DEVUELTO_TOTAL' : 'DEVUELTO_PARCIAL',
+            statusLabel: isTot ? '🔴 Devolución TOTAL' : '🟠 Devolución PARCIAL',
+            statusBadge: isTot ? 'bg-rose-100 text-rose-800 border-rose-300 font-bold' : 'bg-amber-100 text-amber-800 border-amber-300 font-bold',
+            date: ret.returnDate || ret.createdAt || new Date().toISOString(),
+            amount: Number(ret.amount || 0),
+            currency: ret.currency || inv.currency || 'USD',
+            contactName: contact.name,
+            contactTaxId: contact.taxId || '',
+            items: retItems,
+            details: {
+              motivo: ret.reason || 'Sin motivo especificado',
+              notas: ret.notes || null,
+              tipoDevolucion: isTot ? 'Total' : 'Parcial',
+              documentoOrigen: inv.code,
+              notaCreditoAsociada: ret.creditNoteCode || null
+            },
+            parentId: parentDocId,
+            childrenIds: []
+          });
+
+          // Si generó Nota de Crédito / Débito, crear un subnodo financiero
+          if (ret.creditNoteCode) {
+            const ncNodeId = `node-nc-${ret.creditNoteCode}`;
+            nodes.push({
+              id: ncNodeId,
+              type: 'NOTA_CREDITO',
+              stream: 'FINANCIAL',
+              code: ret.creditNoteCode,
+              title: isCust ? 'Nota de Crédito Financiera' : 'Nota de Débito / Ajuste a Proveedor',
+              subtitle: isCust ? 'Ajuste de saldo a favor del cliente' : 'Disminución de cuenta por pagar a proveedor',
+              status: 'EMITIDA',
+              statusLabel: 'Ajuste Contable Aplicado',
+              statusBadge: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+              date: ret.returnDate || ret.createdAt || new Date().toISOString(),
+              amount: Number(ret.amount || 0),
+              currency: ret.currency || inv.currency || 'USD',
+              contactName: contact.name,
+              details: {
+                montoAjuste: Number(ret.amount || 0),
+                amparaDevolucion: ret.returnCode
+              },
+              parentId: retNodeId,
+              childrenIds: []
+            });
+          }
+        });
+      }
+    });
+
+    // 7. Vincular childrenIds en cada nodo padre
     nodes.forEach(n => {
       if (n.parentId) {
         const parent = nodes.find(p => p.id === n.parentId);
