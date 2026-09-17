@@ -549,14 +549,32 @@ export default function TraceabilityModal({ isOpen, onClose, initialDocCode }: T
                             <div className="divide-y divide-slate-200">
                                 {(() => {
                                     // Agrupar items por nombre de producto
-                                    const itemMap = new Map<string, { name: string; quoted: number; dispatched: number; invoiced: number; unitPrice: number }>();
+                                    const itemMap = new Map<string, { 
+                                        name: string; 
+                                        quoted: number; 
+                                        ordered: number;
+                                        billed: number;
+                                        dispatched: number; 
+                                        invoiced: number; 
+                                        unitPrice: number 
+                                    }>();
                                     
                                     data.nodes.forEach(node => {
                                         if (node.items) {
                                             node.items.forEach(it => {
                                                 const key = it.name.trim().toUpperCase();
-                                                const current = itemMap.get(key) || { name: it.name, quoted: 0, dispatched: 0, invoiced: 0, unitPrice: it.unitPrice || 0 };
+                                                const current = itemMap.get(key) || { 
+                                                    name: it.name, 
+                                                    quoted: 0, 
+                                                    ordered: 0,
+                                                    billed: 0,
+                                                    dispatched: 0, 
+                                                    invoiced: 0, 
+                                                    unitPrice: it.unitPrice || 0 
+                                                };
                                                 if (node.type === 'COTIZACION') current.quoted += it.quantity;
+                                                if (node.type === 'ORDEN_COMPRA') current.ordered += it.quantity;
+                                                if (node.type === 'FACTURA_COMPRA') current.billed += it.quantity;
                                                 if (node.type === 'NOTA_ENTREGA') current.dispatched += it.quantity;
                                                 if (node.type === 'FACTURA_VENTA') current.invoiced += it.quantity;
                                                 if (it.unitPrice) current.unitPrice = it.unitPrice;
@@ -570,40 +588,64 @@ export default function TraceabilityModal({ isOpen, onClose, initialDocCode }: T
                                         return <div className="p-8 text-center text-slate-500 text-xs">No hay ítems detallados para contrastar.</div>;
                                     }
 
+                                    const hasPurchases = rows.some(r => r.ordered > 0 || r.billed > 0);
+
                                     return (
-                                        <table className="min-w-full divide-y divide-slate-200 text-xs">
-                                            <thead className="bg-slate-50 text-slate-500 font-semibold uppercase">
-                                                <tr>
-                                                    <th className="px-4 py-2.5 text-left">Producto / Descripción</th>
-                                                    <th className="px-3 py-2.5 text-right">Cotizado</th>
-                                                    <th className="px-3 py-2.5 text-right">Despachado (NE)</th>
-                                                    <th className="px-3 py-2.5 text-right">Facturado (Fac)</th>
-                                                    <th className="px-4 py-2.5 text-center">Estado Conciliación</th>
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-slate-100 font-medium">
-                                                {rows.map((row, rIdx) => {
-                                                    const isBalanced = (row.dispatched >= row.quoted && row.quoted > 0) || (row.invoiced >= row.dispatched && row.dispatched > 0);
-                                                    return (
-                                                        <tr key={rIdx} className="hover:bg-slate-50">
-                                                            <td className="px-4 py-3 text-slate-800 font-medium">{row.name}</td>
-                                                            <td className="px-3 py-3 text-right font-mono text-sky-700 font-bold">{row.quoted} uds</td>
-                                                            <td className="px-3 py-3 text-right font-mono text-purple-700 font-bold">{row.dispatched} uds</td>
-                                                            <td className="px-3 py-3 text-right font-mono text-blue-700 font-bold">{row.invoiced} uds</td>
-                                                            <td className="px-4 py-3 text-center">
-                                                                {row.dispatched >= row.quoted && row.quoted > 0 ? (
-                                                                    <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold">✓ 100% Despachado</span>
-                                                                ) : row.dispatched > 0 ? (
-                                                                    <span className="text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-bold">Despacho Parcial</span>
-                                                                ) : (
-                                                                    <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">Pendiente</span>
+                                        <div className="overflow-x-auto">
+                                            <table className="min-w-full divide-y divide-slate-200 text-xs">
+                                                <thead className="bg-slate-50 text-slate-500 font-semibold uppercase">
+                                                    <tr>
+                                                        <th className="px-4 py-2.5 text-left">Producto / Descripción</th>
+                                                        {hasPurchases && <th className="px-3 py-2.5 text-right">O.C. Compra</th>}
+                                                        {hasPurchases && <th className="px-3 py-2.5 text-right">Fact. Compra</th>}
+                                                        <th className="px-3 py-2.5 text-right">Cotizado</th>
+                                                        <th className="px-3 py-2.5 text-right">Despachado (NE)</th>
+                                                        <th className="px-3 py-2.5 text-right">Facturado (Fac)</th>
+                                                        <th className="px-4 py-2.5 text-center">Estado</th>
+                                                    </tr>
+                                                </thead>
+                                                <tbody className="divide-y divide-slate-100 font-medium">
+                                                    {rows.map((row, rIdx) => {
+                                                        const isBalanced = (row.dispatched >= row.quoted && row.quoted > 0) || (row.invoiced >= row.dispatched && row.dispatched > 0) || (row.billed >= row.ordered && row.ordered > 0);
+                                                        return (
+                                                            <tr key={rIdx} className="hover:bg-slate-50">
+                                                                <td className="px-4 py-3 text-slate-800 font-medium">{row.name}</td>
+                                                                {hasPurchases && (
+                                                                    <td className="px-3 py-3 text-right font-mono text-indigo-700 font-bold">
+                                                                        {row.ordered > 0 ? `${row.ordered} uds` : '-'}
+                                                                    </td>
                                                                 )}
-                                                            </td>
-                                                        </tr>
-                                                    );
-                                                })}
-                                            </tbody>
-                                        </table>
+                                                                {hasPurchases && (
+                                                                    <td className="px-3 py-3 text-right font-mono text-orange-700 font-bold">
+                                                                        {row.billed > 0 ? `${row.billed} uds` : '-'}
+                                                                    </td>
+                                                                )}
+                                                                <td className="px-3 py-3 text-right font-mono text-sky-700 font-bold">
+                                                                    {row.quoted > 0 ? `${row.quoted} uds` : '-'}
+                                                                </td>
+                                                                <td className="px-3 py-3 text-right font-mono text-purple-700 font-bold">
+                                                                    {row.dispatched > 0 ? `${row.dispatched} uds` : '-'}
+                                                                </td>
+                                                                <td className="px-3 py-3 text-right font-mono text-blue-700 font-bold">
+                                                                    {row.invoiced > 0 ? `${row.invoiced} uds` : '-'}
+                                                                </td>
+                                                                <td className="px-4 py-3 text-center">
+                                                                    {hasPurchases && row.ordered > 0 && row.billed >= row.ordered ? (
+                                                                        <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold">✓ Compra Facturada</span>
+                                                                    ) : row.dispatched >= row.quoted && row.quoted > 0 ? (
+                                                                        <span className="text-[10px] bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full font-bold">✓ 100% Despachado</span>
+                                                                    ) : row.dispatched > 0 ? (
+                                                                        <span className="text-[10px] bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full font-bold">Despacho Parcial</span>
+                                                                    ) : (
+                                                                        <span className="text-[10px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">En Proceso</span>
+                                                                    )}
+                                                                </td>
+                                                            </tr>
+                                                        );
+                                                    })}
+                                                </tbody>
+                                            </table>
+                                        </div>
                                     );
                                 })()}
                             </div>

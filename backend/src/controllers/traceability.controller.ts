@@ -168,24 +168,33 @@ export const getTraceability = async (req: Request, res: Response) => {
       }
     }
 
-    // Expandir referencias cruzadas entre Notas de Entrega y Facturas
+    // Expandir referencias cruzadas entre Notas de Entrega, Facturas y Órdenes de Compra
     const neCodesToSearch: string[] = [];
     const invCodesToSearch: string[] = [];
+    const poCodesToSearch: string[] = [];
 
     clusterInvoices.forEach(inv => {
       const meta = parseInvoiceMeta(inv);
       if (meta.invoicedAsCode) invCodesToSearch.push(meta.invoicedAsCode);
       if (meta.invoicedAsId) invCodesToSearch.push(meta.invoicedAsId);
+      if (meta.convertedToBillCode) invCodesToSearch.push(meta.convertedToBillCode);
+      if (meta.convertedToBillId) invCodesToSearch.push(meta.convertedToBillId);
+      if (meta.sourcePurchaseOrderCode) poCodesToSearch.push(meta.sourcePurchaseOrderCode);
+      if (meta.sourcePurchaseOrderId) poCodesToSearch.push(meta.sourcePurchaseOrderId);
+      if (inv.purchaseOrder) poCodesToSearch.push(inv.purchaseOrder);
       if (meta.sourceDeliveryNoteCode) neCodesToSearch.push(meta.sourceDeliveryNoteCode);
       if (meta.sourceDeliveryNoteId) neCodesToSearch.push(meta.sourceDeliveryNoteId);
     });
 
-    if (neCodesToSearch.length > 0 || invCodesToSearch.length > 0) {
+    const allSearchKeys = [...neCodesToSearch, ...invCodesToSearch, ...poCodesToSearch].filter(Boolean);
+
+    if (allSearchKeys.length > 0) {
       const moreInvoices = await prisma.invoice.findMany({
         where: {
           OR: [
-            { id: { in: [...neCodesToSearch, ...invCodesToSearch] } },
-            { code: { in: [...neCodesToSearch, ...invCodesToSearch] } }
+            { id: { in: allSearchKeys } },
+            { code: { in: allSearchKeys } },
+            { purchaseOrder: { in: allSearchKeys } }
           ]
         },
         include: {
@@ -354,9 +363,45 @@ export const getTraceability = async (req: Request, res: Response) => {
     // NODO 3: FACTURAS DE COMPRA (Recepción de mercancía de proveedores)
     bills.forEach((bill) => {
       const billId = `node-bill-${bill.code || bill.id}`;
-      const parentPo = purchaseOrders.length > 0 ? `node-po-${purchaseOrders[0].code || purchaseOrders[0].id}` : (quote ? rootNodeId : null);
       const meta = parseInvoiceMeta(bill);
       const contact = resolveContact(bill, meta);
+
+      // Ítems de la factura de compra
+      const items = Array.isArray(meta?.items) ? meta.items.map((i: any) => ({
+        name: i.name || i.description || 'Artículo de compra',
+        quantity: Number(i.quantity || 1),
+        unitPrice: Number(i.unitPrice || 0),
+        subtotal: Number(i.total || (i.quantity * i.unitPrice) || 0),
+        unit: i.unit || 'UNIDAD'
+      })) : [];
+
+      // Vincular con su Orden de Compra de origen
+      const poCode = meta.sourcePurchaseOrderCode || bill.purchaseOrder;
+      const matchedPo = poCode ? purchaseOrders.find(p => p.code?.toLowerCase() === poCode.toLowerCase() || p.id === meta.sourcePurchaseOrderId) : null;
+      const parentPo = matchedPo ? `node-po-${matchedPo.code || matchedPo.id}` : (purchaseOrders.length > 0 ? `node-po-${purchaseOrders[0].code || purchaseOrders[0].id}` : (quote ? rootNodeId : null));
+
+      if (!rootNodeId && !parentPo) {
+        rootNodeId = billId;
+      }
+
+      // Buscar pagos / abonos aplicados a esta Factura de Compra
+      const billPayments: any[] = [];
+      if (bill.payments && Array.isArray(bill.payments)) {
+        bill.payments.forEach((alloc: any) => {
+          if (alloc.payment) {
+            billPayments.push({
+              code: alloc.payment.code,
+              amount: Number(alloc.allocatedAmount || alloc.payment.amount || 0),
+              currency: alloc.payment.currency || 'USD',
+              date: alloc.payment.date ? alloc.payment.date.toISOString() : new Date().toISOString(),
+              method: alloc.payment.method,
+              reference: alloc.payment.reference,
+              account: alloc.payment.account?.name || 'Caja / Banco',
+              receiptUrl: `/receipts/transaction/${alloc.payment.transactionId || alloc.payment.id}`
+            });
+          }
+        });
+      }
 
       nodes.push({
         id: billId,
@@ -372,14 +417,44 @@ export const getTraceability = async (req: Request, res: Response) => {
         amount: Number(bill.total || 0),
         currency: bill.currency || 'USD',
         contactName: contact.name,
+        items,
         details: {
           vencimiento: bill.dueDate ? bill.dueDate.toISOString() : null,
-          saldoPendiente: Number(bill.outstanding || 0)
+          saldoPendiente: Number(bill.outstanding || 0),
+          ordenCompraOrigen: meta.sourcePurchaseOrderCode || bill.purchaseOrder || null,
+          pagosRegistrados: billPayments
         },
         parentId: parentPo,
         childrenIds: [],
         docId: bill.id,
         pdfUrl: `/backend-api/api/invoices/${bill.id}/pdf`
+      });
+
+      // Crear subnodos para cada pago a proveedor
+      billPayments.forEach((p, pIdx) => {
+        const payNodeId = `node-pay-bill-${bill.code}-${pIdx}`;
+        nodes.push({
+          id: payNodeId,
+          type: 'PAGO_COBRO',
+          stream: 'FINANCIAL',
+          code: p.code || `PAGO-PROV-${pIdx + 1}`,
+          title: 'Pago a Proveedor',
+          subtitle: `Egreso de fondos vía ${p.method || 'Transferencia'} (${p.account})`,
+          status: 'COMPLETED',
+          statusLabel: 'Pago Aplicado',
+          statusBadge: 'bg-emerald-100 text-emerald-800 border-emerald-300',
+          date: p.date,
+          amount: p.amount,
+          currency: p.currency,
+          contactName: contact.name,
+          details: {
+            cuenta: p.account,
+            referencia: p.reference || 'S/R',
+            metodo: p.method
+          },
+          parentId: billId,
+          childrenIds: []
+        });
       });
     });
 
