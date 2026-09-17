@@ -119,8 +119,8 @@ export default function ProductAutocomplete({
         className={`relative p-2.5 bg-blue-50/90 border border-blue-300/80 rounded-xl text-xs transition-all shadow-sm group hover:border-blue-400 ${className}`}
         title={selectedProduct.name}
       >
-        <div className="flex items-start justify-between gap-2">
-          <div className="min-w-0 flex-1 space-y-1">
+        <div className="flex flex-wrap sm:flex-nowrap items-start justify-between gap-2">
+          <div className="min-w-[140px] flex-1 space-y-1">
             <div className="flex items-center gap-1.5 flex-wrap">
               {selectedProduct.sku && (
                 <span className="bg-blue-600 text-white font-mono font-bold text-[10px] px-1.5 py-0.5 rounded shadow-xs shrink-0">
@@ -135,7 +135,7 @@ export default function ProductAutocomplete({
             </div>
             
             {/* Nombre completo sin truncar */}
-            <p className="font-bold text-slate-900 text-xs leading-snug whitespace-normal break-words">
+            <p className="font-bold text-slate-900 text-xs leading-snug whitespace-normal break-normal">
               {selectedProduct.name}
             </p>
 

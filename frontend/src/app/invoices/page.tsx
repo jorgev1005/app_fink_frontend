@@ -10,7 +10,7 @@ import {
     ShoppingCart, Truck, Plus, Eye, Download, Filter, 
     RefreshCw, ExternalLink, ArrowUpRight, DollarSign,
     Package, Check, ArrowRight, Receipt, FileSpreadsheet,
-    HelpCircle, ShieldAlert, GitFork, RotateCcw, Undo2
+    HelpCircle, ShieldAlert, GitFork, RotateCcw, Undo2, Trash2
 } from 'lucide-react';
 import TraceabilityModal from '@/components/TraceabilityModal';
 
@@ -761,8 +761,8 @@ function InvoicesPageContent() {
                 </div>
             ) : (
                 <div className="space-y-2">
-                    {/* Barra de desplazamiento rápido */}
-                    <div className="flex items-center justify-between bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg text-xs text-slate-600">
+                    {/* Barra de desplazamiento rápido - Solo visible en Escritorio */}
+                    <div className="hidden md:flex items-center justify-between bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg text-xs text-slate-600">
                         <div className="flex items-center gap-1.5 font-medium">
                             <ArrowLeftRight className="w-3.5 h-3.5 text-blue-600" />
                             <span>Desplazamiento horizontal de tabla:</span>
@@ -798,7 +798,309 @@ function InvoicesPageContent() {
                         </div>
                     </div>
 
-                    <div className="bg-white shadow-xs border border-gray-200 rounded-xl overflow-hidden relative">
+                    {/* VISTA MÓVIL: Tarjetas individuales para pantallas pequeñas */}
+                    <div className="md:hidden space-y-3">
+                        {filteredDocs.map(doc => {
+                            const isNE = doc.docCategory === 'DELIVERY_NOTE';
+                            const isSaleInvoice = doc.docCategory === 'INVOICE';
+                            const isQuote = doc.docCategory === 'QUOTATION';
+                            const isPO = doc.docCategory === 'PURCHASE_ORDER';
+                            const isBill = doc.docCategory === 'BILL';
+                            const isPos = doc.docCategory === 'POS';
+                            const dueInfo = calculateDueStatus(doc.dueDate, doc.status);
+
+                            return (
+                                <div 
+                                    key={`mobile_${doc.code}_${doc.rawId}`}
+                                    className="bg-white rounded-xl border border-gray-200 p-3.5 shadow-xs space-y-2.5"
+                                >
+                                    {/* Encabezado: Código, Tipo y Estado */}
+                                    <div className="flex items-start justify-between gap-2">
+                                        <div className="flex flex-col gap-1">
+                                            <div className="flex items-center gap-1.5 flex-wrap">
+                                                {isNE && (
+                                                    <span className="text-[10px] bg-purple-100 text-purple-800 font-bold px-1.5 py-0.5 rounded border border-purple-200">
+                                                        NOTA ENTREGA
+                                                    </span>
+                                                )}
+                                                {isSaleInvoice && (
+                                                    <span className="text-[10px] bg-blue-100 text-blue-800 font-bold px-1.5 py-0.5 rounded border border-blue-200">
+                                                        FACTURA
+                                                    </span>
+                                                )}
+                                                {isQuote && (
+                                                    <span className="text-[10px] bg-sky-100 text-sky-800 font-bold px-1.5 py-0.5 rounded border border-sky-200">
+                                                        COTIZACIÓN
+                                                    </span>
+                                                )}
+                                                {isPO && (
+                                                    <span className="text-[10px] bg-indigo-100 text-indigo-800 font-bold px-1.5 py-0.5 rounded border border-indigo-200">
+                                                        ORDEN COMPRA
+                                                    </span>
+                                                )}
+                                                {isBill && (
+                                                    <span className="text-[10px] bg-orange-100 text-orange-800 font-bold px-1.5 py-0.5 rounded border border-orange-200">
+                                                        COMPRA PROV.
+                                                    </span>
+                                                )}
+                                                {isPos && (
+                                                    <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded border border-emerald-200">
+                                                        CAJA POS
+                                                    </span>
+                                                )}
+                                                <span className="font-bold text-gray-900 font-mono text-sm">
+                                                    {doc.code}
+                                                </span>
+                                            </div>
+                                        </div>
+
+                                        {/* Estado Comercial */}
+                                        <div className="shrink-0">
+                                            {isQuote ? (
+                                                <span className={`px-2 py-0.5 inline-flex text-[10px] font-semibold rounded-full items-center ${
+                                                    doc.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-800' :
+                                                    doc.status === 'REJECTED' ? 'bg-rose-100 text-rose-800' :
+                                                    ['INVOICED', 'FULLY_INVOICED', 'PARTIALLY_INVOICED', 'PO_GENERATED'].includes(doc.status) ? 'bg-indigo-100 text-indigo-800' :
+                                                    'bg-amber-100 text-amber-800'
+                                                }`}>
+                                                    {doc.status === 'APPROVED' ? 'APROBADA' :
+                                                     doc.status === 'REJECTED' ? 'RECHAZADA' :
+                                                     doc.status === 'FULLY_INVOICED' ? 'DESPACHO TOTAL' :
+                                                     doc.status === 'PARTIALLY_INVOICED' ? 'DESPACHO PARCIAL' :
+                                                     doc.status === 'INVOICED' ? 'FACTURADA' :
+                                                     'EN EVALUACIÓN'}
+                                                </span>
+                                            ) : (
+                                                <span className={`px-2 py-0.5 inline-flex text-[10px] font-semibold rounded-full items-center ${
+                                                    doc.status === 'PAID' ? 'bg-emerald-100 text-emerald-800' : 
+                                                    doc.status === 'PARTIALLY_PAID' ? 'bg-amber-100 text-amber-800 border border-amber-300' :
+                                                    doc.status === 'POSTED' || doc.status === 'OPEN' ? ((isPO || isBill) ? 'bg-orange-100 text-orange-800' : 'bg-blue-100 text-blue-800') : 
+                                                    doc.status === 'CANCELLED' ? 'bg-red-100 text-red-800' :
+                                                    'bg-gray-100 text-gray-800'
+                                                }`}>
+                                                    {
+                                                        doc.status === 'POSTED' || doc.status === 'OPEN' ? ((isPO || isBill) ? 'POR PAGAR' : 'POR COBRAR') : 
+                                                        doc.status === 'PAID' ? ((isPO || isBill) ? 'PAGADA' : 'COBRADA') : 
+                                                        doc.status === 'PARTIALLY_PAID' ? 'ABONADA' :
+                                                        doc.status === 'DRAFT' ? 'BORRADOR' : doc.status
+                                                    }
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Sub-badges de trazabilidad si existen */}
+                                    {(Boolean(isNE && doc.invoicedAsCode) || Boolean(isSaleInvoice && doc.sourceDeliveryNoteCode) || Boolean(doc.purchaseOrder && doc.purchaseOrder.startsWith('COT-')) || Boolean(doc.hasReturns && doc.returns && doc.returns.length > 0) || Boolean(isQuote && doc.relatedInvoices && doc.relatedInvoices.length > 0)) && (
+                                        <div className="flex flex-wrap gap-1.5 pt-0.5">
+                                            {isNE && doc.invoicedAsCode && (
+                                                <Link 
+                                                    href={`/invoices/${doc.invoicedAsId || ''}`}
+                                                    className="text-[10px] bg-indigo-50 text-indigo-700 font-mono font-bold px-1.5 py-0.5 rounded border border-indigo-200 flex items-center gap-1"
+                                                >
+                                                    <Receipt className="w-2.5 h-2.5 text-indigo-600" />
+                                                    <span>Fac: #{doc.invoicedAsCode}</span>
+                                                </Link>
+                                            )}
+                                            {isSaleInvoice && doc.sourceDeliveryNoteCode && (
+                                                <Link
+                                                    href={`/invoices/${doc.sourceDeliveryNoteId || ''}`}
+                                                    className="text-[10px] bg-purple-50 text-purple-700 font-mono font-bold px-1.5 py-0.5 rounded border border-purple-200 flex items-center gap-1"
+                                                >
+                                                    <Truck className="w-2.5 h-2.5 text-purple-600" />
+                                                    <span>NE: #{doc.sourceDeliveryNoteCode}</span>
+                                                </Link>
+                                            )}
+                                            {doc.purchaseOrder && doc.purchaseOrder.startsWith('COT-') && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setSearch(doc.purchaseOrder)}
+                                                    className="text-[10px] bg-slate-50 text-slate-700 font-mono px-1.5 py-0.5 rounded border border-slate-200 flex items-center gap-1"
+                                                >
+                                                    <FileText className="w-2.5 h-2.5 text-slate-500" />
+                                                    <span>Cotiz: {doc.purchaseOrder}</span>
+                                                </button>
+                                            )}
+                                            {doc.hasReturns && doc.returns && doc.returns.length > 0 && (
+                                                <span className="text-[10px] bg-rose-100 text-rose-800 font-bold px-1.5 py-0.5 rounded border border-rose-300 flex items-center gap-1">
+                                                    <RotateCcw className="w-2.5 h-2.5" />
+                                                    <span>DEV: {doc.returns.map((r: any) => r.returnCode).join(', ')}</span>
+                                                </span>
+                                            )}
+                                            {isQuote && doc.relatedInvoices && doc.relatedInvoices.map((rel: any) => (
+                                                <Link
+                                                    key={rel.id || rel.code}
+                                                    href={`/invoices/${rel.id}`}
+                                                    className="text-[9.5px] bg-emerald-50 text-emerald-700 font-mono font-bold px-1.5 py-0.5 rounded border border-emerald-200 flex items-center gap-1"
+                                                >
+                                                    <span>{rel.code?.startsWith('NE') ? '🚚' : '📄'}</span>
+                                                    <span>{rel.code}</span>
+                                                </Link>
+                                            ))}
+                                        </div>
+                                    )}
+
+                                    {/* Datos del Cliente y Proyecto */}
+                                    <div className="bg-slate-50/80 p-2.5 rounded-lg border border-slate-100 text-xs space-y-1">
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-gray-500 text-[11px]">Contacto:</span>
+                                            <span className="font-semibold text-gray-900 text-right truncate max-w-[200px]">
+                                                {doc.contactName}
+                                            </span>
+                                        </div>
+                                        {doc.taxId && (
+                                            <div className="flex items-center justify-between text-[10px] text-gray-400 font-mono">
+                                                <span>RIF / ID:</span>
+                                                <span>{doc.taxId}</span>
+                                            </div>
+                                        )}
+                                        <div className="flex items-center justify-between">
+                                            <span className="text-gray-500 text-[11px]">Proyecto:</span>
+                                            <span className="text-gray-700 font-medium bg-white px-1.5 py-0.5 rounded border border-gray-200 text-[10px]">
+                                                📁 {doc.projectName}
+                                            </span>
+                                        </div>
+                                        <div className="flex items-center justify-between pt-0.5">
+                                            <span className="text-gray-500 text-[11px]">Emisión:</span>
+                                            <span className="text-gray-700 font-mono text-[11px]">
+                                                {doc.issueDate ? new Date(doc.issueDate).toLocaleDateString('es-VE') : '-'}
+                                            </span>
+                                        </div>
+                                        {doc.dueDate && (
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-gray-500 text-[11px]">Vence:</span>
+                                                <div className="flex items-center gap-1">
+                                                    <span className="text-gray-700 font-mono text-[11px]">
+                                                        {new Date(doc.dueDate).toLocaleDateString('es-VE')}
+                                                    </span>
+                                                    {dueInfo && (
+                                                        <span className={`px-1 py-0.2 rounded text-[9px] border ${dueInfo.badgeClass}`}>
+                                                            {dueInfo.label}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Montos y Despacho */}
+                                    <div className="flex items-center justify-between pt-1 border-t border-gray-100">
+                                        <div>
+                                            <span className="text-[10px] text-gray-400 block uppercase font-medium">Monto Total</span>
+                                            <div className="font-mono font-bold text-gray-900 text-base">
+                                                {Number(doc.total).toLocaleString('es-VE', { minimumFractionDigits: 2 })} {doc.currency}
+                                            </div>
+                                            {(isPO || isBill) && doc.status !== 'PAID' && (
+                                                <div className="text-[10px] text-amber-600 font-mono">
+                                                    Pend: {Number(doc.outstanding).toLocaleString('es-VE', { minimumFractionDigits: 2 })}
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Estado Logístico compacto en móvil */}
+                                        <div className="text-right">
+                                            {isNE ? (
+                                                <div className="flex flex-col items-end gap-0.5">
+                                                    {doc.dispatchStatus === 'DELIVERED' && (
+                                                        <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded-full border border-emerald-200">
+                                                            ✓ Entregada
+                                                        </span>
+                                                    )}
+                                                    {doc.dispatchStatus === 'DISPATCHED' && (
+                                                        <span className="text-[10px] bg-blue-100 text-blue-800 font-bold px-1.5 py-0.5 rounded-full border border-blue-200">
+                                                            🚚 Despachada
+                                                        </span>
+                                                    )}
+                                                    {(!doc.dispatchStatus || doc.dispatchStatus === 'PENDING_DISPATCH') && (
+                                                        <span className="text-[10px] bg-amber-50 text-amber-700 font-medium px-1.5 py-0.5 rounded-full border border-amber-200">
+                                                            🕒 Pend. Despacho
+                                                        </span>
+                                                    )}
+                                                    {doc.invoicedAsCode ? (
+                                                        <span className="text-[9px] text-indigo-700 font-medium">
+                                                            Facturada (#{doc.invoicedAsCode})
+                                                        </span>
+                                                    ) : (
+                                                        <span className="text-[9px] text-orange-600 font-medium">
+                                                            Sin factura
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            ) : isSaleInvoice && doc.sourceDeliveryNoteCode ? (
+                                                <span className="text-[10px] bg-purple-50 text-purple-700 font-medium px-1.5 py-0.5 rounded-full border border-purple-200">
+                                                    🚚 NE #{doc.sourceDeliveryNoteCode}
+                                                </span>
+                                            ) : isQuote && doc.dispatchMetrics ? (
+                                                <div className="text-[10px] text-gray-500 font-mono">
+                                                    {doc.dispatchMetrics.totalDispatchedUnits}/{doc.dispatchMetrics.totalQuotedUnits} uds
+                                                </div>
+                                            ) : null}
+                                        </div>
+                                    </div>
+
+                                    {/* Botonera de Acciones en Móvil */}
+                                    <div className="flex items-center gap-1.5 pt-1 border-t border-gray-100">
+                                        <button
+                                            type="button"
+                                            onClick={() => openTraceModal(doc.code)}
+                                            className="flex-1 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 cursor-pointer transition"
+                                            title="Ver trazabilidad"
+                                        >
+                                            <GitFork className="w-3.5 h-3.5 text-purple-600" />
+                                            <span>Trazabilidad</span>
+                                        </button>
+
+                                        {isQuote ? (
+                                            <Link 
+                                                href={`/quotations?search=${encodeURIComponent(doc.code)}`}
+                                                className="px-3 py-1.5 text-sky-700 bg-sky-50 border border-sky-200 rounded-lg text-xs font-semibold text-center hover:bg-sky-100 transition"
+                                            >
+                                                Ver
+                                            </Link>
+                                        ) : (
+                                            <Link 
+                                                href={`/invoices/${doc.rawId}`}
+                                                className="px-3 py-1.5 text-blue-700 bg-blue-50 border border-blue-200 rounded-lg text-xs font-semibold text-center hover:bg-blue-100 transition"
+                                            >
+                                                Ver
+                                            </Link>
+                                        )}
+
+                                        <button
+                                            type="button"
+                                            onClick={() => isQuote ? window.open(`/backend-api/api/quotations/${doc.code}/pdf`, '_blank') : window.open(`/backend-api/api/invoices/${doc.rawId}/pdf`, '_blank')}
+                                            className="px-3 py-1.5 text-slate-700 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold hover:bg-slate-100 transition cursor-pointer"
+                                        >
+                                            PDF
+                                        </button>
+
+                                        {isNE && !doc.invoicedAsCode && (
+                                            <Link
+                                                href={`/invoices/${doc.rawId}`}
+                                                className="px-2.5 py-1.5 text-emerald-700 bg-emerald-50 border border-emerald-300 rounded-lg text-xs font-bold flex items-center gap-1 hover:bg-emerald-100 transition"
+                                                title="Facturar nota"
+                                            >
+                                                <Receipt className="w-3 h-3" />
+                                                <span>Facturar</span>
+                                            </Link>
+                                        )}
+
+                                        {!isQuote && (
+                                            <button 
+                                                onClick={() => handleDelete(doc.rawId)}
+                                                className="p-1.5 text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition cursor-pointer"
+                                                title="Eliminar documento"
+                                            >
+                                                <Trash2 className="w-3.5 h-3.5" />
+                                            </button>
+                                        )}
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    {/* VISTA ESCRITORIO: Tabla tradicional completa con scroll horizontal */}
+                    <div className="hidden md:block bg-white shadow-xs border border-gray-200 rounded-xl overflow-hidden relative">
                         <div ref={tableContainerRef} className="overflow-x-auto scroll-smooth">
                             <table className="min-w-full divide-y divide-gray-200">
                                 <thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider">
@@ -1166,8 +1468,8 @@ function InvoicesPageContent() {
                         </div>
                     </div>
 
-                    {/* Barra flotante inferior de scroll horizontal rápido */}
-                    <div className="sticky bottom-3 z-20 flex justify-center pointer-events-none mt-2">
+                    {/* Barra flotante inferior de scroll horizontal rápido - Solo en escritorio */}
+                    <div className="hidden md:flex sticky bottom-3 z-20 justify-center pointer-events-none mt-2">
                         <div className="bg-slate-900/40 hover:bg-slate-900/95 active:bg-slate-900/95 backdrop-blur-xs hover:backdrop-blur-md text-white px-4 py-2 rounded-full shadow-md hover:shadow-2xl flex items-center gap-3 border border-slate-700/40 hover:border-slate-700/90 pointer-events-auto text-xs font-medium opacity-30 hover:opacity-100 focus-within:opacity-100 transition-all duration-300 ease-in-out cursor-pointer select-none">
                             <span className="text-slate-300 flex items-center gap-1.5">
                                 <ArrowLeftRight className="w-3.5 h-3.5 text-blue-400" />

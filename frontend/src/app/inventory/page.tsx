@@ -883,10 +883,85 @@ export default function InventoryPage() {
         </div>
       </div>
 
-      {/* Table */}
-      <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+      {/* VISTA MÓVIL: Tarjetas de productos para teléfonos */}
+      <div className="md:hidden space-y-3">
+        {loading ? (
+          <div className="p-8 text-center text-slate-400 bg-white rounded-xl border border-slate-200">Cargando productos...</div>
+        ) : sortProducts(filteredProducts).length === 0 ? (
+          <div className="p-8 text-center text-slate-400 bg-white rounded-xl border border-slate-200">No se encontraron productos</div>
+        ) : (
+          sortProducts(filteredProducts).map((product) => (
+            <div key={product.id} className="bg-white rounded-xl p-3.5 border border-slate-200 shadow-xs space-y-2.5">
+              <div className="flex items-start justify-between gap-2">
+                <div className="flex-1">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className="font-semibold text-slate-800 text-sm break-normal">{product.name}</span>
+                    {product.division && (
+                      <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-slate-100 text-slate-600 rounded">
+                        {product.division}
+                      </span>
+                    )}
+                  </div>
+                  {product.description && (
+                    <div className="text-xs text-slate-500 mt-1 line-clamp-2">{product.description}</div>
+                  )}
+                </div>
+                <span className={`px-2 py-0.5 rounded-full text-xs font-bold shrink-0 ${product.stock > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
+                  {product.stock} {product.unit || 'UND'}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between text-xs bg-slate-50/70 p-2 rounded-lg border border-slate-100">
+                <div>
+                  <span className="text-slate-400 text-[10px] block">SKU:</span>
+                  <span className="font-mono text-slate-600 font-medium">{product.sku || '-'}</span>
+                </div>
+                <div className="text-right">
+                  <span className="text-slate-400 text-[10px] block">Precio Unitario:</span>
+                  <span className="font-bold text-slate-900 font-mono text-sm">
+                    {new Intl.NumberFormat('es-VE', { style: 'currency', currency: product.currency === 'BS' ? 'VES' : 'USD' }).format(product.unitPrice)}
+                  </span>
+                  <span className="text-[10px] text-slate-400 ml-1">
+                    ({product.taxable ? `${product.taxRate}% IVA` : 'Exento'})
+                  </span>
+                </div>
+              </div>
+
+              {/* Botones de acción táctiles en móvil */}
+              <div className="flex items-center justify-end gap-2 pt-1 border-t border-slate-100">
+                <button 
+                  onClick={() => openTransferModal(product)}
+                  className="px-2.5 py-1.5 text-xs text-amber-700 bg-amber-50 hover:bg-amber-100 border border-amber-200 rounded-lg flex items-center gap-1 font-medium transition cursor-pointer"
+                  title="Traspasar inventario"
+                >
+                  <ArrowRightLeft size={14} />
+                  <span>Traspasar</span>
+                </button>
+                <button 
+                  onClick={() => openModal(product)}
+                  className="px-2.5 py-1.5 text-xs text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 rounded-lg flex items-center gap-1 font-medium transition cursor-pointer"
+                  title="Editar"
+                >
+                  <Edit2 size={14} />
+                  <span>Editar</span>
+                </button>
+                <button 
+                  onClick={() => handleDelete(product.id)}
+                  className="p-1.5 text-red-600 bg-red-50 hover:bg-red-100 border border-red-200 rounded-lg transition cursor-pointer"
+                  title="Eliminar"
+                >
+                  <Trash2 size={14} />
+                </button>
+              </div>
+            </div>
+          ))
+        )}
+      </div>
+
+      {/* Table (Escritorio) */}
+      <div className="hidden md:block bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm text-left">
+          <table className="w-full text-sm text-left min-w-[750px]">
             <thead className="bg-slate-50 text-slate-500 font-medium border-b border-slate-200">
               <tr>
                 <th className="p-4 cursor-pointer select-none" onClick={() => { setSortBy('name'); setSortDir(sortBy === 'name' && sortDir === 'asc' ? 'desc' : 'asc'); }}>Producto {sortBy === 'name' && (sortDir === 'asc' ? '▲' : '▼')}</th>

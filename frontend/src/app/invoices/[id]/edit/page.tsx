@@ -603,64 +603,150 @@ export default function EditInvoicePage() {
                                 <Package size={16} className="text-blue-500" /> Items del Documento
                             </h4>
                             <div className="space-y-3">
-                                <div className="grid grid-cols-12 gap-2 text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1 px-1">
+                                {/* Header solo visible en pantallas sm (tabletas/desktop) */}
+                                <div className="hidden sm:grid grid-cols-12 gap-2 text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1 px-1">
                                     <div className="col-span-5">Producto / Servicio</div>
                                     <div className="col-span-2 text-center">Cant.</div>
                                     <div className="col-span-3 text-right">Precio Unit.</div>
                                     <div className="col-span-2 text-right">Total</div>
                                 </div>
                                 {lines.map((line) => (
-                                    <div key={line.id} className="grid grid-cols-12 gap-2 items-start group">
-                                        <div className="col-span-5 space-y-1">
-                                            <ProductAutocomplete
-                                                products={products}
-                                                value={line.productId}
-                                                customName={line.name}
-                                                onSelect={(prod) => {
-                                                    if (prod) {
+                                    <div key={line.id}>
+                                        {/* Versión Desktop / Tablet (sm en adelante) */}
+                                        <div className="hidden sm:grid grid-cols-12 gap-2 items-start group">
+                                            <div className="col-span-5 space-y-1">
+                                                <ProductAutocomplete
+                                                    products={products}
+                                                    value={line.productId}
+                                                    customName={line.name}
+                                                    onSelect={(prod) => {
+                                                        if (prod) {
+                                                            updateLineMultiple(line.id, {
+                                                                productId: prod.id,
+                                                                name: prod.name,
+                                                                price: prod.unitPrice || 0
+                                                            });
+                                                        } else {
+                                                            updateLineMultiple(line.id, {
+                                                                productId: 'CUSTOM'
+                                                            });
+                                                        }
+                                                    }}
+                                                    onCustomChange={(custom) => {
                                                         updateLineMultiple(line.id, {
-                                                            productId: prod.id,
-                                                            name: prod.name,
-                                                            price: prod.unitPrice || 0
+                                                            productId: 'CUSTOM',
+                                                            name: custom
                                                         });
-                                                    } else {
+                                                    }}
+                                                    placeholder="Buscar por nombre, SKU, código..."
+                                                />
+                                                <input 
+                                                    className="w-full mt-1 p-1 text-[11px] border-b border-dashed border-slate-200 focus:border-blue-300 outline-none bg-transparent text-gray-500 placeholder:text-slate-300"
+                                                    placeholder="Anotación / Comentario opcional de línea..."
+                                                    value={line.notes || ''}
+                                                    onChange={(e) => updateLine(line.id, 'notes', e.target.value)}
+                                                />
+                                            </div>
+                                            <div className="col-span-2">
+                                                <input 
+                                                    type="number" className="w-full p-2 text-sm text-center bg-white border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-100"
+                                                    min="1" value={line.quantity} onChange={(e) => updateLine(line.id, 'quantity', Number(e.target.value))}
+                                                />
+                                            </div>
+                                            <div className="col-span-3">
+                                                <input 
+                                                    type="number" className="w-full p-2 text-sm text-right bg-white border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-100"
+                                                    min="0" step="0.01" value={line.price} onChange={(e) => updateLine(line.id, 'price', Number(e.target.value))}
+                                                />
+                                            </div>
+                                            <div className="col-span-2 flex items-center justify-end gap-1">
+                                                <span className="text-sm font-bold text-slate-700">{Number(line.total).toFixed(2)}</span>
+                                                <button type="button" onClick={() => removeLine(line.id)} className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100">
+                                                    <Trash2 size={14} />
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        {/* Versión Móvil (Teléfono: < sm) - Tarjeta estructurada con ancho completo */}
+                                        <div className="block sm:hidden p-3 bg-slate-50/80 border border-slate-200/90 rounded-xl space-y-2.5 shadow-2xs">
+                                            <div>
+                                                <div className="flex items-center justify-between mb-1">
+                                                    <span className="text-[10.5px] font-bold text-slate-500 uppercase tracking-wide">
+                                                        Producto / Servicio
+                                                    </span>
+                                                    <button 
+                                                        type="button" 
+                                                        onClick={() => removeLine(line.id)} 
+                                                        className="p-1 text-slate-400 hover:text-red-600 hover:bg-red-50 rounded-md transition-colors"
+                                                        title="Eliminar este ítem"
+                                                    >
+                                                        <Trash2 size={15} />
+                                                    </button>
+                                                </div>
+                                                <ProductAutocomplete
+                                                    products={products}
+                                                    value={line.productId}
+                                                    customName={line.name}
+                                                    onSelect={(prod) => {
+                                                        if (prod) {
+                                                            updateLineMultiple(line.id, {
+                                                                productId: prod.id,
+                                                                name: prod.name,
+                                                                price: prod.unitPrice || 0
+                                                            });
+                                                        } else {
+                                                            updateLineMultiple(line.id, {
+                                                                productId: 'CUSTOM'
+                                                            });
+                                                        }
+                                                    }}
+                                                    onCustomChange={(custom) => {
                                                         updateLineMultiple(line.id, {
-                                                            productId: 'CUSTOM'
+                                                            productId: 'CUSTOM',
+                                                            name: custom
                                                         });
-                                                    }
-                                                }}
-                                                onCustomChange={(custom) => {
-                                                    updateLineMultiple(line.id, {
-                                                        productId: 'CUSTOM',
-                                                        name: custom
-                                                    });
-                                                }}
-                                                placeholder="Buscar por nombre, SKU, código..."
-                                            />
-                                            <input 
-                                                className="w-full mt-1 p-1 text-[11px] border-b border-dashed border-slate-200 focus:border-blue-300 outline-none bg-transparent text-gray-500 placeholder:text-slate-300"
-                                                placeholder="Anotación / Comentario opcional de línea..."
-                                                value={line.notes || ''}
-                                                onChange={(e) => updateLine(line.id, 'notes', e.target.value)}
-                                            />
-                                        </div>
-                                        <div className="col-span-2">
-                                            <input 
-                                                type="number" className="w-full p-2 text-sm text-center bg-white border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-100"
-                                                min="1" value={line.quantity} onChange={(e) => updateLine(line.id, 'quantity', Number(e.target.value))}
-                                            />
-                                        </div>
-                                        <div className="col-span-3">
-                                            <input 
-                                                type="number" className="w-full p-2 text-sm text-right bg-white border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-100"
-                                                min="0" step="0.01" value={line.price} onChange={(e) => updateLine(line.id, 'price', Number(e.target.value))}
-                                            />
-                                        </div>
-                                        <div className="col-span-2 flex items-center justify-end gap-1">
-                                            <span className="text-sm font-bold text-slate-700">{Number(line.total).toFixed(2)}</span>
-                                            <button type="button" onClick={() => removeLine(line.id)} className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100">
-                                                <Trash2 size={14} />
-                                            </button>
+                                                    }}
+                                                    placeholder="Buscar por nombre o SKU..."
+                                                />
+                                                <input 
+                                                    className="w-full mt-1.5 p-1 text-[11px] border-b border-dashed border-slate-200 focus:border-blue-300 outline-none bg-transparent text-gray-500 placeholder:text-slate-300"
+                                                    placeholder="Comentario opcional..."
+                                                    value={line.notes || ''}
+                                                    onChange={(e) => updateLine(line.id, 'notes', e.target.value)}
+                                                />
+                                            </div>
+
+                                            <div className="grid grid-cols-3 gap-2 items-end pt-1.5 border-t border-slate-200/60">
+                                                <div>
+                                                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Cant.</label>
+                                                    <input 
+                                                        type="number" 
+                                                        className="w-full p-2 text-sm text-center bg-white border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-100 font-bold"
+                                                        min="1" 
+                                                        value={line.quantity} 
+                                                        onChange={(e) => updateLine(line.id, 'quantity', Number(e.target.value))}
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Precio ($)</label>
+                                                    <input 
+                                                        type="number" 
+                                                        className="w-full p-2 text-sm text-right bg-white border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-100 font-medium font-mono"
+                                                        min="0" 
+                                                        step="0.01" 
+                                                        value={line.price} 
+                                                        onChange={(e) => updateLine(line.id, 'price', Number(e.target.value))}
+                                                    />
+                                                </div>
+                                                <div className="text-right">
+                                                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Total</label>
+                                                    <div className="h-[38px] flex items-center justify-end px-2 bg-slate-100 rounded-lg border border-slate-200">
+                                                        <span className="text-xs font-extrabold text-slate-900 font-mono">
+                                                            ${Number(line.total).toFixed(2)}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 ))}
