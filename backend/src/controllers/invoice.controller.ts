@@ -650,6 +650,207 @@ export const issueInvoiceFromDeliveryNote = async (req: Request, res: Response) 
   }
 };
 
+export const convertPurchaseOrderToBill = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const user = (req as any).user;
+    const { supplierInvoiceCode, issueDate, dueDate, notes: additionalNotes } = req.body;
+
+    if (!supplierInvoiceCode || !String(supplierInvoiceCode).trim()) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'El número de factura / control del proveedor es obligatorio' }
+      });
+    }
+
+    const cleanInvoiceCode = String(supplierInvoiceCode).trim();
+
+    const po = await prisma.invoice.findUnique({
+      where: { id },
+      include: {
+        payments: true,
+        project: true
+      }
+    });
+
+    if (!po) {
+      return res.status(404).json({ success: false, error: { message: 'Orden de Compra no encontrada' } });
+    }
+
+    const hasAccess = await checkProjectWriteAccess(user, po.projectId);
+    if (!hasAccess) {
+      return res.status(403).json({ success: false, error: { message: 'No tienes permisos para registrar facturas en este proyecto' } });
+    }
+
+    // Validar que sea una Orden de Compra (OC-... o type === 'BILL' con código OC)
+    const isOC = po.code.toUpperCase().startsWith('OC-') || (po.type === 'BILL' && po.code.toUpperCase().startsWith('OC'));
+    if (!isOC && po.type !== 'BILL') {
+      return res.status(400).json({ success: false, error: { message: 'Solo se pueden convertir documentos que sean Órdenes de Compra (OC)' } });
+    }
+
+    // Parsear líneas de la orden de compra
+    let parsedLines: any = { items: [], taxAmount: 0, description: '' };
+    try {
+      if (po.lines) {
+        parsedLines = typeof po.lines === 'string' ? JSON.parse(po.lines) : po.lines;
+        if (Array.isArray(parsedLines)) {
+          parsedLines = { items: parsedLines, taxAmount: 0, description: '' };
+        }
+      }
+    } catch (e) {
+      console.error('Error parseando líneas de OC:', e);
+    }
+
+    // Verificar si ya fue convertida y la factura aún existe
+    const existingBillId = parsedLines.convertedToBillId || parsedLines.invoicedAsId;
+    if (existingBillId) {
+      const existingBill = await prisma.invoice.findUnique({ where: { id: existingBillId } });
+      if (existingBill) {
+        return res.status(400).json({
+          success: false,
+          error: { message: `Esta Orden de Compra ya fue convertida bajo la Factura de Proveedor #${existingBill.code}` }
+        });
+      }
+    }
+
+    // Comprobar si el código de factura ya existe en el sistema
+    const codeConflict = await prisma.invoice.findUnique({ where: { code: cleanInvoiceCode } });
+    if (codeConflict) {
+      return res.status(400).json({
+        success: false,
+        error: { message: `Ya existe una factura o documento registrado con el código "${cleanInvoiceCode}". Usa un número único.` }
+      });
+    }
+
+    // Fechas
+    let issueDateToStore = issueDate ? new Date(issueDate) : new Date();
+    if (issueDate && typeof issueDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(issueDate)) {
+      issueDateToStore = new Date(issueDate + 'T12:00:00');
+    }
+
+    let dueDateToStore: Date | null = null;
+    if (dueDate) {
+      dueDateToStore = typeof dueDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dueDate)
+        ? new Date(dueDate + 'T12:00:00')
+        : new Date(dueDate);
+    } else if (po.dueDate) {
+      dueDateToStore = new Date(po.dueDate);
+    }
+
+    // Preparar objeto de líneas para la nueva Factura de Proveedor
+    const newBillLines: any = {
+      items: parsedLines.items || [],
+      taxAmount: parsedLines.taxAmount || 0,
+      description: parsedLines.description || '',
+      sourcePurchaseOrderId: po.id,
+      sourcePurchaseOrderCode: po.code,
+      skipInventoryIncrement: true, // No duplicar inventario ya que la OC lo administró
+      convertedFromPOAt: new Date().toISOString()
+    };
+
+    // Notas de trazabilidad
+    const refText = `Factura de compra generada a partir de Orden de Compra ${po.code}`;
+    const cleanNotes = [po.notes, refText, additionalNotes].filter(Boolean).join(' | ');
+
+    // Cuentas por pagar: transferir abonos si la OC ya tenía pagos/anticipos
+    const hasPayments = po.payments && po.payments.length > 0;
+    const targetStatus = hasPayments ? po.status : (po.status === 'DRAFT' ? 'OPEN' : po.status);
+    const targetOutstanding = hasPayments ? po.outstanding : po.total;
+
+    const result = await prisma.$transaction(async (tx) => {
+      // 1. Crear Factura de Proveedor (BILL)
+      const createdBill = await tx.invoice.create({
+        data: {
+          project: { connect: { id: po.projectId } },
+          code: cleanInvoiceCode,
+          type: 'BILL',
+          vendorId: po.vendorId,
+          customerId: null,
+          issueDate: issueDateToStore,
+          dueDate: dueDateToStore,
+          currency: po.currency,
+          total: Number(po.total),
+          outstanding: Number(targetOutstanding),
+          status: targetStatus,
+          lines: JSON.stringify(newBillLines),
+          totalCost: po.totalCost || Number(po.total),
+          netProfit: 0,
+          createdBy: user.id,
+          purchaseOrder: po.code,
+          purchaseOrderDate: po.issueDate ? po.issueDate.toISOString().split('T')[0] : (po.purchaseOrderDate || null),
+          notes: cleanNotes
+        }
+      });
+
+      // 2. Transferir abonos/pagos de la OC a la nueva Factura de Proveedor (si existen)
+      if (hasPayments) {
+        await tx.paymentAllocation.updateMany({
+          where: { invoiceId: po.id },
+          data: { invoiceId: createdBill.id }
+        });
+      }
+
+      // 3. Actualizar la OC original: vincular a la Factura, saldo en 0 y marcar como facturada/completada
+      const updatedPOLines = {
+        ...parsedLines,
+        convertedToBillId: createdBill.id,
+        convertedToBillCode: createdBill.code,
+        invoicedAsId: createdBill.id,
+        invoicedAsCode: createdBill.code,
+        convertedAt: new Date().toISOString()
+      };
+
+      const poNotes = [po.notes, `Facturado bajo Factura de Proveedor #${createdBill.code}`].filter(Boolean).join(' | ');
+
+      await tx.invoice.update({
+        where: { id: po.id },
+        data: {
+          lines: JSON.stringify(updatedPOLines),
+          outstanding: 0,
+          status: 'PAID', // Saldo transferido y cubierto por la Factura formal
+          notes: poNotes
+        }
+      });
+
+      return createdBill;
+    });
+
+    // Registrar log de actividad
+    try {
+      const { logActivity } = await import('../services/activityLog.service');
+      await logActivity(
+        user.id,
+        'CREATE',
+        'Invoice',
+        result.id,
+        `Conversión de Orden de Compra ${po.code} a Factura de Proveedor ${result.code}`,
+        {
+          sourcePurchaseOrderId: po.id,
+          sourcePurchaseOrderCode: po.code,
+          billCode: result.code,
+          total: result.total,
+          currency: result.currency,
+          projectId: po.projectId,
+          vendorId: po.vendorId
+        },
+        req.ip,
+        req.headers['user-agent'] as string
+      );
+    } catch (err) {
+      console.error('Error registrando log de actividad (convertPurchaseOrderToBill):', err);
+    }
+
+    return res.status(201).json({
+      success: true,
+      data: result,
+      message: `Factura de Proveedor #${result.code} creada exitosamente a partir de la Orden de Compra ${po.code}`
+    });
+  } catch (error: any) {
+    console.error('[convertPurchaseOrderToBill] error', error);
+    return res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
 export const updateDispatchStatus = async (req: Request, res: Response) => {
   try {
     const { id } = req.params;

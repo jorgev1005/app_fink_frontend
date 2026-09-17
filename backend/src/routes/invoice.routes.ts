@@ -9,6 +9,7 @@ import {
   getInvoicePdf, 
   getNextInvoiceCodeEndpoint,
   issueInvoiceFromDeliveryNote,
+  convertPurchaseOrderToBill,
   updateDispatchStatus,
   createInvoiceReturn
 } from '../controllers/invoice.controller';
@@ -28,6 +29,7 @@ router.get('/:id', getInvoiceById);
 router.put('/:id', updateInvoice);
 router.patch('/:id/dispatch-status', updateDispatchStatus);
 router.post('/:id/issue-invoice', issueInvoiceFromDeliveryNote);
+router.post('/:id/convert-po-to-bill', convertPurchaseOrderToBill);
 router.post('/:id/returns', createInvoiceReturn);
 router.post('/:id/post', postInvoice);
 router.post('/:id/pay', payInvoice);

@@ -99,6 +99,10 @@ interface Invoice {
   invoicedAt?: string;
   sourceDeliveryNoteId?: string;
   sourceDeliveryNoteCode?: string;
+  convertedToBillId?: string;
+  convertedToBillCode?: string;
+  sourcePurchaseOrderId?: string;
+  sourcePurchaseOrderCode?: string;
   returns?: any[];
   hasReturns?: boolean;
 }
@@ -142,6 +146,15 @@ export default function InvoiceDetailsPage() {
   const [issueInvoiceNotes, setIssueInvoiceNotes] = useState('');
   const [submittingIssueInvoice, setSubmittingIssueInvoice] = useState(false);
   const [issueInvoiceError, setIssueInvoiceError] = useState<string | null>(null);
+
+  // Convert Purchase Order to Bill Modal States
+  const [isConvertPoModalOpen, setIsConvertPoModalOpen] = useState(false);
+  const [supplierInvoiceCode, setSupplierInvoiceCode] = useState('');
+  const [convertPoIssueDate, setConvertPoIssueDate] = useState(() => new Date().toISOString().split('T')[0]);
+  const [convertPoDueDate, setConvertPoDueDate] = useState('');
+  const [convertPoNotes, setConvertPoNotes] = useState('');
+  const [submittingConvertPo, setSubmittingConvertPo] = useState(false);
+  const [convertPoError, setConvertPoError] = useState<string | null>(null);
 
   // Dispatch Status State
   const [updatingDispatch, setUpdatingDispatch] = useState(false);
@@ -305,11 +318,15 @@ export default function InvoiceDetailsPage() {
          dispatchedAt: invData.dispatchedAt || extraLinesData.dispatchedAt || null,
          deliveredAt: invData.deliveredAt || extraLinesData.deliveredAt || null,
          dispatchNotes: invData.dispatchNotes || extraLinesData.dispatchNotes || null,
-         invoicedAsId: invData.invoicedAsId || extraLinesData.invoicedAsId || null,
-         invoicedAsCode: invData.invoicedAsCode || extraLinesData.invoicedAsCode || null,
+         invoicedAsId: invData.invoicedAsId || extraLinesData.invoicedAsId || extraLinesData.convertedToBillId || null,
+         invoicedAsCode: invData.invoicedAsCode || extraLinesData.invoicedAsCode || extraLinesData.convertedToBillCode || null,
          invoicedAt: invData.invoicedAt || extraLinesData.invoicedAt || null,
          sourceDeliveryNoteId: invData.sourceDeliveryNoteId || extraLinesData.sourceDeliveryNoteId || null,
          sourceDeliveryNoteCode: invData.sourceDeliveryNoteCode || extraLinesData.sourceDeliveryNoteCode || null,
+         convertedToBillId: invData.convertedToBillId || extraLinesData.convertedToBillId || null,
+         convertedToBillCode: invData.convertedToBillCode || extraLinesData.convertedToBillCode || null,
+         sourcePurchaseOrderId: invData.sourcePurchaseOrderId || extraLinesData.sourcePurchaseOrderId || null,
+         sourcePurchaseOrderCode: invData.sourcePurchaseOrderCode || extraLinesData.sourcePurchaseOrderCode || null,
          returns: invData.returns || extraLinesData.returns || [],
          hasReturns: Boolean((invData.returns && invData.returns.length > 0) || (extraLinesData.returns && extraLinesData.returns.length > 0))
       });
@@ -433,6 +450,66 @@ export default function InvoiceDetailsPage() {
        setIssueInvoiceError(err.response?.data?.error?.message || err.message || 'Error emitiendo factura');
      } finally {
        setSubmittingIssueInvoice(false);
+     }
+  };
+
+  const openConvertPoModal = () => {
+     if (!invoice) return;
+     setIsConvertPoModalOpen(true);
+     setConvertPoError(null);
+     setSupplierInvoiceCode('');
+     setConvertPoIssueDate(new Date().toISOString().split('T')[0]);
+     // Default due date: if OC has dueDate, use it; otherwise 15 days from today
+     if (invoice.dueDate) {
+       setConvertPoDueDate(invoice.dueDate.split('T')[0]);
+     } else {
+       const d = new Date();
+       d.setDate(d.getDate() + 15);
+       setConvertPoDueDate(d.toISOString().split('T')[0]);
+     }
+     setConvertPoNotes('');
+  };
+
+  const setConvertPoCreditDays = (days: number) => {
+     const base = convertPoIssueDate ? new Date(convertPoIssueDate + 'T12:00:00') : new Date();
+     base.setDate(base.getDate() + days);
+     setConvertPoDueDate(base.toISOString().split('T')[0]);
+  };
+
+  const getConvertPoCreditDaysDiff = (): number | null => {
+     if (!convertPoIssueDate || !convertPoDueDate) return null;
+     const d1 = new Date(convertPoIssueDate + 'T12:00:00').getTime();
+     const d2 = new Date(convertPoDueDate + 'T12:00:00').getTime();
+     return Math.round((d2 - d1) / (1000 * 60 * 60 * 24));
+  };
+
+  const handleConfirmConvertPo = async (e: React.FormEvent) => {
+     e.preventDefault();
+     if (!invoice || !supplierInvoiceCode.trim()) {
+       setConvertPoError('Por favor ingresa el número de factura o control entregado por el proveedor');
+       return;
+     }
+     try {
+       setSubmittingConvertPo(true);
+       setConvertPoError(null);
+       const res = await (api.invoices as any).convertPoToBill(invoice.id, {
+         supplierInvoiceCode: supplierInvoiceCode.trim(),
+         issueDate: convertPoIssueDate || undefined,
+         dueDate: convertPoDueDate || undefined,
+         notes: convertPoNotes || undefined
+       });
+       setIsConvertPoModalOpen(false);
+       const newBill = res.data?.data;
+       if (newBill?.id) {
+         router.push(`/invoices/${newBill.id}`);
+       } else {
+         await loadInvoice();
+       }
+     } catch (err: any) {
+       console.error(err);
+       setConvertPoError(err.response?.data?.error?.message || err.message || 'Error al convertir la orden de compra');
+     } finally {
+       setSubmittingConvertPo(false);
      }
   };
 
@@ -1030,6 +1107,27 @@ export default function InvoiceDetailsPage() {
                )
              )}
 
+             {/* Convertir Orden de Compra en Factura de Proveedor Button */}
+             {invoice.code?.toUpperCase().startsWith('OC-') && (
+               !(invoice.convertedToBillId || invoice.invoicedAsId) ? (
+                 <button 
+                    onClick={openConvertPoModal}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded text-xs font-semibold transition shadow-sm cursor-pointer"
+                    title="Convertir esta orden de compra en la factura formal de compra del proveedor con 1 solo clic"
+                 >
+                    <Receipt size={13} /> Convertir a Factura
+                 </button>
+               ) : (
+                 <button 
+                    onClick={() => router.push(`/invoices/${invoice.convertedToBillId || invoice.invoicedAsId}`)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded text-xs font-semibold transition cursor-pointer"
+                    title={`Ver Factura de Proveedor #${invoice.convertedToBillCode || invoice.invoicedAsCode}`}
+                 >
+                    <Receipt size={13} /> Factura Proveedor #{invoice.convertedToBillCode || invoice.invoicedAsCode}
+                 </button>
+               )
+             )}
+
              {/* Duplicate Button */}
              <button 
                 onClick={handleDuplicate}
@@ -1240,6 +1338,64 @@ export default function InvoiceDetailsPage() {
                 className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-semibold transition shrink-0 flex items-center gap-1 cursor-pointer shadow-xs"
               >
                 <span>Ver Nota de Entrega</span>
+                <ExternalLink size={12} />
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Banner de Orden de Compra ya Facturada */}
+        {invoice.convertedToBillCode && (
+          <div className="bg-purple-50 border border-purple-200 text-purple-900 px-4 py-3 rounded-xl flex items-center justify-between gap-3 shadow-xs">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-purple-100 border border-purple-300 flex items-center justify-center text-purple-700 shrink-0">
+                <Receipt size={16} />
+              </div>
+              <div className="text-xs">
+                <span className="font-bold text-purple-950">Facturación de Proveedor: </span>
+                <span>Esta Orden de Compra ha sido facturada bajo la Factura de Proveedor </span>
+                <span className="font-mono font-bold text-purple-800 bg-white px-1.5 py-0.5 rounded border border-purple-200">
+                  #{invoice.convertedToBillCode}
+                </span>.
+                <span className="text-purple-600 block sm:inline sm:ml-1">Cuentas por pagar e inventario sincronizados.</span>
+              </div>
+            </div>
+            {invoice.convertedToBillId && (
+              <button
+                type="button"
+                onClick={() => router.push(`/invoices/${invoice.convertedToBillId}`)}
+                className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-semibold transition shrink-0 flex items-center gap-1 cursor-pointer shadow-xs"
+              >
+                <span>Ver Factura</span>
+                <ExternalLink size={12} />
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Banner de Factura de Compra originada desde Orden de Compra */}
+        {invoice.sourcePurchaseOrderCode && (
+          <div className="bg-purple-50 border border-purple-200 text-purple-900 px-4 py-3 rounded-xl flex items-center justify-between gap-3 shadow-xs">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-purple-100 border border-purple-300 flex items-center justify-center text-purple-700 shrink-0">
+                <FileText size={16} />
+              </div>
+              <div className="text-xs">
+                <span className="font-bold text-purple-950">Origen de Compra: </span>
+                <span>Esta Factura ampara el pedido emitido mediante la Orden de Compra </span>
+                <span className="font-mono font-bold text-purple-800 bg-white px-1.5 py-0.5 rounded border border-purple-200">
+                  #{invoice.sourcePurchaseOrderCode}
+                </span>.
+                <span className="text-purple-600 block sm:inline sm:ml-1">Cero duplicidad de inventario.</span>
+              </div>
+            </div>
+            {invoice.sourcePurchaseOrderId && (
+              <button
+                type="button"
+                onClick={() => router.push(`/invoices/${invoice.sourcePurchaseOrderId}`)}
+                className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-semibold transition shrink-0 flex items-center gap-1 cursor-pointer shadow-xs"
+              >
+                <span>Ver Orden de Compra</span>
                 <ExternalLink size={12} />
               </button>
             )}
@@ -2004,6 +2160,167 @@ export default function InvoiceDetailsPage() {
                            <>
                               <CheckCircle size={14} />
                               <span>Emitir Factura Oficial</span>
+                           </>
+                        )}
+                     </button>
+                  </div>
+               </form>
+            </div>
+         </div>
+      )}
+
+      {/* Modal Convertir Orden de Compra (OC) en Factura de Proveedor (BILL) */}
+      {isConvertPoModalOpen && invoice && (
+         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs print:hidden animate-in fade-in">
+            <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-gray-100 animate-in zoom-in-95">
+               <div className="flex justify-between items-start mb-4 border-b border-gray-100 pb-3">
+                  <div className="flex items-center gap-2.5">
+                     <div className="w-9 h-9 rounded-xl bg-purple-50 border border-purple-200 flex items-center justify-center text-purple-600">
+                        <Receipt size={18} />
+                     </div>
+                     <div>
+                        <h3 className="text-base font-bold text-gray-900">Convertir a Factura de Compra</h3>
+                        <p className="text-xs text-gray-500">O.C. #{invoice.code} &bull; {contactName}</p>
+                     </div>
+                  </div>
+                  <button 
+                     onClick={() => setIsConvertPoModalOpen(false)}
+                     className="text-gray-400 hover:text-gray-600 p-1 rounded-lg hover:bg-gray-100 transition cursor-pointer"
+                  >
+                     ✕
+                  </button>
+               </div>
+
+               <div className="bg-purple-50/80 border border-purple-200/80 rounded-xl p-3 mb-4 text-xs text-purple-950 space-y-1">
+                  <p className="font-semibold flex items-center gap-1 text-purple-800">
+                     <span>✓ Cero duplicidad de inventario</span>
+                  </p>
+                  <p className="text-purple-700">
+                     Se registrará la Factura de Compra emitida por <b>{contactName}</b> por un total de <b>${invoice.total?.toFixed(2)} USD</b>, vinculándola a la Orden de Compra #{invoice.code}.
+                  </p>
+               </div>
+
+               <form onSubmit={handleConfirmConvertPo} className="space-y-4">
+                  {convertPoError && (
+                     <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg flex items-center gap-2">
+                        <AlertTriangle size={14} className="shrink-0" />
+                        <span>{convertPoError}</span>
+                     </div>
+                  )}
+
+                  <div>
+                     <label className="block text-xs font-semibold text-gray-700 mb-1">
+                        Nro. Factura Proveedor / Nro. de Control *
+                     </label>
+                     <input 
+                        type="text" 
+                        required
+                        autoFocus
+                        value={supplierInvoiceCode}
+                        onChange={(e) => setSupplierInvoiceCode(e.target.value)}
+                        className="w-full border border-gray-300 px-3 py-2 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-gray-800 font-mono font-bold text-sm"
+                        placeholder="Ej. FAC-0012845 o 008472"
+                     />
+                     <p className="text-[11px] text-gray-400 mt-1">Escribe el número de factura fiscal o documento emitido por el proveedor.</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                     <div>
+                        <label className="block text-xs font-semibold text-gray-700 mb-1">
+                           Fecha de Emisión
+                        </label>
+                        <input 
+                           type="date" 
+                           value={convertPoIssueDate}
+                           onChange={(e) => setConvertPoIssueDate(e.target.value)}
+                           className="w-full border border-gray-300 px-3 py-2 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-gray-800 text-xs"
+                        />
+                     </div>
+                     <div>
+                        <label className="block text-xs font-semibold text-gray-700 mb-1 flex items-center justify-between">
+                           <span>Fecha de Vencimiento</span>
+                           {convertPoDueDate && getConvertPoCreditDaysDiff() !== null && (
+                              <span className="text-[10px] font-bold text-purple-700 bg-purple-100 px-1.5 py-0.5 rounded">
+                                 {getConvertPoCreditDaysDiff() === 0 ? 'Contado' : `${getConvertPoCreditDaysDiff()}d crédito`}
+                              </span>
+                           )}
+                        </label>
+                        <input 
+                           type="date" 
+                           value={convertPoDueDate}
+                           onChange={(e) => setConvertPoDueDate(e.target.value)}
+                           className="w-full border border-gray-300 px-3 py-2 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-gray-800 text-xs"
+                        />
+                     </div>
+                  </div>
+
+                  {/* Atajos Rápidos de Días de Crédito */}
+                  <div className="p-2.5 bg-gray-50 rounded-xl border border-gray-200">
+                     <span className="text-[11px] font-bold text-gray-600 block mb-1.5">⚡ Atajos de Crédito:</span>
+                     <div className="flex flex-wrap gap-1">
+                        {[
+                           { label: 'Contado (0d)', days: 0 },
+                           { label: '7 días', days: 7 },
+                           { label: '15 días', days: 15 },
+                           { label: '20 días', days: 20 },
+                           { label: '30 días', days: 30 },
+                           { label: '45 días', days: 45 },
+                           { label: '60 días', days: 60 }
+                        ].map((t) => {
+                           const isSelected = getConvertPoCreditDaysDiff() === t.days;
+                           return (
+                              <button
+                                 key={t.days}
+                                 type="button"
+                                 onClick={() => setConvertPoCreditDays(t.days)}
+                                 className={`px-2 py-0.5 rounded text-[11px] font-semibold transition border cursor-pointer ${
+                                    isSelected 
+                                       ? 'bg-purple-600 text-white border-purple-600 shadow-2xs' 
+                                       : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-100'
+                                 }`}
+                              >
+                                 {t.label}
+                              </button>
+                           );
+                        })}
+                     </div>
+                  </div>
+
+                  <div>
+                     <label className="block text-xs font-semibold text-gray-700 mb-1">
+                        Observaciones / Notas Adicionales (Opcional)
+                     </label>
+                     <textarea 
+                        rows={2}
+                        value={convertPoNotes}
+                        onChange={(e) => setConvertPoNotes(e.target.value)}
+                        placeholder="Ej. Mercancía recibida conforme en almacén principal"
+                        className="w-full border border-gray-300 px-3 py-2 rounded-lg focus:ring-2 focus:ring-purple-500 outline-none text-gray-800 text-xs resize-none"
+                     />
+                  </div>
+
+                  <div className="pt-3 border-t border-gray-150 flex justify-end gap-2.5">
+                     <button 
+                        type="button"
+                        onClick={() => setIsConvertPoModalOpen(false)}
+                        className="px-4 py-2 text-gray-600 hover:text-gray-800 text-xs font-medium transition rounded-lg hover:bg-gray-100 cursor-pointer"
+                     >
+                        Cancelar
+                     </button>
+                     <button 
+                        type="submit"
+                        disabled={submittingConvertPo || !supplierInvoiceCode.trim()}
+                        className="px-4 py-2 bg-gradient-to-r from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 text-white rounded-lg text-xs font-semibold transition flex items-center gap-1.5 shadow-sm disabled:opacity-50 cursor-pointer"
+                     >
+                        {submittingConvertPo ? (
+                           <>
+                              <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                              <span>Convirtiendo a Factura...</span>
+                           </>
+                        ) : (
+                           <>
+                              <CheckCircle size={14} />
+                              <span>Confirmar y Crear Factura</span>
                            </>
                         )}
                      </button>
