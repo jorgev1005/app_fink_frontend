@@ -37,7 +37,7 @@ export default function ForexImpactWidget() {
   const [error, setError] = useState<string | null>(null);
   const [projects, setProjects] = useState<Project[]>([]);
   const [projectId, setProjectId] = useState<string>("all");
-  const [isExpanded, setIsExpanded] = useState(true); 
+  const [isExpanded, setIsExpanded] = useState(false); 
   const [refreshKey, setRefreshKey] = useState(0);
 
   // Date Range State
@@ -146,7 +146,7 @@ export default function ForexImpactWidget() {
 
   return (
     <div className="w-full shadow-sm select-none rounded-lg border bg-card text-card-foreground bg-white">
-      <div className="flex flex-row items-center justify-between space-y-0 pb-2 border-b border-gray-100 bg-gray-50/50 px-4 py-3 h-14 rounded-t-lg">
+      <div className={`flex flex-row items-center justify-between space-y-0 bg-gray-50/50 px-4 py-3 h-14 transition-all ${isExpanded ? 'border-b border-gray-100 rounded-t-lg' : 'rounded-lg'}`}>
         <div 
             className="flex items-center gap-2 cursor-pointer group" 
             onClick={() => setIsExpanded(!isExpanded)}
@@ -159,6 +159,11 @@ export default function ForexImpactWidget() {
           <h3 className="text-sm font-medium text-gray-700 group-hover:text-gray-900 transition-colors">
             Riesgo Cambiario {dateMode === 'custom' ? '(Rango)' : '(24h)'}
           </h3>
+          {!isExpanded && (
+            <span className="text-[11px] text-gray-400 font-normal ml-1 bg-white px-2 py-0.5 rounded-full border border-gray-200 group-hover:border-gray-300 transition-colors">
+              Clic para ver
+            </span>
+          )}
         </div>
         
         <div className="flex items-center space-x-2">
