@@ -175,10 +175,10 @@
     "createdAt": "2026-08-25T23:11:54.663Z",
     "channel": "CATALOGO_WEB",
     "customer": {
-      "name": "jose manuel",
-      "taxId": "J-455543322",
-      "phone": "04144924702",
-      "email": "jorge.verenzuela@gmail.com",
+      "name": "TECNISPORT C.A. - MARCOS ALVAREZ",
+      "taxId": "J-31200447-9",
+      "phone": "+58 412-0345153",
+      "email": "tecnisportca@gmail.com",
       "city": "La Victoria, Aragua (Sede Principal)",
       "seller": "Oficina",
       "gpsCoordinates": "10.304702, -67.321480",
@@ -198,10 +198,11 @@
         "quantity": 200,
         "unit": "UNIDAD",
         "unitPriceUSD": 0.84,
-        "unitPriceBs": 659.458212,
+        "unitPriceBs": 659.46,
         "subtotalUSD": 168,
-        "subtotalBs": 131891.6424,
-        "medidas": "H1"
+        "subtotalBs": 131891.64,
+        "medidas": "H1",
+        "costPrice": 0.6
       },
       {
         "sku": "LUC-CAR-RAF-H2-005",
@@ -209,10 +210,11 @@
         "quantity": 200,
         "unit": "UNIDAD",
         "unitPriceUSD": 0.84,
-        "unitPriceBs": 659.458212,
+        "unitPriceBs": 659.46,
         "subtotalUSD": 168,
-        "subtotalBs": 131891.6424,
-        "medidas": "H2"
+        "subtotalBs": 131891.64,
+        "medidas": "H2",
+        "costPrice": 0.6
       },
       {
         "sku": "LUC-CAR-RAF-H21-006",
@@ -220,10 +222,11 @@
         "quantity": 200,
         "unit": "UNIDAD",
         "unitPriceUSD": 0.96,
-        "unitPriceBs": 753.666528,
+        "unitPriceBs": 753.67,
         "subtotalUSD": 192,
-        "subtotalBs": 150733.3056,
-        "medidas": "H2 1/2"
+        "subtotalBs": 150733.31,
+        "medidas": "H2 1/2",
+        "costPrice": 0.69
       },
       {
         "sku": "LUC-CAR-RAF-H3-007",
@@ -231,10 +234,11 @@
         "quantity": 200,
         "unit": "UNIDAD",
         "unitPriceUSD": 1.04,
-        "unitPriceBs": 816.472072,
+        "unitPriceBs": 816.47,
         "subtotalUSD": 208,
-        "subtotalBs": 163294.4144,
-        "medidas": "H3"
+        "subtotalBs": 163294.41,
+        "medidas": "H3",
+        "costPrice": 0.75
       },
       {
         "sku": "LUC-CAR-RAF-H4-008",
@@ -242,10 +246,11 @@
         "quantity": 150,
         "unit": "UNIDAD",
         "unitPriceUSD": 1.38,
-        "unitPriceBs": 1083.395634,
+        "unitPriceBs": 1083.4,
         "subtotalUSD": 207,
-        "subtotalBs": 162509.3451,
-        "medidas": "H4"
+        "subtotalBs": 162509.35,
+        "medidas": "H4",
+        "costPrice": 0.99
       },
       {
         "sku": "LUC-CAR-RAF-H5-009",
@@ -253,10 +258,11 @@
         "quantity": 150,
         "unit": "UNIDAD",
         "unitPriceUSD": 1.5,
-        "unitPriceBs": 1177.60395,
+        "unitPriceBs": 1177.6,
         "subtotalUSD": 225,
-        "subtotalBs": 176640.5925,
-        "medidas": "H5"
+        "subtotalBs": 176640.59,
+        "medidas": "H5",
+        "costPrice": 1.08
       },
       {
         "sku": "LUC-CAR-RAF-H1T-010",
@@ -267,7 +273,8 @@
         "unitPriceBs": 78506.93,
         "subtotalUSD": 100,
         "subtotalBs": 78506.93,
-        "medidas": "H1"
+        "medidas": "H1",
+        "costPrice": 71.15
       },
       {
         "sku": "LUC-CAR-RAF-H2T-011",
@@ -278,7 +285,8 @@
         "unitPriceBs": 78506.93,
         "subtotalUSD": 100,
         "subtotalBs": 78506.93,
-        "medidas": "H2"
+        "medidas": "H2",
+        "costPrice": 71.15
       },
       {
         "sku": "LUC-CAR-RAF-HXT-012",
@@ -289,7 +297,8 @@
         "unitPriceBs": 78506.93,
         "subtotalUSD": 100,
         "subtotalBs": 78506.93,
-        "medidas": "H2 1/2"
+        "medidas": "H2 1/2",
+        "costPrice": 71.15
       },
       {
         "sku": "LUC-CAR-RAF-H3T-013",
@@ -300,7 +309,8 @@
         "unitPriceBs": 78506.93,
         "subtotalUSD": 100,
         "subtotalBs": 78506.93,
-        "medidas": "H3"
+        "medidas": "H3",
+        "costPrice": 71.15
       },
       {
         "sku": "LUC-CAR-RAF-H4T-014",
@@ -311,7 +321,8 @@
         "unitPriceBs": 78506.93,
         "subtotalUSD": 100,
         "subtotalBs": 78506.93,
-        "medidas": "H4"
+        "medidas": "H4",
+        "costPrice": 71.15
       },
       {
         "sku": "LUC-CAR-RAF-H5T-015",
@@ -322,11 +333,132 @@
         "unitPriceBs": 78506.93,
         "subtotalUSD": 100,
         "subtotalBs": 78506.93,
-        "medidas": "H5"
+        "medidas": "H5",
+        "costPrice": 71.15
       }
     ],
     "totalUSD": 1768,
-    "totalBs": 1388002.5224,
-    "notes": "entregado en el galpon"
+    "totalBs": 1388002.52,
+    "notes": "entregado en el galpon",
+    "status": "APPROVED"
+  },
+  {
+    "id": "COT-20260805-3813",
+    "correlative": "COT-20260805-3813",
+    "createdAt": "2026-08-05T20:40:00.000Z",
+    "channel": "CATALOGO_WEB",
+    "status": "APPROVED",
+    "customer": {
+      "name": "Blas",
+      "taxId": "",
+      "phone": "+58 412-271-1859",
+      "email": "",
+      "city": "La Victoria, Aragua",
+      "seller": "Oficina"
+    },
+    "paymentMethod": "bcv_bs",
+    "rates": {
+      "bcv": 755.16,
+      "paralelo": 832.55,
+      "eur": 870.04
+    },
+    "items": [
+      {
+        "sku": "LUC-CAR-23185",
+        "name": "Caja de carton 23x18x5",
+        "quantity": 1,
+        "unit": "UNIDAD",
+        "unitPriceUSD": 0.26,
+        "unitPriceBs": 196.34,
+        "subtotalUSD": 0.26,
+        "subtotalBs": 196.34,
+        "medidas": "23 x 18 x 5 cm"
+      }
+    ],
+    "totalUSD": 0.26,
+    "totalBs": 196.34,
+    "notes": ""
+  },
+  {
+    "id": "COT-20260610-5122",
+    "correlative": "COT-20260610-5122",
+    "createdAt": "2026-06-10T23:32:00.000Z",
+    "channel": "CATALOGO_WEB",
+    "status": "APPROVED",
+    "customer": {
+      "name": "Luis Morales - Riveyes",
+      "taxId": "",
+      "phone": "+58 412-271-1859",
+      "email": "",
+      "city": "La Victoria, Aragua",
+      "seller": "Oficina"
+    },
+    "paymentMethod": "bcv_bs",
+    "rates": {
+      "bcv": 572.68,
+      "paralelo": 802.07,
+      "eur": 662.25
+    },
+    "items": [
+      {
+        "sku": "LUC-FER-JUL-EST-001",
+        "name": "Caja apilable grande estándar",
+        "quantity": 1,
+        "unit": "UNIDAD",
+        "unitPriceUSD": 3.97,
+        "subtotalUSD": 3.97
+      },
+      {
+        "sku": "ALK-FER-MAR-RED-001",
+        "name": "Caja apilable grande reducida negra",
+        "quantity": 1,
+        "unit": "UNIDAD",
+        "unitPriceUSD": 2.5,
+        "subtotalUSD": 2.5
+      },
+      {
+        "sku": "LUC-FER-MAR-AZU-004",
+        "name": "Caja apilable mediana azul",
+        "quantity": 1,
+        "unit": "UNIDAD",
+        "unitPriceUSD": 1.4,
+        "subtotalUSD": 1.4
+      },
+      {
+        "sku": "LUC-FER-MAR-AZU-005",
+        "name": "Caja apilable pequeña azul",
+        "quantity": 1,
+        "unit": "UNIDAD",
+        "unitPriceUSD": 1,
+        "subtotalUSD": 1
+      },
+      {
+        "sku": "LUC-ALU-MAR-NEG-002",
+        "name": "Cajas apilables medianas negras",
+        "quantity": 1,
+        "unit": "UNIDAD",
+        "unitPriceUSD": 1.4,
+        "subtotalUSD": 1.4
+      },
+      {
+        "sku": "LUC-ALU-MAR-NEG-001",
+        "name": "Cajas apilables pequeñas negras",
+        "quantity": 1,
+        "unit": "UNIDAD",
+        "unitPriceUSD": 1,
+        "subtotalUSD": 1
+      },
+      {
+        "sku": "LUC-FER-MAR-ROJ-004",
+        "name": "Caja apilable pequeña roja",
+        "quantity": 1,
+        "unit": "UNIDAD",
+        "unitPriceUSD": 1,
+        "subtotalUSD": 1
+      }
+    ],
+    "totalUSD": 12.27,
+    "totalBs": 7026.77,
+    "notes": ""
   }
 ]
