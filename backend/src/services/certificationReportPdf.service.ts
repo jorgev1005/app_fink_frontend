@@ -106,7 +106,7 @@ export async function generateCertificationAuditReportPDF(deliveryId: string): P
       doc.text('DETALLES / AGENTE', LEFT + 345, y + 6, { width: W - 355 });
       y += 20;
 
-      delivery.auditLogs.forEach((log, idx) => {
+      delivery.auditLogs.forEach((log: any, idx: number) => {
         const rowBg = idx % 2 === 0 ? '#f8fafc' : '#ffffff';
         doc.rect(LEFT, y, W, 22).fill(rowBg);
 
