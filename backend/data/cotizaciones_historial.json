@@ -1,5 +1,70 @@
 [
   {
+    "id": "COT-20260910-5584",
+    "correlative": "COT-20260910-5584",
+    "createdAt": "2026-09-10T21:06:00.000Z",
+    "channel": "CATALOGO_WEB",
+    "status": "APPROVED",
+    "customer": {
+      "name": "INDUSTRIA TAPA AMARILLA C.A.",
+      "taxId": "J-501762805",
+      "phone": "+58 412-271-1859",
+      "email": "admin@grupoaludra.com",
+      "city": "CALLE ARISMENDI, LOCAL NRO. 54, ZONA INDUSTRIAL LA CHAPA, LA VICTORIA, EDO. ARAGUA. ZP 2121",
+      "seller": "Oficina",
+      "gpsCoordinates": "",
+      "gpsMapsUrl": "",
+      "emissionPlace": "La Victoria, Aragua"
+    },
+    "paymentMethod": "bcv_bs",
+    "rates": {
+      "bcv": 827.74,
+      "paralelo": 929.8,
+      "eur": 916.03
+    },
+    "items": [
+      {
+        "sku": "LUC-TAP-JAM-AMA-001",
+        "name": "Tapa 028 mm sin precinto amarilla",
+        "quantity": 10000,
+        "unit": "UNIDAD",
+        "unitPriceUSD": 0.19,
+        "unitPriceBs": 157.27,
+        "subtotalUSD": 1900,
+        "subtotalBs": 1572700.49,
+        "costPrice": 0.145,
+        "medidas": "AMARILLO"
+      },
+      {
+        "sku": "LUC-CAR-RAF-CL5-017",
+        "name": "Separador de carton cloro 500",
+        "quantity": 3000,
+        "unit": "UNIDAD",
+        "unitPriceUSD": 0.2,
+        "unitPriceBs": 165.55,
+        "subtotalUSD": 600,
+        "subtotalBs": 496642.26,
+        "costPrice": 0.15,
+        "medidas": "CL500"
+      },
+      {
+        "sku": "LUC-CAR-RAF-LV8-016",
+        "name": "Separador de carton lavaplatos 800",
+        "quantity": 3000,
+        "unit": "UNIDAD",
+        "unitPriceUSD": 0.15,
+        "unitPriceBs": 124.16,
+        "subtotalUSD": 450,
+        "subtotalBs": 372481.7,
+        "costPrice": 0.1,
+        "medidas": "LV800"
+      }
+    ],
+    "totalUSD": 2950,
+    "totalBs": 2441824.45,
+    "notes": "Entrega en CALLE ARISMENDI, LOCAL NRO. 54, ZONA INDUSTRIAL LA CHAPA, LA VICTORIA, EDO. ARAGUA. ZP 2121 (Envio Gratuito disponible a partir de $1000.00 USD)"
+  },
+  {
     "id": "COT-20260825-2166",
     "correlative": "COT-20260825-2166",
     "createdAt": "2026-08-26T00:26:42.926Z",

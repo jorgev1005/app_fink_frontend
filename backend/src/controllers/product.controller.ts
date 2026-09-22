@@ -5,17 +5,20 @@ import { getProjectAccessFilter, checkProjectWriteAccess } from '../utils/projec
 // GET /api/products - listar productos (opcional por proyecto y búsqueda)
 export const getProducts = async (req: Request, res: Response) => {
   try {
-    const { projectId, search, limit = '3000' } = req.query;
+    const { projectId, search, division, limit = '3000' } = req.query;
     const where: any = { 
       isActive: true,
       ...getProjectAccessFilter(req.user!)
     };
     if (projectId) where.projectId = projectId as string;
+    if (division && division !== 'all') where.division = division as string;
     if (req.query.forSale === 'true') where.forSale = true;
     if (search) {
       where.OR = [
         { name: { contains: search as string, mode: 'insensitive' } },
         { sku: { contains: search as string, mode: 'insensitive' } },
+        { description: { contains: search as string, mode: 'insensitive' } },
+        { division: { contains: search as string, mode: 'insensitive' } },
       ];
     }
 

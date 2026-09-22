@@ -65,14 +65,40 @@ export default function PriceCheckPage() {
   const [bcvRate, setBcvRate] = useState<number>(0);
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
+  const defaultDivisions = [
+    "Aludra Terra (Agro)",
+    "Aludra Link (Empaques)",
+    "Aludra Link (Ferretería)",
+    "Aludra Link (Demarcación)",
+    "FERRETERIA",
+    "Cartón Reciclado",
+    "TAPAS",
+    "Cercos Eléctricos",
+    "Cotización Bobinas",
+    "Catálogo Ampliado"
+  ];
+
+  const [divisions, setDivisions] = useState<string[]>(defaultDivisions);
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+
   useEffect(() => {
-    loadProducts();
     loadRates();
     // Auto-focus search input
     setTimeout(() => {
       searchInputRef.current?.focus();
     }, 150);
   }, []);
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearch(search);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [search]);
+
+  useEffect(() => {
+    loadProducts(debouncedSearch, selectedDivision);
+  }, [debouncedSearch, selectedDivision]);
 
   const loadRates = async () => {
     try {
@@ -92,11 +118,26 @@ export default function PriceCheckPage() {
     }
   };
 
-  const loadProducts = async () => {
+  const loadProducts = async (query?: string, div?: string) => {
     setLoading(true);
     try {
-      const res = await api.products.getAll({ limit: 2000 });
-      setProducts(res.data.data || []);
+      const params: any = {};
+      if (query && query.trim()) {
+        params.search = query.trim();
+        params.limit = 1000;
+      } else {
+        params.limit = 5000;
+      }
+      if (div && div !== 'all') {
+        params.division = div;
+      }
+      const res = await api.products.getAll(params);
+      const list: Product[] = res.data.data || [];
+      setProducts(list);
+      if (list.length > 0) {
+        const currentDivs = list.map(p => p.division).filter(Boolean) as string[];
+        setDivisions(prev => Array.from(new Set([...prev, ...currentDivs])).sort());
+      }
     } catch (e) {
       toast.error("Error al cargar la lista de productos");
     } finally {
@@ -115,12 +156,6 @@ export default function PriceCheckPage() {
     }
     return null;
   };
-
-  // Divisiones disponibles
-  const divisions = useMemo(() => {
-    const list = Array.from(new Set(products.map(p => p.division).filter(Boolean))) as string[];
-    return list.sort();
-  }, [products]);
 
   // Filtrado y ordenamiento de productos
   const filteredProducts = useMemo(() => {
