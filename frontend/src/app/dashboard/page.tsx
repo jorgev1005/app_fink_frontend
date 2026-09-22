@@ -2,7 +2,7 @@
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useEffect, useState, useRef, useCallback } from "react";
-import { RefreshCw, Calculator, LogOut, Zap, Plus, FileText, Users, BarChart3, Wallet, ArrowRight, Info, ChevronDown, ChevronUp, Layers, Tag, FileClock, Eye, EyeOff, Package, ArrowRightLeft, HardDrive, Banknote, Settings, ShoppingCart, FileCheck } from 'lucide-react';
+import { RefreshCw, Calculator, LogOut, Zap, Plus, FileText, Users, BarChart3, Wallet, ArrowRight, Info, ChevronDown, ChevronUp, Layers, Tag, FileClock, Eye, EyeOff, Package, ArrowRightLeft, HardDrive, Banknote, Settings, ShoppingCart, FileCheck, ShieldCheck } from 'lucide-react';
 
 import NotificationBell from "@/components/NotificationBell";
 import ExchangeRatesPanel from '@/components/ExchangeRatesPanel';
@@ -353,6 +353,14 @@ export default function DashboardPage() {
             <p className="text-slate-500 mt-1">Resumen general de tus finanzas</p>
           </div>
           <div className="flex items-center gap-3">
+            <Link
+              href="/certified"
+              className="flex items-center gap-2 px-4 py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl shadow-sm hover:shadow-md transition-all duration-200 font-bold"
+              title="Panel de Auditoría de Documentos Certificados"
+            >
+              <ShieldCheck className="w-4 h-4 text-cyan-200" />
+              <span>Certificados</span>
+            </Link>
             <Link
               href="/pos"
               className="flex items-center gap-2 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl shadow-sm hover:shadow-md transition-all duration-200 font-bold"

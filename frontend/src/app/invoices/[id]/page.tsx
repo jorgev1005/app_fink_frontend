@@ -2,8 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import api from '@/lib/api';
-import { Printer, ArrowLeft, Download, Edit, CreditCard, CheckCircle, FileText, Copy, Play, MessageCircle, Trash2, Undo2, AlertTriangle, Truck, Receipt, ExternalLink, Clock, RotateCcw } from 'lucide-react';
+import api, { apiClient } from '@/lib/api';
+import { Printer, ArrowLeft, Download, Edit, CreditCard, CheckCircle, FileText, Copy, Play, MessageCircle, Trash2, Undo2, AlertTriangle, Truck, Receipt, ExternalLink, Clock, RotateCcw, ShieldCheck } from 'lucide-react';
 
 interface InvoiceItem {
   id: string;
@@ -791,6 +791,31 @@ export default function InvoiceDetailsPage() {
     window.open(url, '_blank');
   };
 
+  const [certifyingDoc, setCertifyingDoc] = useState(false);
+
+  const handleShareCertifiedWhatsApp = async () => {
+    if (!invoice) return;
+    try {
+      setCertifyingDoc(true);
+      const res = await (apiClient as any).post(`/api/certified/certify-invoice/${invoice.id}`);
+      const data = res.data?.data;
+      if (data?.whatsappText) {
+        const phone = contact?.phone ? contact.phone.replace(/[^0-9]/g, '') : '';
+        const url = phone
+          ? `https://wa.me/${phone}?text=${encodeURIComponent(data.whatsappText)}`
+          : `https://wa.me/?text=${encodeURIComponent(data.whatsappText)}`;
+        window.open(url, '_blank');
+      } else {
+        alert('No se pudo generar la certificación digital');
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert(err.response?.data?.error?.message || err.message || 'Error al certificar documento');
+    } finally {
+      setCertifyingDoc(false);
+    }
+  };
+
   const handleDownloadPdf = async () => {
     if (!invoice) return;
     try {
@@ -1180,6 +1205,15 @@ export default function InvoiceDetailsPage() {
              )}
 
              {/* Print, WhatsApp & PDF Buttons */}
+             <button 
+                onClick={handleShareCertifiedWhatsApp}
+                disabled={certifyingDoc}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white rounded text-xs font-semibold transition shadow-sm cursor-pointer disabled:opacity-50"
+                title="Generar enlace fehaciente con acuse de recibo y hash SHA-256 para WhatsApp"
+             >
+                <ShieldCheck size={13} /> {certifyingDoc ? 'Certificando...' : 'Enviar Certificado'}
+             </button>
+
              <button 
                 onClick={shareViaWhatsApp}
                 className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded text-xs font-medium transition shadow-sm"

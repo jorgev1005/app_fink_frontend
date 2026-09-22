@@ -142,6 +142,8 @@ app.use('/api/entries', entryRoutes);
 app.use('/api/settings', settingsRoutes);
 app.use('/api/backups', backupRoutes);
 app.use('/api/public', publicRoutes);
+import certificationRoutes from './routes/certification.routes';
+app.use(certificationRoutes);
 
 // ============================================
 // MANEJO DE ERRORES

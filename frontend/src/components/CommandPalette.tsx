@@ -19,6 +19,7 @@ export default function CommandPalette() {
 
   const actions: Action[] = [
     { id: 'dashboard', name: 'Ir al Dashboard', perform: () => router.push('/dashboard') },
+    { id: 'certified', name: 'Auditoría de Certificados Digitales (Fehaciente)', perform: () => router.push('/certified') },
     { id: 'accounts', name: 'Ver Plan de Cuentas', perform: () => router.push('/accounts') },
     { id: 'new-transaction', name: 'Nueva Transacción', perform: () => router.push('/transactions/new') },
     { id: 'contacts', name: 'Contactos', perform: () => router.push('/contacts') },

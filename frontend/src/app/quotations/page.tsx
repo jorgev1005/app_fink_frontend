@@ -6,7 +6,7 @@ import {
   FileText, CheckCircle2, Clock, XCircle, ShoppingBag, Truck, Search, 
   Filter, Eye, ArrowLeft, RefreshCw, MessageSquare, Phone, MapPin, 
   Building2, UserCheck, AlertCircle, Plus, Send, ExternalLink, 
-  ChevronRight, ArrowRight, Download, Check, X, Package, DollarSign, Percent, Trash2
+  ChevronRight, ArrowRight, Download, Check, X, Package, DollarSign, Percent, Trash2, ShieldCheck
 } from 'lucide-react';
 import { toast } from 'sonner';
 import api, { apiClient } from '@/lib/api';
@@ -663,6 +663,39 @@ export default function QuotationsPage() {
     }
 
     setShowPOModal(true);
+  };
+
+  const [certifyingQuote, setCertifyingQuote] = useState(false);
+
+  const handleShareCertifiedQuote = async (quote: Quotation) => {
+    try {
+      setCertifyingQuote(true);
+      const res = await (apiClient as any).post('/api/certified/register', {
+        docCategory: 'QUOTATION',
+        documentNumber: quote.correlative || quote.id,
+        recipientName: quote.customer?.name || 'CLIENTE ESTIMADO',
+        recipientPhone: quote.customer?.phone || '',
+        recipientEmail: quote.customer?.email || '',
+        recipientTaxId: quote.customer?.taxId || '',
+        totalAmount: Number(quote.totalUSD || 0),
+        currency: 'USD'
+      });
+      const data = res.data?.data;
+      if (data?.whatsappText) {
+        const phone = quote.customer?.phone ? quote.customer.phone.replace(/[^0-9]/g, '') : '';
+        const url = phone
+          ? `https://wa.me/${phone}?text=${encodeURIComponent(data.whatsappText)}`
+          : `https://wa.me/?text=${encodeURIComponent(data.whatsappText)}`;
+        window.open(url, '_blank');
+        toast.success(`Certificación digital generada para ${quote.correlative}`);
+      } else {
+        toast.error('No se pudo generar la certificación');
+      }
+    } catch (e: any) {
+      toast.error(e.response?.data?.error?.message || e.message || 'Error al certificar cotización');
+    } finally {
+      setCertifyingQuote(false);
+    }
   };
 
   const handleSelectSupplierInPO = (supplierId: string) => {
@@ -1423,13 +1456,25 @@ export default function QuotationsPage() {
 
             {/* Footer Modal */}
             <div className="p-4 border-t border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-3">
-              <button
-                onClick={() => window.open(`/backend-api/api/quotations/${selectedQuote.correlative || selectedQuote.id}/pdf`, '_blank')}
-                className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-semibold text-xs transition-all cursor-pointer"
-              >
-                <Eye size={16} className="text-emerald-400" />
-                Ver PDF de Cotización
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={() => window.open(`/backend-api/api/quotations/${selectedQuote.correlative || selectedQuote.id}/pdf`, '_blank')}
+                  className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-semibold text-xs transition-all cursor-pointer"
+                >
+                  <Eye size={16} className="text-emerald-400" />
+                  Ver PDF
+                </button>
+
+                <button
+                  onClick={() => handleShareCertifiedQuote(selectedQuote)}
+                  disabled={certifyingQuote}
+                  className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white rounded-xl font-bold text-xs shadow-xs transition-all cursor-pointer disabled:opacity-50"
+                  title="Enviar enlace seguro de aprobación con acuse digital y trazabilidad"
+                >
+                  <ShieldCheck size={16} className="text-cyan-200" />
+                  {certifyingQuote ? 'Certificando...' : 'Enviar Certificado'}
+                </button>
+              </div>
 
               <div className="flex items-center gap-2">
                 <button

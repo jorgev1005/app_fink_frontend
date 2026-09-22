@@ -1007,3 +1007,58 @@ model POSSession {
   @@map("pos_sessions")
 }
 
+// ============================================
+// MODULO DE CERTIFICACIÓN Y ENTREGA FEHACIENTE
+// ============================================
+
+model CertifiedDelivery {
+  id              String   @id @default(uuid())
+  projectId       String?
+  docCategory     String   // "INVOICE", "QUOTATION", "DELIVERY_NOTE", "PURCHASE_ORDER"
+  documentNumber  String   // Ej: "FAC-00123", "COT-2026-001", "NE-0045"
+  
+  recipientName   String
+  recipientPhone  String
+  recipientEmail  String?
+  recipientTaxId  String?  // RIF o Cédula
+  
+  title           String?  // Descripción amigable del documento
+  totalAmount     Float?   // Monto total expresado en USD o moneda base
+  currency        String?  @default("USD")
+  
+  fileUrl         String   // Ruta del PDF generado
+  fileHashSha256  String   // Hash criptográfico inmutable
+  token           String   @unique @default(uuid())
+  
+  status          String   @default("SENT") // "SENT", "VIEWED", "CONFIRMED", "REJECTED"
+  sentAt          DateTime @default(now())
+  firstViewedAt   DateTime?
+  confirmedAt     DateTime?
+  
+  clientNotes     String?  // Notas ingresadas por el cliente al confirmar
+  
+  auditLogs       CertifiedAuditLog[]
+
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([token])
+  @@index([documentNumber])
+  @@index([recipientPhone])
+  @@map("certified_deliveries")
+}
+
+model CertifiedAuditLog {
+  id          BigInt            @id @default(autoincrement())
+  deliveryId  String
+  delivery    CertifiedDelivery @relation(fields: [deliveryId], references: [id], onDelete: Cascade)
+  eventType   String            // "LINK_CLICKED", "PDF_RENDERED", "CONFIRMED", "DOWNLOADED"
+  ipAddress   String?
+  userAgent   String?
+  payload     String?           // JSON con detalles
+  createdAt   DateTime          @default(now())
+
+  @@index([deliveryId, eventType])
+  @@map("certified_audit_logs")
+}
+
