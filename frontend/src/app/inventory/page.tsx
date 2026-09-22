@@ -19,7 +19,8 @@ import {
   FileText,
   Truck,
   ShoppingCart,
-  Check
+  Check,
+  Tag
 } from 'lucide-react';
 import api, { apiClient } from '@/lib/api';
 import { toast } from 'sonner';
@@ -672,9 +673,19 @@ export default function InventoryPage() {
   // Obtener la lista de divisiones únicas de los productos cargados
   const divisionsList = Array.from(new Set(products.map(p => p.division).filter(Boolean)));
 
-  // Filtrar productos por división localmente
+  const sCodes = skuSupplierCodes as Record<string, string>;
+
+  // Filtrar productos por división y por código de proveedor localmente
   const filteredProducts = products.filter(p => {
     if (selectedDivision && p.division !== selectedDivision) return false;
+    if (search) {
+      const q = search.trim().toLowerCase();
+      const sCode = (p.sku ? sCodes[p.sku] : '')?.toLowerCase();
+      const matchesName = (p.name || '').toLowerCase().includes(q);
+      const matchesSku = (p.sku || '').toLowerCase().includes(q);
+      const matchesSupp = sCode && sCode.includes(q);
+      if (!matchesName && !matchesSku && !matchesSupp) return false;
+    }
     return true;
   });
 
@@ -758,6 +769,15 @@ export default function InventoryPage() {
       {/* 3. Botones de Acción */}
       <div className="flex flex-wrap items-center gap-2.5">
         <button 
+          onClick={() => router.push('/price-check')}
+          className="flex items-center gap-2 px-4 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-xl hover:from-emerald-700 hover:to-teal-700 transition-all shadow-sm font-semibold text-xs cursor-pointer"
+          title="Abrir Consulta Rápida de Precios, Costos y Códigos para Ventas"
+        >
+          <Tag size={16} className="text-emerald-200" />
+          Consulta de Precios y Costos
+        </button>
+
+        <button 
           onClick={() => setShowPdfModal(true)}
           className="flex items-center gap-2 px-4 py-2.5 bg-slate-800 text-white rounded-xl hover:bg-slate-900 transition-all shadow-sm font-semibold text-xs cursor-pointer"
           title="Generar e imprimir Lista de Precios en PDF"
@@ -820,7 +840,7 @@ export default function InventoryPage() {
           <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" size={18} />
           <input 
             type="text" 
-            placeholder="Buscar por nombre o SKU..." 
+            placeholder="Buscar por Nombre, SKU o Código del Proveedor..." 
             className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:bg-white focus:border-transparent outline-none transition-all text-xs font-semibold text-slate-800 placeholder:text-slate-400"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -914,15 +934,17 @@ export default function InventoryPage() {
               <div className="flex items-center justify-between text-xs bg-slate-50/70 p-2 rounded-lg border border-slate-100">
                 <div>
                   <span className="text-slate-400 text-[10px] block">SKU:</span>
-                  <span className="font-mono text-slate-600 font-medium">{product.sku || '-'}</span>
+                  <span className="font-mono text-slate-600 font-semibold">{product.sku || '-'}</span>
+                  {product.sku && sCodes[product.sku] && (
+                    <span className="block text-[10px] font-mono text-amber-700 font-bold">
+                      Prov: {sCodes[product.sku]}
+                    </span>
+                  )}
                 </div>
                 <div className="text-right">
-                  <span className="text-slate-400 text-[10px] block">Precio Unitario:</span>
+                  <span className="text-slate-400 text-[10px] block">Costo: ${Number(product.costPrice || 0).toFixed(2)}</span>
                   <span className="font-bold text-slate-900 font-mono text-sm">
                     {new Intl.NumberFormat('es-VE', { style: 'currency', currency: product.currency === 'BS' ? 'VES' : 'USD' }).format(product.unitPrice)}
-                  </span>
-                  <span className="text-[10px] text-slate-400 ml-1">
-                    ({product.taxable ? `${product.taxRate}% IVA` : 'Exento'})
                   </span>
                 </div>
               </div>
@@ -966,7 +988,9 @@ export default function InventoryPage() {
               <tr>
                 <th className="p-4 cursor-pointer select-none" onClick={() => { setSortBy('name'); setSortDir(sortBy === 'name' && sortDir === 'asc' ? 'desc' : 'asc'); }}>Producto {sortBy === 'name' && (sortDir === 'asc' ? '▲' : '▼')}</th>
                 <th className="p-4 cursor-pointer select-none" onClick={() => { setSortBy('sku'); setSortDir(sortBy === 'sku' && sortDir === 'asc' ? 'desc' : 'asc'); }}>SKU {sortBy === 'sku' && (sortDir === 'asc' ? '▲' : '▼')}</th>
-                <th className="p-4 text-right cursor-pointer select-none" onClick={() => { setSortBy('unitPrice'); setSortDir(sortBy === 'unitPrice' && sortDir === 'asc' ? 'desc' : 'asc'); }}>Precio Unit. {sortBy === 'unitPrice' && (sortDir === 'asc' ? '▲' : '▼')}</th>
+                <th className="p-4 text-center">Cód. Prov.</th>
+                <th className="p-4 text-right cursor-pointer select-none" onClick={() => { setSortBy('costPrice'); setSortDir(sortBy === 'costPrice' && sortDir === 'asc' ? 'desc' : 'asc'); }}>Costo Base {sortBy === 'costPrice' && (sortDir === 'asc' ? '▲' : '▼')}</th>
+                <th className="p-4 text-right cursor-pointer select-none" onClick={() => { setSortBy('unitPrice'); setSortDir(sortBy === 'unitPrice' && sortDir === 'asc' ? 'desc' : 'asc'); }}>Precio Venta {sortBy === 'unitPrice' && (sortDir === 'asc' ? '▲' : '▼')}</th>
                 <th className="p-4 text-center cursor-pointer select-none" onClick={() => { setSortBy('stock'); setSortDir(sortBy === 'stock' && sortDir === 'asc' ? 'desc' : 'asc'); }}>Stock {sortBy === 'stock' && (sortDir === 'asc' ? '▲' : '▼')}</th>
                 <th className="p-4 text-center cursor-pointer select-none" onClick={() => { setSortBy('taxRate'); setSortDir(sortBy === 'taxRate' && sortDir === 'asc' ? 'desc' : 'asc'); }}>Impuesto {sortBy === 'taxRate' && (sortDir === 'asc' ? '▲' : '▼')}</th>
                 <th className="p-4 text-right">Acciones</th>
@@ -974,11 +998,17 @@ export default function InventoryPage() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {loading ? (
-                <tr><td colSpan={6} className="p-8 text-center text-slate-400">Cargando...</td></tr>
+                <tr><td colSpan={8} className="p-8 text-center text-slate-400">Cargando...</td></tr>
               ) : sortProducts(filteredProducts).length === 0 ? (
-                <tr><td colSpan={6} className="p-8 text-center text-slate-400">No se encontraron productos</td></tr>
+                <tr><td colSpan={8} className="p-8 text-center text-slate-400">No se encontraron productos</td></tr>
               ) : (
-                sortProducts(filteredProducts).map((product) => (
+                sortProducts(filteredProducts).map((product) => {
+                  const suppCode = (product.sku ? sCodes[product.sku] : '') || '-';
+                  const cost = Number(product.costPrice || 0);
+                  const price = Number(product.unitPrice || 0);
+                  const marginPct = price > 0 ? (((price - cost) / price) * 100).toFixed(0) : '0';
+
+                  return (
                   <tr key={product.id} className="hover:bg-slate-50 transition-colors group">
                     <td className="p-4">
                       <div className="flex items-center gap-2">
@@ -992,8 +1022,27 @@ export default function InventoryPage() {
                       {product.description && <div className="text-xs text-slate-500 truncate max-w-[200px]">{product.description}</div>}
                     </td>
                     <td className="p-4 text-slate-500 font-mono text-xs">{product.sku || '-'}</td>
+                    <td className="p-4 text-center">
+                      {suppCode !== '-' ? (
+                        <span className="px-2 py-0.5 rounded text-xs font-mono font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                          {suppCode}
+                        </span>
+                      ) : (
+                        <span className="text-slate-300 text-xs">—</span>
+                      )}
+                    </td>
+                    <td className="p-4 text-right font-mono text-xs text-slate-600">
+                      ${cost.toFixed(2)}
+                    </td>
                     <td className="p-4 text-right font-medium">
-                      {new Intl.NumberFormat('es-VE', { style: 'currency', currency: product.currency === 'BS' ? 'VES' : 'USD' }).format(product.unitPrice)}
+                      <div className="font-mono text-slate-900 font-bold">
+                        {new Intl.NumberFormat('es-VE', { style: 'currency', currency: product.currency === 'BS' ? 'VES' : 'USD' }).format(product.unitPrice)}
+                      </div>
+                      {cost > 0 && price > cost && (
+                        <div className="text-[10px] text-emerald-600 font-semibold font-mono">
+                          +{marginPct}% marg.
+                        </div>
+                      )}
                     </td>
                     <td className="p-4 text-center">
                       <span className={`px-2 py-1 rounded-full text-xs font-bold ${product.stock > 0 ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
@@ -1028,10 +1077,10 @@ export default function InventoryPage() {
                         </button>
                       </div>
                     </td>
-
                   </tr>
-                ))
-              )}
+                );
+              })
+            )}
             </tbody>
           </table>
         </div>

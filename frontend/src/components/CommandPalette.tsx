@@ -18,6 +18,8 @@ export default function CommandPalette() {
   const inputRef = useRef<HTMLInputElement | null>(null)
 
   const actions: Action[] = [
+    { id: 'price-check', name: 'Consulta Rápida de Precios y Costos (Ventas)', perform: () => router.push('/price-check') },
+    { id: 'inventory', name: 'Inventario de Productos y Catálogo', perform: () => router.push('/inventory') },
     { id: 'dashboard', name: 'Ir al Dashboard', perform: () => router.push('/dashboard') },
     { id: 'certified', name: 'Auditoría de Certificados Digitales (Fehaciente)', perform: () => router.push('/certified') },
     { id: 'accounts', name: 'Ver Plan de Cuentas', perform: () => router.push('/accounts') },

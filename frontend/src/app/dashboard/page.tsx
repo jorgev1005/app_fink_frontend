@@ -792,6 +792,7 @@ export default function DashboardPage() {
             <QuickAction icon={Banknote} label="Préstamos" path="/loans" color="emerald" />
             <QuickAction icon={RefreshCw} label="Reglas Periódicas" path="/recurring" color="violet" />
             <QuickAction icon={Package} label="Inventario" path="/inventory" color="amber" />
+            <QuickAction icon={ShoppingCart} label="Consulta Precios" path="/price-check" color="emerald" />
             <QuickAction icon={Tag} label="Categorías" path="/categories" color="pink" />
             <QuickAction icon={BarChart3} label="Reportes" path="/reports" color="blue" />
             <QuickAction icon={ArrowRightLeft} label="Transferencias entre proyectos" action={() => setShowTransferModal(true)} color="teal" />
