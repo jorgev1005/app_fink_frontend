@@ -624,7 +624,7 @@ export default function QuotationsPage() {
   // Abrir Modal de Orden de Compra desde Cotización
   const openPOModal = async (quote: Quotation) => {
     setPoQuote(quote);
-    setPoNotes(`Abastecimiento para Cotización ${quote.correlative} - Cliente: ${quote.customer?.name || 'Particular'}`);
+    setPoNotes(`Abastecimiento de inventario - Ref: ${quote.correlative}`);
     
     // Obtener ítems enriquecidos con su costo, código de proveedor y órdenes de compra previas
     try {
@@ -1746,6 +1746,22 @@ export default function QuotationsPage() {
                       className="w-full bg-white border border-slate-200 rounded-xl p-2 text-xs focus:ring-2 focus:ring-blue-500 outline-none"
                     />
                   </div>
+                </div>
+
+                <div>
+                  <label className="block text-[11px] font-bold text-slate-700 mb-1">
+                    Observaciones e Instrucciones de Despacho (visibles en la Orden de Compra)
+                  </label>
+                  <input
+                    type="text"
+                    value={poNotes}
+                    onChange={e => setPoNotes(e.target.value)}
+                    placeholder="Ej: Abastecimiento de inventario - Ref: COT-..."
+                    className="w-full bg-white border border-slate-200 rounded-xl p-2 text-xs font-semibold text-slate-800 focus:ring-2 focus:ring-blue-500 outline-none"
+                  />
+                  <p className="text-[10px] text-slate-400 mt-0.5">
+                    Nota visible para el proveedor en la Orden de Compra impresa. No incluye ni menciona el cliente.
+                  </p>
                 </div>
               </div>
 

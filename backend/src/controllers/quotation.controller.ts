@@ -695,6 +695,17 @@ export const generatePOFromQuotation = async (req: Request, res: Response) => {
       logoPath
     } = await resolveProjectCompanyData((quote as any).projectId);
 
+    // Sanitizar notas para que NUNCA contengan datos del cliente final ante el proveedor
+    let finalNotes = (notes && typeof notes === 'string' && notes.trim()) 
+      ? notes.trim() 
+      : ('Abastecimiento de inventario - Ref: ' + quote.correlative);
+
+    // Eliminar cualquier mención de cliente si viniese de antes
+    finalNotes = finalNotes
+      .replace(/\s*-\s*Cliente:\s*[^;\n\r]+/gi, '')
+      .replace(/\s*para cliente\s*[^;\n\r]+/gi, '')
+      .trim();
+
     // Generar PDF formal de Orden de Compra
     const { buffer, orderNumber } = await generatePurchaseOrderPDFBuffer({
       supplierName,
@@ -712,7 +723,7 @@ export const generatePOFromQuotation = async (req: Request, res: Response) => {
       paymentTerms,
       tasaBCV,
       items: poItems,
-      notes: notes || ('Generada automáticamente desde Cotización ' + quote.correlative + ' para cliente ' + (quote.customer?.name || 'Cliente'))
+      notes: finalNotes
     });
 
     // Resolver proyecto de la cotización
@@ -801,7 +812,7 @@ export const generatePOFromQuotation = async (req: Request, res: Response) => {
           createdBy: req.user ? (req.user as any).id : ((await prisma.user.findFirst())?.id || ''),
           purchaseOrder: quote.correlative,
           purchaseOrderDate: quote.createdAt ? new Date(quote.createdAt).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
-          notes: notes || `Orden de Compra formal emitida a ${supplierName} s/Cotización ${quote.correlative}`
+          notes: finalNotes || `Orden de Compra formal emitida a ${supplierName} s/Cotización ${quote.correlative}`
         }
       });
       createdInvoiceId = createdInvoice.id;
