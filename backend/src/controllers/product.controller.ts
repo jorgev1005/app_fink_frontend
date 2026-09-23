@@ -14,12 +14,18 @@ export const getProducts = async (req: Request, res: Response) => {
     if (division && division !== 'all') where.division = division as string;
     if (req.query.forSale === 'true') where.forSale = true;
     if (search) {
-      where.OR = [
-        { name: { contains: search as string, mode: 'insensitive' } },
-        { sku: { contains: search as string, mode: 'insensitive' } },
-        { description: { contains: search as string, mode: 'insensitive' } },
-        { division: { contains: search as string, mode: 'insensitive' } },
+      const s = (search as string).trim();
+      const hyphenated = s.replace(/([A-Za-z]{3})([A-Za-z]{2}\d+)/g, (_m, g1, g2) => `${g1}-${g2}`);
+      const conditions: any[] = [
+        { name: { contains: s, mode: 'insensitive' } },
+        { sku: { contains: s, mode: 'insensitive' } },
+        { description: { contains: s, mode: 'insensitive' } },
+        { division: { contains: s, mode: 'insensitive' } },
       ];
+      if (hyphenated !== s) {
+        conditions.push({ sku: { contains: hyphenated, mode: 'insensitive' } });
+      }
+      where.OR = conditions;
     }
 
     const products = await prisma.product.findMany({
