@@ -1684,7 +1684,11 @@ export const getInvoicePdf = async (req: Request, res: Response) => {
         logoPath,
         tasaBCV,
         items: enrichedItems,
-        notes: invoice.notes || ''
+        notes: (invoice.notes || '')
+          .replace(/\s*-\s*Cliente:\s*[^;\n\r]+/gi, '')
+          .replace(/\s*para cliente\s*[^;\n\r]+/gi, '')
+          .replace(/Cliente:\s*[^;\n\r]+/gi, '')
+          .trim()
       });
 
       const filename = `${orderNumber}.pdf`;
