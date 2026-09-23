@@ -7,7 +7,7 @@ import {
   Filter, Eye, ArrowLeft, RefreshCw, MessageSquare, Phone, MapPin, 
   Building2, UserCheck, AlertCircle, Plus, Send, ExternalLink, 
   ChevronRight, ArrowRight, Download, Check, X, Package, DollarSign, Percent, Trash2, ShieldCheck,
-  Save, Loader2
+  Save, Loader2, Pencil, RotateCcw
 } from 'lucide-react';
 import { toast } from 'sonner';
 import api, { apiClient } from '@/lib/api';
@@ -127,6 +127,7 @@ export default function QuotationsPage() {
   // Modal Cotización Manual Código por Código
   const [showManualQuoteModal, setShowManualQuoteModal] = useState(false);
   const [savingManualQuote, setSavingManualQuote] = useState(false);
+  const [editingCorrelative, setEditingCorrelative] = useState<string | null>(null);
   const [availableProducts, setAvailableProducts] = useState<any[]>([]);
   const [bcvRate, setBcvRate] = useState<number>(785.07);
   const [manualCustomer, setManualCustomer] = useState({
@@ -460,7 +461,7 @@ export default function QuotationsPage() {
       const totalUSD = manualItems.reduce((acc, i) => acc + (i.subtotalUSD || 0), 0);
       const totalBs = totalUSD * bcvRate;
 
-      const payload = {
+      const payload: any = {
         channel: 'FINK_MANUAL',
         customer: {
           ...manualCustomer,
@@ -491,26 +492,81 @@ export default function QuotationsPage() {
         notes: manualNotes.trim()
       };
 
-      const res = await (api as any).quotations.create(payload);
-      if (res.data?.success) {
-        toast.success('¡Cotización creada exitosamente!');
-        setShowManualQuoteModal(false);
-        setManualItems([]);
-        setManualCustomer({ name: '', taxId: '', phone: '', email: '', city: 'La Victoria, Aragua', seller: 'Oficina' });
-        setManualNotes('');
-        loadQuotations();
+      if (editingCorrelative) {
+        payload.correlative = editingCorrelative;
+        payload.id = editingCorrelative;
+        payload.status = 'PENDING';
 
-        const quoteId = res.data.data?.correlative || res.data.data?.id;
-        if (quoteId) {
-          window.open(`/backend-api/api/quotations/${quoteId}/pdf`, '_blank');
+        const res = await (api as any).quotations.update(editingCorrelative, payload);
+        if (res.data?.success) {
+          toast.success(`¡Cotización ${editingCorrelative} actualizada exitosamente!`);
+          setShowManualQuoteModal(false);
+          setEditingCorrelative(null);
+          setManualItems([]);
+          setManualCustomer({ name: '', taxId: '', phone: '', email: '', city: 'La Victoria, Aragua', seller: 'Oficina' });
+          setManualNotes('');
+          loadQuotations();
+
+          window.open(`/backend-api/api/quotations/${editingCorrelative}/pdf`, '_blank');
+        }
+      } else {
+        const res = await (api as any).quotations.create(payload);
+        if (res.data?.success) {
+          toast.success('¡Cotización creada exitosamente!');
+          setShowManualQuoteModal(false);
+          setEditingCorrelative(null);
+          setManualItems([]);
+          setManualCustomer({ name: '', taxId: '', phone: '', email: '', city: 'La Victoria, Aragua', seller: 'Oficina' });
+          setManualNotes('');
+          loadQuotations();
+
+          const quoteId = res.data.data?.correlative || res.data.data?.id;
+          if (quoteId) {
+            window.open(`/backend-api/api/quotations/${quoteId}/pdf`, '_blank');
+          }
         }
       }
     } catch (err: any) {
-      console.error('Error creando cotización manual:', err);
+      console.error('Error guardando cotización manual:', err);
       toast.error(err.response?.data?.error?.message || err.message || 'Error al guardar cotización');
     } finally {
       setSavingManualQuote(false);
     }
+  };
+
+  const openEditQuoteModal = (quote: Quotation) => {
+    loadSuppliers();
+    loadAvailableProducts();
+    const corr = quote.correlative || quote.id;
+    setEditingCorrelative(corr);
+    setManualCustomer({
+      name: quote.customer?.name || (quote as any).clientName || '',
+      taxId: quote.customer?.taxId || (quote as any).clientTaxId || '',
+      phone: quote.customer?.phone || (quote as any).clientPhone || '',
+      email: quote.customer?.email || (quote as any).clientEmail || '',
+      city: quote.customer?.city || (quote as any).destinationCity || 'La Victoria, Aragua',
+      seller: quote.customer?.seller || (quote as any).seller || 'Oficina'
+    });
+    setManualZelleAccount((quote as any).zelleAccount || (quote as any).zelleEmail || 'admin@grupoaludra.com');
+    setManualNotes(quote.notes || '');
+    setManualPricingTier(quote.paymentMethod === 'bcv_bs' ? 'BCV' : 'DIVISAS');
+
+    const items = (quote.items || []).map((it: any) => {
+      const q = Number(it.quantity || 1);
+      const p = Number(it.unitPriceUSD || it.unitPrice || 0);
+      return {
+        sku: it.sku || 'N/A',
+        name: it.name || '',
+        quantity: q,
+        unitPriceUSD: p,
+        unit: it.unit || 'UNIDAD',
+        subtotalUSD: Number(it.subtotalUSD !== undefined ? it.subtotalUSD : (p * q)),
+        costPrice: it.costPrice !== undefined ? Number(it.costPrice) : undefined,
+        medidas: it.medidas || ''
+      };
+    });
+    setManualItems(items);
+    setShowManualQuoteModal(true);
   };
 
   const loadSuppliers = async () => {
@@ -950,6 +1006,11 @@ export default function QuotationsPage() {
             onClick={() => {
               loadSuppliers();
               loadAvailableProducts();
+              setEditingCorrelative(null);
+              setManualItems([]);
+              setManualCustomer({ name: '', taxId: '', phone: '', email: '', city: 'La Victoria, Aragua', seller: 'Oficina' });
+              setManualNotes('');
+              setManualZelleAccount('admin@grupoaludra.com');
               setShowManualQuoteModal(true);
             }}
             className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-md font-extrabold text-xs transition-all cursor-pointer"
@@ -1238,6 +1299,15 @@ export default function QuotationsPage() {
                             <Eye size={15} />
                           </button>
 
+                          {/* Botón Modificar Cotización */}
+                          <button
+                            onClick={() => openEditQuoteModal(q)}
+                            className="p-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 border border-amber-200 rounded-lg transition-colors cursor-pointer"
+                            title="Modificar montos, renglones o cliente de esta cotización"
+                          >
+                            <Pencil size={15} />
+                          </button>
+
                           {/* Botón Emitir Nota de Entrega */}
                           <button
                             onClick={() => router.push(`/invoices/new?fromQuotation=${encodeURIComponent(q.correlative || q.id)}&isDeliveryNote=true`)}
@@ -1522,6 +1592,40 @@ export default function QuotationsPage() {
               </div>
 
               <div className="flex items-center gap-2">
+                <button
+                  onClick={() => { setShowDetailModal(false); openEditQuoteModal(selectedQuote); }}
+                  className="flex items-center gap-1.5 px-3 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl font-bold text-xs transition-all shadow-xs cursor-pointer"
+                  title="Modificar montos, renglones o datos de esta cotización"
+                >
+                  <Pencil size={15} />
+                  Modificar Cotización
+                </button>
+
+                {selectedQuote.status === 'APPROVED' && (
+                  <button
+                    onClick={async () => {
+                      try {
+                        const res = await (api as any).quotations.updateStatus(selectedQuote.id || selectedQuote.correlative, {
+                          status: 'PENDING',
+                          notes: 'Cotización reabierta a estado Pendiente para renegociación de montos'
+                        });
+                        if (res.data?.success) {
+                          toast.success(`Cotización ${selectedQuote.correlative} reabierta en negociación (Pendiente)`);
+                          loadQuotations();
+                          setSelectedQuote({ ...selectedQuote, status: 'PENDING' });
+                        }
+                      } catch (e: any) {
+                        toast.error('Error al cambiar estado a Pendiente');
+                      }
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 rounded-xl font-bold text-xs transition-all shadow-xs cursor-pointer"
+                    title="Revertir de Aprobada a Pendiente para continuar negociando con el cliente"
+                  >
+                    <RotateCcw size={15} />
+                    Pasar a Pendiente
+                  </button>
+                )}
+
                 <button
                   onClick={() => router.push(`/invoices/new?fromQuotation=${encodeURIComponent(selectedQuote.correlative || selectedQuote.id)}&isDeliveryNote=true`)}
                   className="flex items-center gap-1.5 px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl font-bold text-xs transition-all shadow-xs cursor-pointer"
@@ -1976,8 +2080,21 @@ export default function QuotationsPage() {
                   <FileText size={22} />
                 </div>
                 <div>
-                  <h3 className="text-base font-extrabold text-slate-900">Nueva Cotización Manual (Código por Código)</h3>
-                  <p className="text-xs text-slate-500">Carga rápida por SKU, selector de tarifa (BCV vs Zelle) y emisión de PDF</p>
+                  <h3 className="text-base font-extrabold text-slate-900">
+                    {editingCorrelative ? (
+                      <span className="flex items-center gap-2">
+                        <span>Modificar Cotización</span>
+                        <span className="px-2.5 py-0.5 bg-blue-100 text-blue-800 rounded-lg font-mono text-sm font-black">{editingCorrelative}</span>
+                      </span>
+                    ) : (
+                      'Nueva Cotización Manual (Código por Código)'
+                    )}
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    {editingCorrelative
+                      ? 'Actualiza cantidades, precios acordados con el cliente o agrega nuevos renglones'
+                      : 'Carga rápida por SKU, selector de tarifa (BCV vs Zelle) y emisión de PDF'}
+                  </p>
                 </div>
               </div>
               <button
@@ -2446,7 +2563,11 @@ export default function QuotationsPage() {
                 className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-extrabold rounded-xl text-xs flex items-center gap-2 shadow-md transition-all cursor-pointer"
               >
                 <FileText size={16} />
-                <span>{savingManualQuote ? 'Guardando...' : 'Emitir Cotización y Descargar PDF'}</span>
+                <span>
+                  {savingManualQuote
+                    ? 'Guardando...'
+                    : (editingCorrelative ? 'Guardar Cambios y Descargar PDF' : 'Emitir Cotización y Descargar PDF')}
+                </span>
               </button>
             </div>
 

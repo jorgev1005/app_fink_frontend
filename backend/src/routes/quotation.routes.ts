@@ -3,6 +3,7 @@ import {
   getQuotations,
   getQuotationById,
   createQuotation,
+  updateQuotation,
   updateQuotationStatus,
   generatePOFromQuotation,
   viewQuotationPDF
@@ -14,6 +15,7 @@ const router = Router();
 router.get('/', getQuotations);
 router.post('/', createQuotation);
 router.get('/:id', getQuotationById);
+router.put('/:id', updateQuotation);
 router.get('/:id/pdf', viewQuotationPDF);
 router.patch('/:id/status', updateQuotationStatus);
 router.post('/:id/generate-po', generatePOFromQuotation);

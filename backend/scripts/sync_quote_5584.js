@@ -6,7 +6,7 @@ const quote5584 = {
   correlative: "COT-20260910-5584",
   createdAt: "2026-09-10T21:06:00.000Z",
   channel: "CATALOGO_WEB",
-  status: "APPROVED",
+  status: "PENDING",
   customer: {
     name: "INDUSTRIA TAPA AMARILLA C.A.",
     taxId: "J-501762805",

@@ -126,7 +126,7 @@ export const createQuotation = async (req: Request, res: Response) => {
       quotes[idx] = {
         ...existing,
         ...quoteRecord,
-        status: existing.status || quoteRecord.status || 'PENDING',
+        status: body.status !== undefined ? body.status : (existing.status || 'PENDING'),
         purchaseOrderNumber: (existing as any)?.purchaseOrderNumber || (body as any)?.purchaseOrderNumber,
         invoiceCode: (existing as any)?.invoiceCode || (body as any)?.invoiceCode,
         invoiceId: (existing as any)?.invoiceId || (body as any)?.invoiceId,
@@ -143,10 +143,88 @@ export const createQuotation = async (req: Request, res: Response) => {
     res.status(201).json({
       success: true,
       message: 'Cotización guardada exitosamente',
-      data: quoteRecord
+      data: idx >= 0 ? quotes[idx] : quoteRecord
     });
   } catch (error: any) {
     res.status(500).json({ success: false, error: { message: error.message } });
+  }
+};
+
+// PUT /api/quotations/:id — Modifica una cotización existente (precios, cantidades, cliente, etc.)
+export const updateQuotation = async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const body = req.body;
+    if (!body) {
+      return res.status(400).json({ success: false, error: { message: 'Datos requeridos para actualizar' } });
+    }
+
+    const quotes = loadAllQuotes();
+    const idx = quotes.findIndex((q: any) => q.id === id || q.correlative === id);
+    if (idx === -1) {
+      return res.status(404).json({ success: false, error: { message: 'Cotización no encontrada' } });
+    }
+
+    const existing = quotes[idx];
+    const bcvRate = Number(body.rates?.bcv || body.tasaBCV || existing.rates?.bcv || 785.07);
+
+    const updatedItems = Array.isArray(body.items) ? body.items.map((i: any) => {
+      const qty = Number(i.quantity || 1);
+      const unitPriceUSD = Number(i.unitPriceUSD || i.unitPrice || 0);
+      const subtotalUSD = Number(i.subtotalUSD !== undefined ? i.subtotalUSD : (unitPriceUSD * qty));
+      return {
+        sku: i.sku || i.product?.sku || 'N/A',
+        name: i.name || i.product?.name || '',
+        quantity: qty,
+        unit: i.unit || i.product?.unit || 'UNIDAD',
+        unitPriceUSD,
+        unitPriceBs: Number((unitPriceUSD * bcvRate).toFixed(2)),
+        subtotalUSD: Number(subtotalUSD.toFixed(2)),
+        subtotalBs: Number((subtotalUSD * bcvRate).toFixed(2)),
+        medidas: i.medidas || i.product?.medidas || '',
+        costPrice: i.costPrice !== undefined ? Number(i.costPrice) : undefined
+      };
+    }) : existing.items;
+
+    const totalUSD = Number(body.totalUSD !== undefined ? body.totalUSD : updatedItems.reduce((acc: number, it: any) => acc + (it.subtotalUSD || 0), 0));
+    const totalBs = Number(body.totalBs !== undefined ? body.totalBs : (totalUSD * bcvRate));
+
+    quotes[idx] = {
+      ...existing,
+      customer: {
+        ...existing.customer,
+        ...(body.customer || {}),
+        name: body.customer?.name || body.clientName || existing.customer?.name,
+        taxId: body.customer?.taxId || body.clientTaxId || existing.customer?.taxId,
+        phone: body.customer?.phone || body.clientPhone || existing.customer?.phone,
+        email: body.customer?.email || body.clientEmail || existing.customer?.email,
+        city: body.customer?.city || body.destinationCity || existing.customer?.city,
+        seller: body.customer?.seller || body.seller || existing.customer?.seller,
+      },
+      paymentMethod: body.paymentMethod || existing.paymentMethod || 'bcv_bs',
+      rates: {
+        ...existing.rates,
+        ...(body.rates || {}),
+        bcv: bcvRate
+      },
+      items: updatedItems,
+      totalUSD: Number(totalUSD.toFixed(2)),
+      totalBs: Number(totalBs.toFixed(2)),
+      notes: body.notes !== undefined ? body.notes : existing.notes,
+      zelleAccount: body.zelleAccount !== undefined ? body.zelleAccount : existing.zelleAccount,
+      status: body.status || existing.status || 'PENDING',
+      updatedAt: new Date().toISOString()
+    };
+
+    saveAllQuotes(quotes);
+
+    return res.json({
+      success: true,
+      message: 'Cotización actualizada exitosamente',
+      data: quotes[idx]
+    });
+  } catch (error: any) {
+    return res.status(500).json({ success: false, error: { message: error.message } });
   }
 };
 

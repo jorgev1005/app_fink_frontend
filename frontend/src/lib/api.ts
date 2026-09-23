@@ -344,6 +344,7 @@ export const quotationsAPI = {
   getAll: (params?: any) => apiClient.get('/api/quotations', { params }),
   getById: (id: string) => apiClient.get(`/api/quotations/${id}`),
   create: (data: any) => apiClient.post('/api/quotations', data),
+  update: (id: string, data: any) => apiClient.put(`/api/quotations/${id}`, data),
   downloadPdf: (id: string) => apiClient.get(`/api/quotations/${id}/pdf`, { responseType: 'blob' }),
   updateStatus: (id: string, data: { status: string; notes?: string; rejectionReason?: string; orderNumber?: string }) =>
     apiClient.patch(`/api/quotations/${id}/status`, data),
