@@ -715,9 +715,121 @@ export const generatePOFromQuotation = async (req: Request, res: Response) => {
       notes: notes || ('Generada automáticamente desde Cotización ' + quote.correlative + ' para cliente ' + (quote.customer?.name || 'Cliente'))
     });
 
-    // Actualizar estado de la cotización a PO_GENERATED
+    // Resolver proyecto de la cotización
+    let targetProjectId = (quote as any).projectId || req.body.projectId;
+    if (!targetProjectId) {
+      const lucemProj = await prisma.project.findFirst({
+        where: { name: { contains: 'Lucem', mode: 'insensitive' } }
+      });
+      targetProjectId = lucemProj ? lucemProj.id : (await prisma.project.findFirst())?.id || '';
+    }
+
+    // Resolver o registrar Proveedor en contactos
+    let vendorContactId: string | null = null;
+    try {
+      if (supplierId) {
+        const found = await prisma.contactPerson.findUnique({ where: { id: supplierId } });
+        if (found) vendorContactId = found.id;
+      }
+      if (!vendorContactId && supplierTaxId) {
+        const found = await prisma.contactPerson.findFirst({
+          where: { taxId: supplierTaxId, projectId: targetProjectId }
+        });
+        if (found) vendorContactId = found.id;
+      }
+      if (!vendorContactId && supplierName) {
+        const found = await prisma.contactPerson.findFirst({
+          where: { name: { contains: supplierName.trim(), mode: 'insensitive' }, projectId: targetProjectId }
+        });
+        if (found) vendorContactId = found.id;
+      }
+      if (!vendorContactId && supplierName && supplierName.trim().toUpperCase() !== 'SOLO MAYOR / PROVEEDOR') {
+        const newContact = await prisma.contactPerson.create({
+          data: {
+            projectId: targetProjectId,
+            name: supplierName.trim(),
+            taxId: supplierTaxId || null,
+            phone: supplierPhone || null,
+            address: supplierAddress || null,
+            type: 'SUPPLIER'
+          }
+        });
+        vendorContactId = newContact.id;
+      }
+    } catch (e) {
+      console.warn('Error resolviendo contacto proveedor para OC:', e);
+    }
+
+    // Calcular costo total y estructura de renglones para la base de datos
+    const totalPOCost = Number(poItems.reduce((acc: number, item: any) => acc + (Number(item.costPrice || 0) * Number(item.quantity || 1)), 0).toFixed(2));
+
+    const finalLines = {
+      items: poItems.map((item: any, idx: number) => ({
+        id: Date.now() + idx,
+        productId: item.productId || 'CUSTOM',
+        name: item.name,
+        sku: item.sku,
+        supplierCode: item.supplierCode,
+        quantity: Number(item.quantity),
+        costPrice: Number(item.costPrice),
+        unitPrice: Number(item.costPrice),
+        price: Number(item.costPrice),
+        total: Number((Number(item.costPrice) * Number(item.quantity)).toFixed(2)),
+        medidas: item.medidas,
+        empaqueCantidad: item.empaqueCantidad,
+        notes: item.notes
+      })),
+      taxAmount: 0,
+      description: `Orden de Compra s/Cotización ${quote.correlative} - Proveedor: ${supplierName}`
+    };
+
+    // Crear la Orden de Compra oficial en la tabla Invoice (tipo BILL) de FINK
+    let createdInvoiceId = '';
+    try {
+      const createdInvoice = await prisma.invoice.create({
+        data: {
+          project: { connect: { id: targetProjectId } },
+          code: orderNumber,
+          type: 'BILL',
+          vendorId: vendorContactId,
+          issueDate: new Date(),
+          currency: 'USD',
+          total: totalPOCost,
+          outstanding: totalPOCost,
+          status: 'OPEN',
+          lines: JSON.stringify(finalLines),
+          createdBy: req.user ? (req.user as any).id : ((await prisma.user.findFirst())?.id || ''),
+          purchaseOrder: quote.correlative,
+          purchaseOrderDate: quote.createdAt ? new Date(quote.createdAt).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
+          notes: notes || `Orden de Compra formal emitida a ${supplierName} s/Cotización ${quote.correlative}`
+        }
+      });
+      createdInvoiceId = createdInvoice.id;
+    } catch (e) {
+      console.error('Error registrando Invoice para la Orden de Compra en BD:', e);
+    }
+
+    // Actualizar historial de la cotización con la nueva Orden de Compra emitida
     const idx = quotes.findIndex(q => q.id === id || q.correlative === id);
     if (idx >= 0) {
+      if (!quotes[idx].purchaseOrders) {
+        quotes[idx].purchaseOrders = [];
+      }
+      quotes[idx].purchaseOrders.push({
+        id: createdInvoiceId || undefined,
+        code: orderNumber,
+        supplierName: supplierName,
+        supplierId: vendorContactId || undefined,
+        totalCostUSD: totalPOCost,
+        createdAt: new Date().toISOString(),
+        createdBy: req.user ? (((req.user as any).firstName || '') + ' ' + ((req.user as any).lastName || '')).trim() : 'Administrador',
+        items: poItems.map((it: any) => ({
+          sku: it.sku,
+          name: it.name,
+          quantity: it.quantity,
+          costPrice: it.costPrice
+        }))
+      });
       quotes[idx].status = 'PO_GENERATED';
       quotes[idx].poGeneratedAt = new Date().toISOString();
       quotes[idx].poGeneratedBy = req.user ? (((req.user as any).firstName || '') + ' ' + ((req.user as any).lastName || '')).trim() : 'Administrador';
@@ -734,7 +846,7 @@ export const generatePOFromQuotation = async (req: Request, res: Response) => {
           action: 'PURCHASE_ORDER_GENERATED_FROM_QUOTATION',
           entity: 'PurchaseOrder',
           entityId: orderNumber,
-          description: 'Orden de Compra "' + orderNumber + '" emitida para "' + supplierName + '" desde Cotización "' + quote.correlative + '". Total renglones: ' + poItems.length
+          description: 'Orden de Compra "' + orderNumber + '" emitida para "' + supplierName + '" desde Cotización "' + quote.correlative + '". Total renglones: ' + poItems.length + ' ($' + totalPOCost + ' USD)'
         }
       });
     } catch (_) {}
@@ -743,6 +855,10 @@ export const generatePOFromQuotation = async (req: Request, res: Response) => {
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'inline; filename="' + filename + '"');
     res.setHeader('X-Order-Number', orderNumber);
+    if (createdInvoiceId) {
+      res.setHeader('X-Invoice-Id', createdInvoiceId);
+    }
+    res.setHeader('Access-Control-Expose-Headers', 'X-Order-Number, X-Invoice-Id');
     return res.send(buffer);
   } catch (error: any) {
     console.error('Error generando OC desde cotización:', error);

@@ -6,7 +6,8 @@ import {
   FileText, CheckCircle2, Clock, XCircle, ShoppingBag, Truck, Search, 
   Filter, Eye, ArrowLeft, RefreshCw, MessageSquare, Phone, MapPin, 
   Building2, UserCheck, AlertCircle, Plus, Send, ExternalLink, 
-  ChevronRight, ArrowRight, Download, Check, X, Package, DollarSign, Percent, Trash2, ShieldCheck
+  ChevronRight, ArrowRight, Download, Check, X, Package, DollarSign, Percent, Trash2, ShieldCheck,
+  Save, Loader2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import api, { apiClient } from '@/lib/api';
@@ -31,6 +32,7 @@ interface QuotationItem {
   quotedQuantity?: number;
   dispatchedQuantity?: number;
   pendingQuantity?: number;
+  orderedBefore?: number;
 }
 
 interface Quotation {
@@ -624,38 +626,69 @@ export default function QuotationsPage() {
     setPoQuote(quote);
     setPoNotes(`Abastecimiento para Cotización ${quote.correlative} - Cliente: ${quote.customer?.name || 'Particular'}`);
     
-    // Obtener ítems enriquecidos con su costo y código de proveedor
+    // Obtener ítems enriquecidos con su costo, código de proveedor y órdenes de compra previas
     try {
       const res = await (api as any).quotations.getById(quote.id || quote.correlative);
       const enrichedQuote = res.data?.success ? res.data.data : quote;
       
       const sCodes = skuSupplierCodes as Record<string, string>;
+      const previousPOs = enrichedQuote.purchaseOrders || (quote as any).purchaseOrders || [];
+
       const itemsPrepared = (enrichedQuote.items || []).map((it: QuotationItem) => {
         let sCode = it.supplierCode || (it.sku ? sCodes[it.sku] : undefined);
         if (!sCode && (it as any).description) {
           const m = (it as any).description.match(/C[oó]digo Proveedor:\s*([^|\n\r]+)/i);
           if (m && m[1]) sCode = m[1].trim();
         }
+
+        const quotedQty = Number(it.quotedQuantity || it.quantity || 1);
+        let orderedBefore = 0;
+        if (Array.isArray(previousPOs)) {
+          for (const po of previousPOs) {
+            const found = (po.items || []).find((pIt: any) => (pIt.sku && pIt.sku === it.sku) || pIt.name === it.name);
+            if (found) orderedBefore += Number(found.quantity || 0);
+          }
+        }
+        const pendingQty = Math.max(0, quotedQty - orderedBefore);
+
         return {
           ...it,
+          quotedQuantity: quotedQty,
+          orderedBefore: orderedBefore,
+          quantity: previousPOs.length > 0 ? (pendingQty > 0 ? pendingQty : quotedQty) : quotedQty,
           supplierCode: sCode,
-          selected: true,
+          selected: previousPOs.length > 0 ? pendingQty > 0 : true,
           orderCost: it.costPrice && it.costPrice > 0 ? it.costPrice : Number((it.unitPriceUSD * 0.85).toFixed(2))
         };
       });
       setPoItems(itemsPrepared);
     } catch (e) {
       const sCodes = skuSupplierCodes as Record<string, string>;
+      const previousPOs = (quote as any).purchaseOrders || [];
       const itemsPrepared = (quote.items || []).map((it: QuotationItem) => {
         let sCode = it.supplierCode || (it.sku ? sCodes[it.sku] : undefined);
         if (!sCode && (it as any).description) {
           const m = (it as any).description.match(/C[oó]digo Proveedor:\s*([^|\n\r]+)/i);
           if (m && m[1]) sCode = m[1].trim();
         }
+
+        const quotedQty = Number(it.quotedQuantity || it.quantity || 1);
+        let orderedBefore = 0;
+        if (Array.isArray(previousPOs)) {
+          for (const po of previousPOs) {
+            const found = (po.items || []).find((pIt: any) => (pIt.sku && pIt.sku === it.sku) || pIt.name === it.name);
+            if (found) orderedBefore += Number(found.quantity || 0);
+          }
+        }
+        const pendingQty = Math.max(0, quotedQty - orderedBefore);
+
         return {
           ...it,
+          quotedQuantity: quotedQty,
+          orderedBefore: orderedBefore,
+          quantity: previousPOs.length > 0 ? (pendingQty > 0 ? pendingQty : quotedQty) : quotedQty,
           supplierCode: sCode,
-          selected: true,
+          selected: previousPOs.length > 0 ? pendingQty > 0 : true,
           orderCost: it.costPrice && it.costPrice > 0 ? it.costPrice : Number((it.unitPriceUSD * 0.85).toFixed(2))
         };
       });
@@ -710,8 +743,8 @@ export default function QuotationsPage() {
     }
   };
 
-  // Ejecutar generación de Orden de Compra PDF
-  const handleExecuteGeneratePO = async (action: 'view' | 'download' | 'whatsapp') => {
+  // Ejecutar generación y guardado formal de Orden de Compra en FINK
+  const handleExecuteGeneratePO = async (action: 'save' | 'view' | 'download' | 'whatsapp') => {
     if (!poQuote) return;
     const selectedList = poItems.filter(i => i.selected);
     if (selectedList.length === 0) {
@@ -722,6 +755,7 @@ export default function QuotationsPage() {
     setGeneratingPO(true);
     try {
       const payload = {
+        supplierId: selectedSupplierId || undefined,
         supplierName: poSupplierName.trim() || 'SOLO MAYOR / PROVEEDOR',
         supplierTaxId: poSupplierTaxId.trim() || undefined,
         supplierPhone: poSupplierPhone.trim() || undefined,
@@ -754,10 +788,12 @@ export default function QuotationsPage() {
       });
 
       if (!res.ok) {
-        throw new Error('Error al generar la Orden de Compra');
+        const errJson = await res.json().catch(() => null);
+        throw new Error(errJson?.error?.message || 'Error al generar y guardar la Orden de Compra');
       }
 
       const orderNumber = res.headers.get('X-Order-Number') || 'OC-OFICIAL';
+      const invoiceId = res.headers.get('X-Invoice-Id');
       const blob = await res.blob();
       const blobUrl = window.URL.createObjectURL(blob);
 
@@ -768,7 +804,7 @@ export default function QuotationsPage() {
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-        toast.success(`📥 Orden de Compra ${orderNumber} descargada`);
+        toast.success(`✅ Orden de Compra ${orderNumber} guardada en FINK y descargada`);
       } else if (action === 'whatsapp') {
         const phoneClean = (poSupplierPhone || '').replace(/[^0-9]/g, '');
         const totalPOCost = selectedList.reduce((acc, item) => acc + (item.orderCost * item.quantity), 0);
@@ -779,16 +815,25 @@ export default function QuotationsPage() {
         
         window.open(waUrl, '_blank');
         window.open(blobUrl, '_blank');
-        toast.success(`📲 Abriendo WhatsApp y Orden ${orderNumber}`);
-      } else {
+        toast.success(`✅ Orden de Compra ${orderNumber} guardada en FINK. Abriendo WhatsApp...`);
+      } else if (action === 'view') {
         window.open(blobUrl, '_blank');
-        toast.success(`👁️ Abriendo Orden de Compra ${orderNumber}`);
+        toast.success(`✅ Orden de Compra ${orderNumber} guardada en FINK. Mostrando PDF.`);
+      } else {
+        toast.success(`✅ ¡Orden de Compra #${orderNumber} registrada y guardada exitosamente en el sistema FINK!`, {
+          duration: 5000
+        });
       }
 
       setShowPOModal(false);
       loadQuotations();
+
+      if (action === 'save' && invoiceId) {
+        router.push(`/invoices/${invoiceId}`);
+      }
     } catch (err: any) {
-      toast.error(err.message || 'Error al emitir orden de compra');
+      console.error('Error al emitir orden de compra:', err);
+      toast.error(err.message || 'Error al guardar la orden de compra');
     } finally {
       setGeneratingPO(false);
     }
@@ -1723,72 +1768,98 @@ export default function QuotationsPage() {
                         <th className="p-3 w-10 text-center">Pedir</th>
                         <th className="p-3">SKU</th>
                         <th className="p-3">Descripción</th>
-                        <th className="p-3 text-center w-24">Cant.</th>
-                        <th className="p-3 text-right w-28">Costo Compra ($)</th>
+                        <th className="p-3 text-center w-20">Cotizado</th>
+                        <th className="p-3 text-center w-24">Ya Pedido</th>
+                        <th className="p-3 text-center w-28">Cant. a Pedir</th>
+                        <th className="p-3 text-right w-24">Costo ($)</th>
                         <th className="p-3 text-right w-28">Subtotal Compra</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {poItems.map((item, idx) => (
-                        <tr key={idx} className={`hover:bg-slate-50 transition-colors ${item.selected ? '' : 'opacity-40 bg-slate-50/50'}`}>
-                          <td className="p-3 text-center">
-                            <input
-                              type="checkbox"
-                              checked={item.selected}
-                              onChange={e => {
-                                const copy = [...poItems];
-                                copy[idx].selected = e.target.checked;
-                                setPoItems(copy);
-                              }}
-                              className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 cursor-pointer"
-                            />
-                          </td>
-                          <td className="p-3 font-mono">
-                            <div className="font-semibold text-slate-700">{item.sku || 'N/A'}</div>
-                            {(() => {
-                              const sCodes = skuSupplierCodes as Record<string, string>;
-                              const sCode = item.supplierCode || (item.sku ? sCodes[item.sku] : null);
-                              if (!sCode) return null;
-                              return (
-                                <div className="text-[11px] font-bold text-blue-600 tracking-tight flex items-center gap-1 mt-0.5" title="Código de referencia del proveedor">
-                                  <span className="text-[9px] uppercase px-1 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded font-semibold">Prov</span>
-                                  <span>{sCode}</span>
+                      {poItems.map((item, idx) => {
+                        const quoted = Number(item.quotedQuantity || item.quantity || 1);
+                        const previous = Number(item.orderedBefore || 0);
+                        const pending = Math.max(0, quoted - previous);
+                        return (
+                          <tr key={idx} className={`hover:bg-slate-50 transition-colors ${item.selected ? '' : 'opacity-40 bg-slate-50/50'}`}>
+                            <td className="p-3 text-center">
+                              <input
+                                type="checkbox"
+                                checked={item.selected}
+                                onChange={e => {
+                                  const copy = [...poItems];
+                                  copy[idx].selected = e.target.checked;
+                                  setPoItems(copy);
+                                }}
+                                className="w-4 h-4 text-blue-600 rounded focus:ring-blue-500 cursor-pointer"
+                              />
+                            </td>
+                            <td className="p-3 font-mono">
+                              <div className="font-semibold text-slate-700">{item.sku || 'N/A'}</div>
+                              {(() => {
+                                const sCodes = skuSupplierCodes as Record<string, string>;
+                                const sCode = item.supplierCode || (item.sku ? sCodes[item.sku] : null);
+                                if (!sCode) return null;
+                                return (
+                                  <div className="text-[11px] font-bold text-blue-600 tracking-tight flex items-center gap-1 mt-0.5" title="Código de referencia del proveedor">
+                                    <span className="text-[9px] uppercase px-1 py-0.5 bg-blue-50 text-blue-700 border border-blue-200 rounded font-semibold">Prov</span>
+                                    <span>{sCode}</span>
+                                  </div>
+                                );
+                              })()}
+                            </td>
+                            <td className="p-3">
+                              <div className="font-medium text-slate-900">{item.name}</div>
+                              {previous > 0 && (
+                                <div className="text-[10px] text-amber-700 font-bold mt-0.5">
+                                  ⚠️ Previo: {previous} unds ordenadas (Resta pedir: {pending})
                                 </div>
-                              );
-                            })()}
-                          </td>
-                          <td className="p-3 font-medium text-slate-900">{item.name}</td>
-                          <td className="p-3 text-center">
-                            <input
-                              type="number"
-                              min="1"
-                              value={item.quantity}
-                              onChange={e => {
-                                const copy = [...poItems];
-                                copy[idx].quantity = parseFloat(e.target.value) || 1;
-                                setPoItems(copy);
-                              }}
-                              className="w-16 border border-slate-200 rounded-lg p-1 text-center font-bold text-xs focus:ring-2 focus:ring-blue-500 outline-none"
-                            />
-                          </td>
-                          <td className="p-3 text-right">
-                            <input
-                              type="number"
-                              step="0.01"
-                              value={item.orderCost}
-                              onChange={e => {
-                                const copy = [...poItems];
-                                copy[idx].orderCost = parseFloat(e.target.value) || 0;
-                                setPoItems(copy);
-                              }}
-                              className="w-20 border border-slate-200 rounded-lg p-1 text-right font-mono font-bold text-xs focus:ring-2 focus:ring-blue-500 outline-none"
-                            />
-                          </td>
-                          <td className="p-3 text-right font-mono font-bold text-slate-900">
-                            ${Number((item.orderCost || 0) * (item.quantity || 1)).toFixed(2)}
-                          </td>
-                        </tr>
-                      ))}
+                              )}
+                            </td>
+                            <td className="p-3 text-center font-mono font-bold text-slate-600">
+                              {quoted}
+                            </td>
+                            <td className="p-3 text-center font-mono">
+                              {previous > 0 ? (
+                                <span className="px-2 py-0.5 bg-amber-100 text-amber-800 rounded-md font-bold text-[11px]">
+                                  {previous}
+                                </span>
+                              ) : (
+                                <span className="text-slate-400">0</span>
+                              )}
+                            </td>
+                            <td className="p-3 text-center">
+                              <input
+                                type="number"
+                                min="0"
+                                value={item.quantity}
+                                onChange={e => {
+                                  const copy = [...poItems];
+                                  copy[idx].quantity = parseFloat(e.target.value) || 0;
+                                  setPoItems(copy);
+                                }}
+                                className="w-20 border border-blue-300 bg-blue-50/50 rounded-lg p-1.5 text-center font-bold text-xs text-blue-900 focus:ring-2 focus:ring-blue-500 outline-none"
+                              />
+                            </td>
+                            <td className="p-3 text-right">
+                              <input
+                                type="number"
+                                step="0.01"
+                                value={item.orderCost}
+                                onChange={e => {
+                                  const copy = [...poItems];
+                                  copy[idx].orderCost = parseFloat(e.target.value) || 0;
+                                  setPoItems(copy);
+                                }}
+                                className="w-20 border border-slate-200 rounded-lg p-1.5 text-right font-mono font-bold text-xs focus:ring-2 focus:ring-blue-500 outline-none"
+                              />
+                            </td>
+                            <td className="p-3 text-right font-mono font-bold text-slate-900">
+                              ${Number((item.orderCost || 0) * (item.quantity || 0)).toFixed(2)}
+                            </td>
+                          </tr>
+                        );
+                      })}
                     </tbody>
                   </table>
                 </div>
@@ -1830,9 +1901,20 @@ export default function QuotationsPage() {
 
               <div className="flex flex-wrap items-center gap-2">
                 <button
+                  onClick={() => handleExecuteGeneratePO('save')}
+                  disabled={generatingPO || selectedPOItems.length === 0}
+                  className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-black text-xs shadow-md hover:shadow-lg transition-all disabled:opacity-50 cursor-pointer"
+                  title="Guardar Orden de Compra en FINK y registrarla formalmente"
+                >
+                  {generatingPO ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                  <span>Guardar Orden de Compra en FINK</span>
+                </button>
+
+                <button
                   onClick={() => handleExecuteGeneratePO('view')}
                   disabled={generatingPO || selectedPOItems.length === 0}
-                  className="flex items-center gap-1.5 px-4 py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-bold text-xs shadow-xs transition-all disabled:opacity-50 cursor-pointer"
+                  className="flex items-center gap-1.5 px-3.5 py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-bold text-xs shadow-xs transition-all disabled:opacity-50 cursor-pointer"
+                  title="Guardar en FINK y ver PDF en nueva pestaña"
                 >
                   <Eye size={15} />
                   Ver PDF
@@ -1841,7 +1923,8 @@ export default function QuotationsPage() {
                 <button
                   onClick={() => handleExecuteGeneratePO('download')}
                   disabled={generatingPO || selectedPOItems.length === 0}
-                  className="flex items-center gap-1.5 px-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs shadow-xs transition-all disabled:opacity-50 cursor-pointer"
+                  className="flex items-center gap-1.5 px-3.5 py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-bold text-xs shadow-xs transition-all disabled:opacity-50 cursor-pointer"
+                  title="Guardar en FINK y descargar archivo PDF"
                 >
                   <Download size={15} />
                   Descargar PDF
@@ -1850,10 +1933,11 @@ export default function QuotationsPage() {
                 <button
                   onClick={() => handleExecuteGeneratePO('whatsapp')}
                   disabled={generatingPO || selectedPOItems.length === 0}
-                  className="flex items-center gap-1.5 px-4 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-xs transition-all disabled:opacity-50 cursor-pointer"
+                  className="flex items-center gap-1.5 px-3.5 py-2.5 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl font-bold text-xs shadow-xs transition-all disabled:opacity-50 cursor-pointer"
+                  title="Guardar en FINK y enviar WhatsApp al Proveedor"
                 >
                   <Send size={15} />
-                  Enviar WhatsApp al Proveedor
+                  Enviar WhatsApp
                 </button>
               </div>
             </div>
