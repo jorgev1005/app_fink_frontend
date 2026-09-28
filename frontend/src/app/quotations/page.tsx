@@ -501,13 +501,17 @@ export default function QuotationsPage() {
         if (res.data?.success) {
           toast.success(`¡Cotización ${editingCorrelative} actualizada exitosamente!`);
           setShowManualQuoteModal(false);
+          const updatedQuote = res.data.data;
+          if (updatedQuote && selectedQuote && (selectedQuote.id === editingCorrelative || selectedQuote.correlative === editingCorrelative)) {
+            setSelectedQuote(updatedQuote);
+          }
           setEditingCorrelative(null);
           setManualItems([]);
           setManualCustomer({ name: '', taxId: '', phone: '', email: '', city: 'La Victoria, Aragua', seller: 'Oficina' });
           setManualNotes('');
           loadQuotations();
 
-          window.open(`/backend-api/api/quotations/${editingCorrelative}/pdf`, '_blank');
+          window.open(`/backend-api/api/quotations/${editingCorrelative}/pdf?v=${Date.now()}`, '_blank');
         }
       } else {
         const res = await (api as any).quotations.create(payload);
@@ -522,7 +526,7 @@ export default function QuotationsPage() {
 
           const quoteId = res.data.data?.correlative || res.data.data?.id;
           if (quoteId) {
-            window.open(`/backend-api/api/quotations/${quoteId}/pdf`, '_blank');
+            window.open(`/backend-api/api/quotations/${quoteId}/pdf?v=${Date.now()}`, '_blank');
           }
         }
       }
@@ -1573,7 +1577,7 @@ export default function QuotationsPage() {
             <div className="p-4 border-t border-slate-200 bg-slate-50 flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-2">
                 <button
-                  onClick={() => window.open(`/backend-api/api/quotations/${selectedQuote.correlative || selectedQuote.id}/pdf`, '_blank')}
+                  onClick={() => window.open(`/backend-api/api/quotations/${selectedQuote.correlative || selectedQuote.id}/pdf?v=${Date.now()}`, '_blank')}
                   className="flex items-center gap-2 px-4 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-semibold text-xs transition-all cursor-pointer"
                 >
                   <Eye size={16} className="text-emerald-400" />

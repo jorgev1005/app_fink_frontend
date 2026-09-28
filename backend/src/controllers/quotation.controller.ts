@@ -27,6 +27,7 @@ function getHistoryPaths(): string[] {
   const root = process.cwd();
   return [
     path.join(root, 'data', 'cotizaciones_historial.json'),
+    path.join(root, 'backend', 'data', 'cotizaciones_historial.json'),
     path.join(root, 'uploads', 'cotizaciones_historial.json'),
     path.join(root, '..', 'data', 'cotizaciones_historial.json'),
     path.join(root, '..', '..', 'asistente', 'cotizaciones_historial.json'),
@@ -40,17 +41,31 @@ function getHistoryPaths(): string[] {
 
 export function loadAllQuotes(): any[] {
   const paths = getHistoryPaths();
-  for (const p of paths) {
-    if (fs.existsSync(p)) {
+  // Obtener todos los archivos existentes con su mtime para priorizar el más reciente
+  const existingFiles = paths
+    .filter(p => fs.existsSync(p))
+    .map(p => {
       try {
-        const raw = fs.readFileSync(p, 'utf8');
-        const data = JSON.parse(raw);
-        if (Array.isArray(data)) {
-          return data.filter(item => item && typeof item === 'object');
-        }
-      } catch (err) {
-        console.warn('Error reading quote file from ' + p, err);
+        const stat = fs.statSync(p);
+        return { path: p, mtime: stat.mtimeMs };
+      } catch (_) {
+        return null;
       }
+    })
+    .filter(Boolean) as { path: string; mtime: number }[];
+
+  // Ordenar los más recientemente modificados primero
+  existingFiles.sort((a, b) => b.mtime - a.mtime);
+
+  for (const item of existingFiles) {
+    try {
+      const raw = fs.readFileSync(item.path, 'utf8');
+      const data = JSON.parse(raw);
+      if (Array.isArray(data)) {
+        return data.filter(item => item && typeof item === 'object');
+      }
+    } catch (err) {
+      console.warn('Error reading quote file from ' + item.path, err);
     }
   }
   return [];
@@ -63,8 +78,16 @@ function saveAllQuotes(quotes: any[]): void {
       const dir = path.dirname(filePath);
       if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
       fs.writeFileSync(filePath, JSON.stringify(quotes, null, 2), 'utf8');
-    } catch (e) {
-      // Ignored for non-writable paths
+    } catch (e: any) {
+      // Si falla por permisos (ej. archivo creado por root en el directorio del usuario), intentar desenlazar y reescribir
+      try {
+        if (fs.existsSync(filePath)) {
+          fs.unlinkSync(filePath);
+          fs.writeFileSync(filePath, JSON.stringify(quotes, null, 2), 'utf8');
+        }
+      } catch (_) {
+        // Ignored for non-writable paths
+      }
     }
   });
 }
@@ -1018,6 +1041,9 @@ export const viewQuotationPDF = async (req: Request, res: Response) => {
     const filename = quotationNumber + '.pdf';
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', 'inline; filename="' + filename + '"');
+    res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.setHeader('Pragma', 'no-cache');
+    res.setHeader('Expires', '0');
     return res.send(buffer);
   } catch (error: any) {
     console.error('Error visualizando PDF de cotización:', error);

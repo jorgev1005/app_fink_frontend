@@ -18,7 +18,7 @@
     },
     "paymentMethod": "bcv_bs",
     "rates": {
-      "bcv": 827.74,
+      "bcv": 857.0058,
       "paralelo": 929.8,
       "eur": 916.03
     },
@@ -28,41 +28,43 @@
         "name": "Tapa 028 mm sin precinto amarilla",
         "quantity": 10000,
         "unit": "UNIDAD",
-        "unitPriceUSD": 0.19,
-        "unitPriceBs": 157.27,
-        "subtotalUSD": 1900,
-        "subtotalBs": 1572700.49,
-        "costPrice": 0.145,
-        "medidas": "AMARILLO"
+        "unitPriceUSD": 0.17,
+        "unitPriceBs": 145.69,
+        "subtotalUSD": 1700,
+        "subtotalBs": 1456909.86,
+        "medidas": "AMARILLO",
+        "costPrice": 0.145
       },
       {
         "sku": "LUC-CAR-RAF-CL5-017",
         "name": "Separador de carton cloro 500",
         "quantity": 3000,
         "unit": "UNIDAD",
-        "unitPriceUSD": 0.2,
-        "unitPriceBs": 165.55,
-        "subtotalUSD": 600,
-        "subtotalBs": 496642.26,
-        "costPrice": 0.15,
-        "medidas": "CL500"
+        "unitPriceUSD": 0.18,
+        "unitPriceBs": 154.26,
+        "subtotalUSD": 540,
+        "subtotalBs": 462783.13,
+        "medidas": "CL500",
+        "costPrice": 0.1
       },
       {
         "sku": "LUC-CAR-RAF-LV8-016",
         "name": "Separador de carton lavaplatos 800",
         "quantity": 3000,
         "unit": "UNIDAD",
-        "unitPriceUSD": 0.15,
-        "unitPriceBs": 124.16,
-        "subtotalUSD": 450,
-        "subtotalBs": 372481.7,
-        "costPrice": 0.1,
-        "medidas": "LV800"
+        "unitPriceUSD": 0.13,
+        "unitPriceBs": 111.41,
+        "subtotalUSD": 390,
+        "subtotalBs": 334232.26,
+        "medidas": "LV800",
+        "costPrice": 0.07
       }
     ],
-    "totalUSD": 2950,
-    "totalBs": 2441824.45,
-    "notes": "Entrega en CALLE ARISMENDI, LOCAL NRO. 54, ZONA INDUSTRIAL LA CHAPA, LA VICTORIA, EDO. ARAGUA. ZP 2121 (Envio Gratuito disponible a partir de $1000.00 USD)"
+    "totalUSD": 2630,
+    "totalBs": 2253925.25,
+    "notes": "Entrega en CALLE ARISMENDI, LOCAL NRO. 54, ZONA INDUSTRIAL LA CHAPA, LA VICTORIA, EDO. ARAGUA. ZP 2121 (Envio Gratuito disponible a partir de $1000.00 USD)",
+    "zelleAccount": "admin@grupoaludra.com",
+    "updatedAt": "2026-09-28T18:13:28.490Z"
   },
   {
     "id": "COT-20260825-2166",

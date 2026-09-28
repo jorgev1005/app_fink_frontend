@@ -392,6 +392,7 @@ export const createInvoice = async (req: Request, res: Response) => {
         const root = process.cwd();
         const paths = [
           path.join(root, 'data', 'cotizaciones_historial.json'),
+          path.join(root, 'backend', 'data', 'cotizaciones_historial.json'),
           path.join(root, 'uploads', 'cotizaciones_historial.json'),
           path.join(root, '..', 'data', 'cotizaciones_historial.json'),
           path.join('/home/fink', 'cotizaciones_historial.json'),
