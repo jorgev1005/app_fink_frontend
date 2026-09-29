@@ -791,7 +791,7 @@ function NewInvoiceContent() {
                                         : 'text-gray-500 hover:text-gray-700'
                                     }`}
                                 >
-                                    Factura de Proveedor
+                                    Factura de Compra
                                 </button>
                             </div>
                         </div>

@@ -110,7 +110,7 @@ function InvoicesPageContent() {
         try {
             setLoading(true);
             const [invRes, quoteRes, projRes] = await Promise.all([
-                api.invoices.getAll().catch(() => ({ data: { data: [] } })),
+                api.invoices.getAll({ limit: 1000 }).catch(() => ({ data: { data: [] } })),
                 quotationsAPI.getAll().catch(() => ({ data: { data: [] } })),
                 projectsAPI.getAll().catch(() => ({ data: { data: [] } }))
             ]);
@@ -476,6 +476,9 @@ function InvoicesPageContent() {
                     <Link href="/invoices/new?type=po" className="bg-indigo-700 hover:bg-indigo-800 text-white px-3 py-2 rounded-lg transition font-medium text-xs sm:text-sm flex items-center gap-1.5 shadow-sm">
                         📥 Nueva O.C.
                     </Link>
+                    <Link href="/invoices/new?type=bill" className="bg-orange-700 hover:bg-orange-800 text-white px-3 py-2 rounded-lg transition font-medium text-xs sm:text-sm flex items-center gap-1.5 shadow-sm">
+                        <Plus className="w-4 h-4" /> Factura de Compra
+                    </Link>
                     <Link href="/invoices/new?type=invoice" className="bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-2 rounded-lg transition font-medium text-xs sm:text-sm flex items-center gap-1.5 shadow-sm">
                         <Plus className="w-4 h-4" /> Nueva Factura / Nota
                     </Link>
@@ -840,7 +843,7 @@ function InvoicesPageContent() {
                                                 )}
                                                 {isBill && (
                                                     <span className="text-[10px] bg-orange-100 text-orange-800 font-bold px-1.5 py-0.5 rounded border border-orange-200">
-                                                        COMPRA PROV.
+                                                        FACTURA COMPRA
                                                     </span>
                                                 )}
                                                 {isPos && (
@@ -1157,7 +1160,7 @@ function InvoicesPageContent() {
                                                             )}
                                                             {isBill && (
                                                                 <span className="text-[10px] bg-orange-100 text-orange-800 font-bold px-1.5 py-0.5 rounded border border-orange-200">
-                                                                    COMPRA PROV.
+                                                                    FACTURA COMPRA
                                                                 </span>
                                                             )}
                                                             {isPos && (

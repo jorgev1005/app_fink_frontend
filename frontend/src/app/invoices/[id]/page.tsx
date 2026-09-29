@@ -15,6 +15,9 @@ interface InvoiceItem {
   total: number;
   productId?: string;
   notes?: string;
+  basePrice?: number;
+  adjustmentType?: 'PERCENT' | 'AMOUNT';
+  adjustmentValue?: number;
 }
 
 interface PaymentAllocationData {
@@ -206,46 +209,76 @@ export default function InvoiceDetailsPage() {
   const conversionFactor = getConversionFactor();
 
   const getInvoiceTotals = () => {
-    if (!invoice) return { subtotal: 0, taxAmount: 0, total: 0, outstanding: 0 };
+    if (!invoice) return { subtotal: 0, taxAmount: 0, total: 0, outstanding: 0, subtotalBruto: 0, totalDiscounts: 0, totalIncrements: 0, hasAdjustments: false };
     
     // Default values if calculateIVA is false
+    let subtotal = 0;
+    let calculatedTax = 0;
+    let total = 0;
+    let outstanding = 0;
+
     if (!calculateIVA) {
-      const subtotal = invoice.total - (invoice.taxAmount || 0);
-      return {
-        subtotal,
-        taxAmount: 0,
-        total: subtotal,
-        outstanding: invoice.outstanding - (invoice.taxAmount || 0)
-      };
-    }
-    
-    // If calculateIVA is true
-    if (invoice.taxAmount > 0) {
-      // Use existing DB tax values
-      return {
-        subtotal: invoice.total - invoice.taxAmount,
-        taxAmount: invoice.taxAmount,
-        total: invoice.total,
-        outstanding: invoice.outstanding
-      };
+      subtotal = invoice.total - (invoice.taxAmount || 0);
+      calculatedTax = 0;
+      total = subtotal;
+      outstanding = invoice.outstanding - (invoice.taxAmount || 0);
+    } else if (invoice.taxAmount > 0) {
+      subtotal = invoice.total - invoice.taxAmount;
+      calculatedTax = invoice.taxAmount;
+      total = invoice.total;
+      outstanding = invoice.outstanding;
     } else {
-      // Calculate IVA dynamically based on project settings or fallback to 16%
       const defaultIvaRate = (invoice.project?.defaultTaxRate !== undefined)
         ? (invoice.project.defaultTaxRate / 100)
         : 0.16; 
-      const subtotal = invoice.total;
-      const calculatedTax = subtotal * defaultIvaRate;
-      const total = subtotal + calculatedTax;
-      
-      const outstanding = invoice.total > 0 ? (invoice.outstanding / invoice.total) * total : 0;
-      
-      return {
-        subtotal,
-        taxAmount: calculatedTax,
-        total,
-        outstanding
-      };
+      subtotal = invoice.total;
+      calculatedTax = subtotal * defaultIvaRate;
+      total = subtotal + calculatedTax;
+      outstanding = invoice.total > 0 ? (invoice.outstanding / invoice.total) * total : 0;
     }
+
+    let subtotalBruto = 0;
+    let totalDiscounts = 0;
+    let totalIncrements = 0;
+    let hasAdjustments = false;
+
+    if (invoice.items && invoice.items.length > 0) {
+      invoice.items.forEach(it => {
+        const qty = Number(it.quantity) || 0;
+        const bPrice = it.basePrice !== undefined 
+          ? Number(it.basePrice) 
+          : (typeof it.unitPrice === 'number' && !isNaN(it.unitPrice) ? it.unitPrice : (typeof it.price === 'number' ? it.price : 0));
+        const lineBaseTotal = qty * bPrice;
+        subtotalBruto += lineBaseTotal;
+
+        const adjVal = Number(it.adjustmentValue || 0);
+        if (adjVal !== 0) {
+          hasAdjustments = true;
+          let diff = 0;
+          if (it.adjustmentType === 'AMOUNT') {
+            diff = adjVal * qty;
+          } else {
+            diff = (lineBaseTotal * adjVal) / 100;
+          }
+          if (diff < 0) {
+            totalDiscounts += Math.abs(diff);
+          } else {
+            totalIncrements += diff;
+          }
+        }
+      });
+    }
+
+    return {
+      subtotal,
+      taxAmount: calculatedTax,
+      total,
+      outstanding,
+      subtotalBruto: subtotalBruto > 0 ? subtotalBruto : subtotal,
+      totalDiscounts,
+      totalIncrements,
+      hasAdjustments
+    };
   };
 
   const totals = getInvoiceTotals();
@@ -758,7 +791,13 @@ export default function InvoiceDetailsPage() {
         msg += `• ${item.quantity}x ${item.description || item.name}\n`;
       } else {
         const itemTotal = formatCurrency(item.total * conversionFactor, displayCurrency);
-        msg += `• ${item.quantity}x ${item.description || item.name} - ${itemTotal}\n`;
+        let adjNote = '';
+        if (item.adjustmentValue && Number(item.adjustmentValue) !== 0) {
+          const sign = Number(item.adjustmentValue) > 0 ? '+' : '';
+          const unit = item.adjustmentType === 'AMOUNT' ? '$' : '%';
+          adjNote = ` (Ajuste: ${sign}${item.adjustmentValue}${unit})`;
+        }
+        msg += `• ${item.quantity}x ${item.description || item.name}${adjNote} - ${itemTotal}\n`;
       }
     });
 
@@ -915,7 +954,7 @@ export default function InvoiceDetailsPage() {
     if (invoice?.code?.toUpperCase().startsWith('NE-') || invoice?.code?.toUpperCase().startsWith('NE')) {
       return 'Nota de Entrega';
     }
-    return type === 'INVOICE' ? 'Factura de Venta' : 'Factura de Compra / Gasto';
+    return type === 'INVOICE' ? 'Factura de Venta' : 'Factura de Compra';
   };
 
   const getStatusBadge = (status: string, type: string) => {
@@ -1626,6 +1665,24 @@ export default function InvoiceDetailsPage() {
                                        <tr key={item.id} className="border-b border-gray-50 last:border-0">
                                            <td className={`${printLayout === 'FREE_FORM' ? 'py-1.5' : 'py-4'} text-sm text-gray-800`}>
                                                <p className="font-medium">{item.description || item.name || 'Ítem sin nombre'}</p>
+                                                {item.adjustmentValue && Number(item.adjustmentValue) !== 0 ? (
+                                                    <div className="flex items-center gap-1.5 mt-0.5">
+                                                        <span className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded ${
+                                                            Number(item.adjustmentValue) < 0 
+                                                                ? 'bg-rose-50 text-rose-700 border border-rose-200' 
+                                                                : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                                        }`}>
+                                                            {Number(item.adjustmentValue) < 0 ? 'Desc: ' : 'Inc: '}
+                                                            {Number(item.adjustmentValue) > 0 ? `+${item.adjustmentValue}` : item.adjustmentValue}
+                                                            {item.adjustmentType === 'AMOUNT' ? ' $' : '%'}
+                                                        </span>
+                                                        {item.basePrice !== undefined && Number(item.basePrice) !== Number(item.unitPrice || item.price) && (
+                                                            <span className="text-[10px] text-gray-400 font-mono">
+                                                                (Base: {formatCurrency(Number(item.basePrice) * conversionFactor, displayCurrency)})
+                                                            </span>
+                                                        )}
+                                                    </div>
+                                                ) : null}
                                                {item.notes && (
                                                   <p className="text-[10px] text-gray-400 mt-0.5 font-normal whitespace-pre-wrap leading-tight">
                                                      {item.notes}
@@ -1792,10 +1849,36 @@ export default function InvoiceDetailsPage() {
               {(viewMode !== 'DELIVERY_NOTE' || showPricesInDeliveryNote) && (
                  <div className="mt-8 flex justify-end">
                      <div className="w-full md:w-5/12 space-y-3">
-                         <div className="flex justify-between text-sm text-gray-600">
-                             <span>Subtotal</span>
-                             <span className="font-mono">{formatCurrency(totals.subtotal * conversionFactor, displayCurrency)}</span>
-                         </div>
+                          {totals.hasAdjustments && (
+                              <>
+                                  <div className="flex justify-between text-sm text-gray-600">
+                                      <span>Subtotal Bruto</span>
+                                      <span className="font-mono">{formatCurrency(totals.subtotalBruto * conversionFactor, displayCurrency)}</span>
+                                  </div>
+                                  {totals.totalDiscounts > 0 && (
+                                      <div className="flex justify-between text-sm text-rose-600 font-medium">
+                                          <span>Descuento (-)</span>
+                                          <span className="font-mono">- {formatCurrency(totals.totalDiscounts * conversionFactor, displayCurrency)}</span>
+                                      </div>
+                                  )}
+                                  {totals.totalIncrements > 0 && (
+                                      <div className="flex justify-between text-sm text-emerald-600 font-medium">
+                                          <span>Incremento (+)</span>
+                                          <span className="font-mono">+ {formatCurrency(totals.totalIncrements * conversionFactor, displayCurrency)}</span>
+                                      </div>
+                                  )}
+                                  <div className="flex justify-between text-sm font-semibold text-gray-700 pt-1 border-t border-gray-100">
+                                      <span>Subtotal Neto</span>
+                                      <span className="font-mono">{formatCurrency(totals.subtotal * conversionFactor, displayCurrency)}</span>
+                                  </div>
+                              </>
+                          )}
+                          {!totals.hasAdjustments && (
+                              <div className="flex justify-between text-sm text-gray-600">
+                                  <span>Subtotal</span>
+                                  <span className="font-mono">{formatCurrency(totals.subtotal * conversionFactor, displayCurrency)}</span>
+                              </div>
+                          )}
                          {totals.taxAmount > 0 && (
                              <div className="flex justify-between text-sm text-gray-600">
                                  <span>IVA ({invoice.taxAmount > 0 && invoice.total > 0 ? `${Math.round((invoice.taxAmount / (invoice.total - invoice.taxAmount)) * 100)}%` : '16%'})</span>
