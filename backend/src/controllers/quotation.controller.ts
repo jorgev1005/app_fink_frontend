@@ -25,9 +25,8 @@ function loadSupplierCodesMap(): Record<string, string> {
 
 function getHistoryPaths(): string[] {
   const root = process.cwd();
-  return [
+  const paths: string[] = [
     path.join(root, 'data', 'cotizaciones_historial.json'),
-    path.join(root, 'backend', 'data', 'cotizaciones_historial.json'),
     path.join(root, 'uploads', 'cotizaciones_historial.json'),
     path.join(root, '..', 'data', 'cotizaciones_historial.json'),
     path.join(root, '..', '..', 'asistente', 'cotizaciones_historial.json'),
@@ -37,6 +36,12 @@ function getHistoryPaths(): string[] {
     path.join('/home/fink/app_fink/backend/data', 'cotizaciones_historial.json'),
     path.join('/home/fink/asistente', 'cotizaciones_historial.json')
   ];
+
+  if (path.basename(root) !== 'backend') {
+    paths.unshift(path.join(root, 'backend', 'data', 'cotizaciones_historial.json'));
+  }
+
+  return paths;
 }
 
 export function loadAllQuotes(): any[] {
@@ -76,8 +81,10 @@ function saveAllQuotes(quotes: any[]): void {
   paths.forEach(filePath => {
     try {
       const dir = path.dirname(filePath);
-      if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-      fs.writeFileSync(filePath, JSON.stringify(quotes, null, 2), 'utf8');
+      // Solo escribir si el directorio contenedor realmente existe
+      if (fs.existsSync(dir)) {
+        fs.writeFileSync(filePath, JSON.stringify(quotes, null, 2), 'utf8');
+      }
     } catch (e: any) {
       // Si falla por permisos (ej. archivo creado por root en el directorio del usuario), intentar desenlazar y reescribir
       try {
