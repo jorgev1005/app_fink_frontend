@@ -115,15 +115,24 @@ export default function EditInvoicePage() {
             }
 
             if (parsedItems.length > 0) {
-                setLines(parsedItems.map((item: any, idx: number) => ({
-                   id: Date.now() + idx,
-                   productId: item.productId || '',
-                   name: item.description || item.name || '',
-                   quantity: Number(item.quantity || 1),
-                   price: Number(typeof item.unitPrice === 'number' && !isNaN(item.unitPrice) ? item.unitPrice : (typeof item.price === 'number' && !isNaN(item.price) ? item.price : 0)),
-                   total: Number(item.total || 0),
-                   notes: item.notes || ''
-                })));
+                setLines(parsedItems.map((item: any, idx: number) => {
+                   const unitPrice = Number(typeof item.unitPrice === 'number' && !isNaN(item.unitPrice) ? item.unitPrice : (typeof item.price === 'number' && !isNaN(item.price) ? item.price : 0));
+                   const basePrice = item.basePrice !== undefined ? Number(item.basePrice) : unitPrice;
+                   const adjType = item.adjustmentType === 'AMOUNT' ? 'AMOUNT' : 'PERCENT';
+                   const adjVal = Number(item.adjustmentValue || 0);
+                   return {
+                      id: Date.now() + idx,
+                      productId: item.productId || '',
+                      name: item.description || item.name || '',
+                      quantity: Number(item.quantity || 1),
+                      basePrice,
+                      adjustmentType: adjType,
+                      adjustmentValue: adjVal,
+                      price: unitPrice,
+                      total: Number(item.total !== undefined ? item.total : (unitPrice * Number(item.quantity || 1))),
+                      notes: item.notes || ''
+                   };
+                }));
                 setUseItemsMode(true);
             } else {
                 const baseVal = inv.total - taxVal;
@@ -185,8 +194,56 @@ export default function EditInvoicePage() {
      }
   }, [lines, useItemsMode]);
 
+  const calculateAdjustedUnitPrice = (basePrice: number, adjType: 'PERCENT' | 'AMOUNT', adjValue: number): number => {
+    if (!adjValue || isNaN(adjValue)) return basePrice;
+    let finalPrice = basePrice;
+    if (adjType === 'PERCENT') {
+      finalPrice = basePrice * (1 + (adjValue / 100));
+    } else {
+      finalPrice = basePrice + adjValue;
+    }
+    return Math.max(0, Number(finalPrice.toFixed(4)));
+  };
+
+  const handleUpdateLineBasePrice = (id: number, newBasePrice: number) => {
+    setLines(prev => prev.map(line => {
+      if (line.id === id) {
+        const adjType = line.adjustmentType === 'AMOUNT' ? 'AMOUNT' : 'PERCENT';
+        const adjVal = Number(line.adjustmentValue || 0);
+        const finalUnitPrice = calculateAdjustedUnitPrice(newBasePrice, adjType, adjVal);
+        const qty = Number(line.quantity || 1);
+        return {
+          ...line,
+          basePrice: newBasePrice,
+          price: Number(finalUnitPrice.toFixed(2)),
+          total: Number((finalUnitPrice * qty).toFixed(2))
+        };
+      }
+      return line;
+    }));
+  };
+
+  const handleUpdateLineAdjustment = (id: number, newType: 'PERCENT' | 'AMOUNT', newVal: number) => {
+    setLines(prev => prev.map(line => {
+      if (line.id === id) {
+        const base = line.basePrice !== undefined ? Number(line.basePrice) : Number(line.price || 0);
+        const finalUnitPrice = calculateAdjustedUnitPrice(base, newType, newVal);
+        const qty = Number(line.quantity || 1);
+        return {
+          ...line,
+          basePrice: base,
+          adjustmentType: newType,
+          adjustmentValue: newVal,
+          price: Number(finalUnitPrice.toFixed(2)),
+          total: Number((finalUnitPrice * qty).toFixed(2))
+        };
+      }
+      return line;
+    }));
+  };
+
   const addLine = () => {
-    setLines(prev => [...prev, { id: Date.now(), productId: '', name: '', quantity: 1, price: 0, total: 0, notes: '' }]);
+    setLines(prev => [...prev, { id: Date.now(), productId: '', name: '', quantity: 1, basePrice: 0, adjustmentType: 'PERCENT', adjustmentValue: 0, price: 0, total: 0, notes: '' }]);
   };
 
   const removeLine = (id: number) => {
@@ -204,10 +261,26 @@ export default function EditInvoicePage() {
                   const prod = products.find(p => p.id === value);
                   if (prod) {
                       updated.name = prod.name;
-                      updated.price = prod.unitPrice || 0;
+                      const uPrice = Number(prod.unitPrice || 0);
+                      updated.basePrice = uPrice;
+                      updated.adjustmentType = 'PERCENT';
+                      updated.adjustmentValue = 0;
+                      updated.price = uPrice;
                   }
               }
-              updated.total = (Number(updated.quantity) || 0) * (Number(updated.price) || 0);
+              if (field === 'quantity') {
+                  const qty = Number(value) || 0;
+                  const finalUnitPrice = Number(updated.price) || 0;
+                  updated.total = Number((qty * finalUnitPrice).toFixed(2));
+                  return updated;
+              }
+              if (field === 'price') {
+                  const pVal = Number(value) || 0;
+                  updated.basePrice = pVal;
+                  updated.adjustmentValue = 0;
+                  updated.price = pVal;
+              }
+              updated.total = Number(((Number(updated.quantity) || 0) * (Number(updated.price) || 0)).toFixed(2));
               return updated;
           }
           return line;
@@ -222,10 +295,16 @@ export default function EditInvoicePage() {
                   const prod = products.find(p => p.id === values.productId);
                   if (prod) {
                       if (values.name === undefined) updated.name = prod.name;
-                      if (values.price === undefined) updated.price = prod.unitPrice || 0;
+                      const uPrice = Number(prod.unitPrice || 0);
+                      if (values.price === undefined && values.basePrice === undefined) {
+                        updated.basePrice = uPrice;
+                        updated.adjustmentType = 'PERCENT';
+                        updated.adjustmentValue = 0;
+                        updated.price = uPrice;
+                      }
                   }
               }
-              updated.total = (Number(updated.quantity) || 0) * (Number(updated.price) || 0);
+              updated.total = Number(((Number(updated.quantity) || 0) * (Number(updated.price) || 0)).toFixed(2));
               return updated;
           }
           return line;
@@ -278,7 +357,11 @@ export default function EditInvoicePage() {
               productId: line.productId || undefined,
               description: line.name || '',
               quantity: Number(line.quantity || 1),
+              basePrice: line.basePrice !== undefined ? Number(line.basePrice) : Number(line.price || 0),
+              adjustmentType: line.adjustmentType === 'AMOUNT' ? 'AMOUNT' : 'PERCENT',
+              adjustmentValue: Number(line.adjustmentValue || 0),
               unitPrice: Number(line.price || 0),
+              price: Number(line.price || 0),
               total: Number(line.total || 0),
               notes: line.notes || ''
           })) : [],
@@ -605,16 +688,24 @@ export default function EditInvoicePage() {
                             <div className="space-y-3">
                                 {/* Header solo visible en pantallas sm (tabletas/desktop) */}
                                 <div className="hidden sm:grid grid-cols-12 gap-2 text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1 px-1">
-                                    <div className="col-span-5">Producto / Servicio</div>
-                                    <div className="col-span-2 text-center">Cant.</div>
-                                    <div className="col-span-3 text-right">Precio Unit.</div>
-                                    <div className="col-span-2 text-right">Total</div>
+                                    <div className="col-span-4">Producto / Servicio</div>
+                                    <div className="col-span-1 text-center">Cant.</div>
+                                    <div className="col-span-2 text-right">P. Base ($)</div>
+                                    <div className="col-span-2 text-center">Ajuste (+/-)</div>
+                                    <div className="col-span-1 text-right">P. Final ($)</div>
+                                    <div className="col-span-2 text-right">Subtotal ($)</div>
                                 </div>
-                                {lines.map((line) => (
+                                {lines.map((line) => {
+                                    const basePrice = line.basePrice !== undefined ? Number(line.basePrice) : Number(line.price || 0);
+                                    const adjType = line.adjustmentType === 'AMOUNT' ? 'AMOUNT' : 'PERCENT';
+                                    const adjVal = Number(line.adjustmentValue || 0);
+                                    const hasAdj = adjVal !== 0;
+
+                                    return (
                                     <div key={line.id}>
                                         {/* Versión Desktop / Tablet (sm en adelante) */}
-                                        <div className="hidden sm:grid grid-cols-12 gap-2 items-start group">
-                                            <div className="col-span-5 space-y-1">
+                                        <div className="hidden sm:grid grid-cols-12 gap-2 items-center group py-1">
+                                            <div className="col-span-4 space-y-1">
                                                 <ProductAutocomplete
                                                     products={products}
                                                     value={line.productId}
@@ -624,6 +715,9 @@ export default function EditInvoicePage() {
                                                             updateLineMultiple(line.id, {
                                                                 productId: prod.id,
                                                                 name: prod.name,
+                                                                basePrice: prod.unitPrice || 0,
+                                                                adjustmentType: 'PERCENT',
+                                                                adjustmentValue: 0,
                                                                 price: prod.unitPrice || 0
                                                             });
                                                         } else {
@@ -647,21 +741,72 @@ export default function EditInvoicePage() {
                                                     onChange={(e) => updateLine(line.id, 'notes', e.target.value)}
                                                 />
                                             </div>
-                                            <div className="col-span-2">
+                                            <div className="col-span-1">
                                                 <input 
-                                                    type="number" className="w-full p-2 text-sm text-center bg-white border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-100"
+                                                    type="number" className="w-full p-2 text-sm text-center bg-white border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-100 font-bold"
                                                     min="1" value={line.quantity} onChange={(e) => updateLine(line.id, 'quantity', Number(e.target.value))}
                                                 />
                                             </div>
-                                            <div className="col-span-3">
+                                            <div className="col-span-2">
                                                 <input 
-                                                    type="number" className="w-full p-2 text-sm text-right bg-white border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-100"
-                                                    min="0" step="0.01" value={line.price} onChange={(e) => updateLine(line.id, 'price', Number(e.target.value))}
+                                                    type="number" className="w-full p-2 text-sm text-right bg-white border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-100 font-mono"
+                                                    min="0" step="0.01" value={basePrice} 
+                                                    onChange={(e) => handleUpdateLineBasePrice(line.id, Number(e.target.value))}
+                                                    placeholder="0.00"
                                                 />
                                             </div>
-                                            <div className="col-span-2 flex items-center justify-end gap-1">
-                                                <span className="text-sm font-bold text-slate-700">{Number(line.total).toFixed(2)}</span>
-                                                <button type="button" onClick={() => removeLine(line.id)} className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100">
+                                            {/* Ajuste (+/-) */}
+                                            <div className="col-span-2">
+                                                <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg p-1">
+                                                    <input
+                                                        type="number"
+                                                        step={adjType === 'AMOUNT' ? '0.01' : '1'}
+                                                        value={adjVal === 0 ? '' : adjVal}
+                                                        placeholder="0"
+                                                        onChange={(e) => handleUpdateLineAdjustment(line.id, adjType, Number(e.target.value))}
+                                                        className={`w-full text-center font-mono font-bold text-xs bg-white rounded border outline-none py-1 transition-all ${
+                                                            hasAdj
+                                                                ? adjVal < 0
+                                                                    ? 'text-red-600 border-red-200 bg-red-50/50'
+                                                                    : 'text-blue-600 border-blue-200 bg-blue-50/50'
+                                                                : 'text-slate-600 border-slate-200'
+                                                        }`}
+                                                        title="Ingresa valor positivo (+) para incremento o negativo (-) para descuento"
+                                                    />
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            const newType = adjType === 'AMOUNT' ? 'PERCENT' : 'AMOUNT';
+                                                            handleUpdateLineAdjustment(line.id, newType, adjVal);
+                                                        }}
+                                                        className={`px-1.5 py-1 text-[10px] font-black rounded cursor-pointer transition-colors shrink-0 ${
+                                                            adjType === 'AMOUNT'
+                                                                ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
+                                                                : 'bg-blue-100 text-blue-800 hover:bg-blue-200'
+                                                        }`}
+                                                        title={adjType === 'AMOUNT' ? 'Monto Fijo ($). Clic para cambiar a %' : 'Porcentaje (%). Clic para cambiar a $'}
+                                                    >
+                                                        {adjType === 'AMOUNT' ? '$' : '%'}
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            {/* P. Final */}
+                                            <div className="col-span-1 text-right">
+                                                <span className={`font-mono font-extrabold text-xs ${hasAdj ? (adjVal < 0 ? 'text-emerald-700' : 'text-blue-800') : 'text-slate-800'}`}>
+                                                    ${Number(line.price || 0).toFixed(2)}
+                                                </span>
+                                            </div>
+                                            {/* Subtotal */}
+                                            <div className="col-span-2 flex items-center justify-end gap-1 text-right">
+                                                <div className="font-mono">
+                                                    <span className="text-sm font-bold text-slate-800">${Number(line.total || 0).toFixed(2)}</span>
+                                                    {hasAdj && (
+                                                        <div className={`text-[9.5px] font-medium ${adjVal < 0 ? 'text-red-500' : 'text-blue-600'}`}>
+                                                            {adjVal < 0 ? `-${(Math.abs(basePrice - line.price) * line.quantity).toFixed(2)}` : `+${((line.price - basePrice) * line.quantity).toFixed(2)}`}
+                                                        </div>
+                                                    )}
+                                                </div>
+                                                <button type="button" onClick={() => removeLine(line.id)} className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100 cursor-pointer">
                                                     <Trash2 size={14} />
                                                 </button>
                                             </div>
@@ -692,6 +837,9 @@ export default function EditInvoicePage() {
                                                             updateLineMultiple(line.id, {
                                                                 productId: prod.id,
                                                                 name: prod.name,
+                                                                basePrice: prod.unitPrice || 0,
+                                                                adjustmentType: 'PERCENT',
+                                                                adjustmentValue: 0,
                                                                 price: prod.unitPrice || 0
                                                             });
                                                         } else {
@@ -716,8 +864,8 @@ export default function EditInvoicePage() {
                                                 />
                                             </div>
 
-                                            <div className="grid grid-cols-3 gap-2 items-end pt-1.5 border-t border-slate-200/60">
-                                                <div>
+                                            <div className="grid grid-cols-12 gap-2 items-end pt-2 border-t border-slate-200/60">
+                                                <div className="col-span-3">
                                                     <label className="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Cant.</label>
                                                     <input 
                                                         type="number" 
@@ -727,31 +875,116 @@ export default function EditInvoicePage() {
                                                         onChange={(e) => updateLine(line.id, 'quantity', Number(e.target.value))}
                                                     />
                                                 </div>
-                                                <div>
-                                                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Precio ($)</label>
+                                                <div className="col-span-3">
+                                                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">P. Base ($)</label>
                                                     <input 
                                                         type="number" 
-                                                        className="w-full p-2 text-sm text-right bg-white border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-100 font-medium font-mono"
+                                                        className="w-full p-2 text-sm text-right bg-white border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-100 font-mono"
                                                         min="0" 
                                                         step="0.01" 
-                                                        value={line.price} 
-                                                        onChange={(e) => updateLine(line.id, 'price', Number(e.target.value))}
+                                                        value={basePrice} 
+                                                        onChange={(e) => handleUpdateLineBasePrice(line.id, Number(e.target.value))}
                                                     />
                                                 </div>
-                                                <div className="text-right">
+                                                <div className="col-span-3">
+                                                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Ajuste</label>
+                                                    <div className="flex items-center gap-0.5 bg-white border border-slate-200 rounded-lg p-1 h-[38px]">
+                                                        <input
+                                                            type="number"
+                                                            step={adjType === 'AMOUNT' ? '0.01' : '1'}
+                                                            value={adjVal === 0 ? '' : adjVal}
+                                                            placeholder="0"
+                                                            onChange={(e) => handleUpdateLineAdjustment(line.id, adjType, Number(e.target.value))}
+                                                            className={`w-full text-center font-mono font-bold text-xs bg-transparent outline-none ${
+                                                                hasAdj
+                                                                    ? adjVal < 0 ? 'text-red-600' : 'text-blue-600'
+                                                                    : 'text-slate-600'
+                                                            }`}
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                const newType = adjType === 'AMOUNT' ? 'PERCENT' : 'AMOUNT';
+                                                                handleUpdateLineAdjustment(line.id, newType, adjVal);
+                                                            }}
+                                                            className={`px-1 py-0.5 text-[9px] font-black rounded cursor-pointer ${
+                                                                adjType === 'AMOUNT'
+                                                                    ? 'bg-emerald-100 text-emerald-800'
+                                                                    : 'bg-blue-100 text-blue-800'
+                                                            }`}
+                                                        >
+                                                            {adjType === 'AMOUNT' ? '$' : '%'}
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                                <div className="col-span-3 text-right">
                                                     <label className="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Total</label>
-                                                    <div className="h-[38px] flex items-center justify-end px-2 bg-slate-100 rounded-lg border border-slate-200">
+                                                    <div className="h-[38px] flex flex-col justify-center items-end px-2 bg-slate-100 rounded-lg border border-slate-200">
                                                         <span className="text-xs font-extrabold text-slate-900 font-mono">
                                                             ${Number(line.total).toFixed(2)}
                                                         </span>
+                                                        {hasAdj && (
+                                                            <span className={`text-[9px] font-bold font-mono ${adjVal < 0 ? 'text-red-500' : 'text-blue-600'}`}>
+                                                                ${Number(line.price || 0).toFixed(2)}
+                                                            </span>
+                                                        )}
                                                     </div>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
-                                ))}
+                                    );
+                                })}
                             </div>
-                            <button type="button" onClick={addLine} className="mt-4 text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 bg-blue-50 hover:bg-blue-100 px-3 py-2 rounded-lg transition-colors">
+
+                            {/* Desglose de Totales e Incrementos/Descuentos */}
+                            {(() => {
+                                const subtotalBruto = lines.reduce((acc, l) => {
+                                    const base = l.basePrice !== undefined ? Number(l.basePrice) : Number(l.price || 0);
+                                    return acc + (base * Number(l.quantity || 1));
+                                }, 0);
+                                const totalNeto = lines.reduce((acc, l) => acc + Number(l.total || 0), 0);
+                                const totalDiscounts = lines.reduce((acc, l) => {
+                                    const base = l.basePrice !== undefined ? Number(l.basePrice) : Number(l.price || 0);
+                                    const bruto = base * Number(l.quantity || 1);
+                                    const finalL = Number(l.total || 0);
+                                    return finalL < bruto ? acc + (bruto - finalL) : acc;
+                                }, 0);
+                                const totalIncrements = lines.reduce((acc, l) => {
+                                    const base = l.basePrice !== undefined ? Number(l.basePrice) : Number(l.price || 0);
+                                    const bruto = base * Number(l.quantity || 1);
+                                    const finalL = Number(l.total || 0);
+                                    return finalL > bruto ? acc + (finalL - bruto) : acc;
+                                }, 0);
+
+                                if (totalDiscounts <= 0.009 && totalIncrements <= 0.009) return null;
+
+                                return (
+                                    <div className="mt-4 p-3 bg-slate-900 text-white rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs font-mono shadow-xs">
+                                        <div className="flex flex-wrap items-center gap-4">
+                                            <span className="text-slate-400">
+                                                Subtotal Bruto: <strong className="text-slate-100">${subtotalBruto.toFixed(2)}</strong>
+                                            </span>
+                                            {totalDiscounts > 0.009 && (
+                                                <span className="text-red-400 font-semibold">
+                                                    Descuentos (-): -${totalDiscounts.toFixed(2)}
+                                                </span>
+                                            )}
+                                            {totalIncrements > 0.009 && (
+                                                <span className="text-blue-300 font-semibold">
+                                                    Incrementos (+): +${totalIncrements.toFixed(2)}
+                                                </span>
+                                            )}
+                                        </div>
+                                        <div className="text-right">
+                                            <span className="text-[10px] text-emerald-400 uppercase tracking-wider block font-bold">Total Neto Ítems</span>
+                                            <span className="text-base font-extrabold text-emerald-400 font-mono">${totalNeto.toFixed(2)} USD</span>
+                                        </div>
+                                    </div>
+                                );
+                            })()}
+
+                            <button type="button" onClick={addLine} className="mt-4 text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 bg-blue-50 hover:bg-blue-100 px-3 py-2 rounded-lg transition-colors cursor-pointer">
                                 <Plus size={14} /> AGREGAR ITEM
                             </button>
                         </div>

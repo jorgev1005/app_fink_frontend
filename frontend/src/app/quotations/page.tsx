@@ -19,6 +19,9 @@ interface QuotationItem {
   name: string;
   quantity: number;
   unit?: string;
+  basePriceUSD?: number;
+  adjustmentType?: 'PERCENT' | 'AMOUNT';
+  adjustmentValue?: number;
   unitPriceUSD: number;
   unitPriceBs?: number;
   subtotalUSD: number;
@@ -34,6 +37,18 @@ interface QuotationItem {
   pendingQuantity?: number;
   orderedBefore?: number;
 }
+
+const calculateAdjustedUnitPrice = (basePrice: number, adjType: 'PERCENT' | 'AMOUNT', adjValue: number): number => {
+  const base = Number(basePrice) || 0;
+  const val = Number(adjValue) || 0;
+  let finalPrice = base;
+  if (adjType === 'PERCENT') {
+    finalPrice = base * (1 + (val / 100));
+  } else {
+    finalPrice = base + val;
+  }
+  return Number(Math.max(0, finalPrice).toFixed(4));
+};
 
 interface Quotation {
   id: string;
@@ -147,6 +162,9 @@ export default function QuotationsPage() {
     sku: string;
     name: string;
     quantity: number;
+    basePriceUSD?: number;
+    adjustmentType?: 'PERCENT' | 'AMOUNT';
+    adjustmentValue?: number;
     unitPriceUSD: number;
     unit: string;
     subtotalUSD: number;
@@ -293,6 +311,9 @@ export default function QuotationsPage() {
         name: product.name,
         quantity: qty,
         unit: product.unit || 'UNIDAD',
+        basePriceUSD: unitPrice,
+        adjustmentType: 'PERCENT',
+        adjustmentValue: 0,
         unitPriceUSD: unitPrice,
         subtotalUSD: Number((unitPrice * qty).toFixed(2)),
         costPrice: product.costPrice,
@@ -367,11 +388,15 @@ export default function QuotationsPage() {
     setManualItems(prev => prev.map(item => {
       const prod = availableProducts.find(p => (p.sku || '').toUpperCase() === (item.sku || '').toUpperCase());
       if (prod) {
-        const newPrice = resolveItemPrice(prod, newTier);
+        const newBasePrice = resolveItemPrice(prod, newTier);
+        const adjType = item.adjustmentType || 'PERCENT';
+        const adjVal = item.adjustmentValue || 0;
+        const newFinalPrice = calculateAdjustedUnitPrice(newBasePrice, adjType, adjVal);
         return {
           ...item,
-          unitPriceUSD: newPrice,
-          subtotalUSD: Number((newPrice * item.quantity).toFixed(2))
+          basePriceUSD: newBasePrice,
+          unitPriceUSD: newFinalPrice,
+          subtotalUSD: Number((newFinalPrice * item.quantity).toFixed(2))
         };
       }
       return item;
@@ -409,6 +434,9 @@ export default function QuotationsPage() {
       name: raw,
       quantity: qty,
       unit: 'UNIDAD',
+      basePriceUSD: 0,
+      adjustmentType: 'PERCENT',
+      adjustmentValue: 0,
       unitPriceUSD: 0,
       subtotalUSD: 0
     }]);
@@ -424,20 +452,55 @@ export default function QuotationsPage() {
       return;
     }
     const updated = [...manualItems];
+    const item = updated[idx];
     updated[idx] = {
-      ...updated[idx],
+      ...item,
       quantity: qty,
-      subtotalUSD: Number((updated[idx].unitPriceUSD * qty).toFixed(2))
+      subtotalUSD: Number((item.unitPriceUSD * qty).toFixed(2))
+    };
+    setManualItems(updated);
+  };
+
+  const handleUpdateManualItemBasePrice = (idx: number, basePrice: number) => {
+    const updated = [...manualItems];
+    const item = updated[idx];
+    const adjType = item.adjustmentType || 'PERCENT';
+    const adjVal = item.adjustmentValue || 0;
+    const finalPrice = calculateAdjustedUnitPrice(basePrice, adjType, adjVal);
+    updated[idx] = {
+      ...item,
+      basePriceUSD: basePrice,
+      unitPriceUSD: finalPrice,
+      subtotalUSD: Number((finalPrice * item.quantity).toFixed(2))
+    };
+    setManualItems(updated);
+  };
+
+  const handleUpdateManualItemAdjustment = (idx: number, adjType: 'PERCENT' | 'AMOUNT', adjVal: number) => {
+    const updated = [...manualItems];
+    const item = updated[idx];
+    const base = item.basePriceUSD !== undefined ? item.basePriceUSD : item.unitPriceUSD;
+    const finalPrice = calculateAdjustedUnitPrice(base, adjType, adjVal);
+    updated[idx] = {
+      ...item,
+      basePriceUSD: base,
+      adjustmentType: adjType,
+      adjustmentValue: adjVal,
+      unitPriceUSD: finalPrice,
+      subtotalUSD: Number((finalPrice * item.quantity).toFixed(2))
     };
     setManualItems(updated);
   };
 
   const handleUpdateManualItemPrice = (idx: number, price: number) => {
     const updated = [...manualItems];
+    const item = updated[idx];
     updated[idx] = {
-      ...updated[idx],
+      ...item,
+      basePriceUSD: price,
+      adjustmentValue: 0,
       unitPriceUSD: price,
-      subtotalUSD: Number((price * updated[idx].quantity).toFixed(2))
+      subtotalUSD: Number((price * item.quantity).toFixed(2))
     };
     setManualItems(updated);
   };
@@ -480,6 +543,9 @@ export default function QuotationsPage() {
           name: i.name,
           quantity: i.quantity,
           unit: i.unit || 'UNIDAD',
+          basePriceUSD: i.basePriceUSD !== undefined ? i.basePriceUSD : i.unitPriceUSD,
+          adjustmentType: i.adjustmentType || 'PERCENT',
+          adjustmentValue: i.adjustmentValue || 0,
           unitPriceUSD: i.unitPriceUSD,
           unitPriceBs: Number((i.unitPriceUSD * bcvRate).toFixed(2)),
           subtotalUSD: i.subtotalUSD,
@@ -557,14 +623,20 @@ export default function QuotationsPage() {
 
     const items = (quote.items || []).map((it: any) => {
       const q = Number(it.quantity || 1);
-      const p = Number(it.unitPriceUSD || it.unitPrice || 0);
+      const finalP = Number(it.unitPriceUSD || it.unitPrice || 0);
+      const baseP = it.basePriceUSD !== undefined ? Number(it.basePriceUSD) : finalP;
+      const adjType = (it.adjustmentType === 'AMOUNT' ? 'AMOUNT' : 'PERCENT') as 'PERCENT' | 'AMOUNT';
+      const adjVal = it.adjustmentValue !== undefined ? Number(it.adjustmentValue) : 0;
       return {
         sku: it.sku || 'N/A',
         name: it.name || '',
         quantity: q,
-        unitPriceUSD: p,
+        basePriceUSD: baseP,
+        adjustmentType: adjType,
+        adjustmentValue: adjVal,
+        unitPriceUSD: finalP,
         unit: it.unit || 'UNIDAD',
-        subtotalUSD: Number(it.subtotalUSD !== undefined ? it.subtotalUSD : (p * q)),
+        subtotalUSD: Number(it.subtotalUSD !== undefined ? it.subtotalUSD : (finalP * q)),
         costPrice: it.costPrice !== undefined ? Number(it.costPrice) : undefined,
         medidas: it.medidas || ''
       };
@@ -1543,7 +1615,16 @@ export default function QuotationsPage() {
                                 {pending === 0 && quoted > 0 ? '✅ 0 (Listo)' : `${pending} pend.`}
                               </span>
                             </td>
-                            <td className="p-3 text-right font-mono">${Number(it.unitPriceUSD || 0).toFixed(2)}</td>
+                            <td className="p-3 text-right font-mono">
+                              <div className="font-bold">${Number(it.unitPriceUSD || 0).toFixed(2)}</div>
+                              {it.adjustmentValue && Number(it.adjustmentValue) !== 0 && (
+                                <span className={`inline-block text-[9.5px] font-extrabold px-1.5 py-0.5 rounded-md mt-0.5 ${
+                                  Number(it.adjustmentValue) < 0 ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-700'
+                                }`}>
+                                  {Number(it.adjustmentValue) > 0 ? '+' : ''}{it.adjustmentValue}{it.adjustmentType === 'AMOUNT' ? '$' : '%'}
+                                </span>
+                              )}
+                            </td>
                             <td className="p-3 text-right font-mono font-bold text-slate-900">
                               ${Number((it.unitPriceUSD || 0) * (it.quantity || 1)).toFixed(2)}
                             </td>
@@ -2431,61 +2512,119 @@ export default function QuotationsPage() {
                         <tr>
                           <th className="py-2.5 px-3">SKU</th>
                           <th className="py-2.5 px-3">Descripción</th>
-                          <th className="py-2.5 px-3 text-center w-20">Cant.</th>
-                          <th className="py-2.5 px-3 text-right w-28">P. Unit ($)</th>
+                          <th className="py-2.5 px-2 text-center w-16">Cant.</th>
+                          <th className="py-2.5 px-2 text-right w-24">P. Base ($)</th>
+                          <th className="py-2.5 px-2 text-center w-36">Ajuste (+/-)</th>
+                          <th className="py-2.5 px-2 text-right w-24">P. Final ($)</th>
                           <th className="py-2.5 px-3 text-right w-28">Subtotal ($)</th>
-                          <th className="py-2.5 px-2 text-center w-10"></th>
+                          <th className="py-2.5 px-2 text-center w-8"></th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-slate-100">
-                        {manualItems.map((item, idx) => (
-                          <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                            <td className="py-2 px-3 font-mono font-bold text-blue-700">{item.sku}</td>
-                            <td className="py-2 px-3 font-semibold text-slate-800">
-                              <input
-                                type="text"
-                                value={item.name}
-                                onChange={e => {
-                                  const up = [...manualItems];
-                                  up[idx].name = e.target.value;
-                                  setManualItems(up);
-                                }}
-                                className="w-full bg-transparent border-b border-transparent hover:border-slate-300 focus:border-blue-500 outline-none font-semibold text-slate-800"
-                              />
-                            </td>
-                            <td className="py-2 px-3 text-center">
-                              <input
-                                type="number"
-                                min="1"
-                                value={item.quantity}
-                                onChange={e => handleUpdateManualItemQty(idx, parseInt(e.target.value) || 0)}
-                                className="w-16 px-1.5 py-1 text-center font-mono font-bold border border-slate-200 rounded-lg outline-none focus:border-blue-500"
-                              />
-                            </td>
-                            <td className="py-2 px-3 text-right">
-                              <input
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                value={item.unitPriceUSD}
-                                onChange={e => handleUpdateManualItemPrice(idx, parseFloat(e.target.value) || 0)}
-                                className="w-20 px-1.5 py-1 text-right font-mono font-bold border border-slate-200 rounded-lg outline-none focus:border-blue-500 text-emerald-700"
-                              />
-                            </td>
-                            <td className="py-2 px-3 text-right font-mono font-bold text-slate-900">
-                              ${item.subtotalUSD.toFixed(2)}
-                            </td>
-                            <td className="py-2 px-2 text-center">
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveManualItem(idx)}
-                                className="text-slate-400 hover:text-red-500 p-1 rounded-lg transition-colors cursor-pointer"
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
+                        {manualItems.map((item, idx) => {
+                          const basePrice = item.basePriceUSD !== undefined ? item.basePriceUSD : item.unitPriceUSD;
+                          const adjVal = item.adjustmentValue || 0;
+                          const adjType = item.adjustmentType || 'PERCENT';
+                          const hasAdj = adjVal !== 0;
+
+                          return (
+                            <tr key={idx} className="hover:bg-slate-50 transition-colors">
+                              <td className="py-2 px-3 font-mono font-bold text-blue-700 whitespace-nowrap">{item.sku}</td>
+                              <td className="py-2 px-3 font-semibold text-slate-800">
+                                <input
+                                  type="text"
+                                  value={item.name}
+                                  onChange={e => {
+                                    const up = [...manualItems];
+                                    up[idx].name = e.target.value;
+                                    setManualItems(up);
+                                  }}
+                                  className="w-full bg-transparent border-b border-transparent hover:border-slate-300 focus:border-blue-500 outline-none font-semibold text-slate-800"
+                                />
+                              </td>
+                              <td className="py-2 px-2 text-center">
+                                <input
+                                  type="number"
+                                  min="1"
+                                  value={item.quantity}
+                                  onChange={e => handleUpdateManualItemQty(idx, parseInt(e.target.value) || 0)}
+                                  className="w-14 px-1 py-1 text-center font-mono font-bold border border-slate-200 rounded-lg outline-none focus:border-blue-500"
+                                />
+                              </td>
+                              {/* P. Base */}
+                              <td className="py-2 px-2 text-right">
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  min="0"
+                                  value={basePrice}
+                                  onChange={e => handleUpdateManualItemBasePrice(idx, parseFloat(e.target.value) || 0)}
+                                  className="w-20 px-1 py-1 text-right font-mono font-bold border border-slate-200 rounded-lg outline-none focus:border-blue-500 text-slate-700"
+                                />
+                              </td>
+                              {/* Ajuste (+/-) con toggle % vs $ */}
+                              <td className="py-2 px-2 text-center">
+                                <div className={`inline-flex items-center gap-1 bg-white border rounded-lg p-0.5 shadow-2xs ${
+                                  adjVal < 0 ? 'border-red-300 bg-red-50/30' : adjVal > 0 ? 'border-blue-300 bg-blue-50/30' : 'border-slate-200'
+                                }`}>
+                                  <input
+                                    type="number"
+                                    step={adjType === 'AMOUNT' ? '0.01' : '1'}
+                                    value={adjVal === 0 ? '' : adjVal}
+                                    placeholder="0"
+                                    onChange={e => {
+                                      const val = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                                      handleUpdateManualItemAdjustment(idx, adjType, isNaN(val) ? 0 : val);
+                                    }}
+                                    className={`w-14 px-1 py-0.5 text-xs text-right font-mono font-black outline-none bg-transparent ${
+                                      adjVal < 0 ? 'text-red-600' : adjVal > 0 ? 'text-blue-700' : 'text-slate-600'
+                                    }`}
+                                    title="Escribe un valor negativo para descuento (ej: -10) o positivo para incremento (ej: 5)"
+                                  />
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      const newType = adjType === 'AMOUNT' ? 'PERCENT' : 'AMOUNT';
+                                      handleUpdateManualItemAdjustment(idx, newType, adjVal);
+                                    }}
+                                    className={`px-1.5 py-0.5 text-[10px] font-black rounded cursor-pointer transition-colors ${
+                                      adjType === 'AMOUNT'
+                                        ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
+                                        : 'bg-blue-100 text-blue-800 hover:bg-blue-200'
+                                    }`}
+                                    title={adjType === 'AMOUNT' ? 'Modo Monto Fijo ($). Clic para cambiar a Porcentaje (%)' : 'Modo Porcentaje (%). Clic para cambiar a Monto Fijo ($)'}
+                                  >
+                                    {adjType === 'AMOUNT' ? '$' : '%'}
+                                  </button>
+                                </div>
+                              </td>
+                              {/* P. Final */}
+                              <td className="py-2 px-2 text-right">
+                                <span className={`font-mono font-extrabold text-xs ${hasAdj ? (adjVal < 0 ? 'text-emerald-700 font-black' : 'text-blue-800') : 'text-slate-800'}`}>
+                                  ${item.unitPriceUSD.toFixed(2)}
+                                </span>
+                              </td>
+                              {/* Subtotal */}
+                              <td className="py-2 px-3 text-right font-mono font-bold text-slate-900">
+                                <div>${item.subtotalUSD.toFixed(2)}</div>
+                                {hasAdj && (
+                                  <div className={`text-[10px] font-medium ${adjVal < 0 ? 'text-red-500' : 'text-blue-600'}`}>
+                                    {adjVal < 0 ? `-${(Math.abs(basePrice - item.unitPriceUSD) * item.quantity).toFixed(2)}` : `+${((item.unitPriceUSD - basePrice) * item.quantity).toFixed(2)}`}
+                                  </div>
+                                )}
+                              </td>
+                              <td className="py-2 px-2 text-center">
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveManualItem(idx)}
+                                  className="text-slate-400 hover:text-red-500 p-1 rounded-lg transition-colors cursor-pointer"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
                       </tbody>
                     </table>
                   </div>
@@ -2528,25 +2667,69 @@ export default function QuotationsPage() {
               </div>
 
               {/* 5. Totales */}
-              <div className="bg-slate-900 text-white p-4 rounded-2xl flex flex-wrap items-center justify-between gap-4 shadow-md">
-                <div>
-                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
-                    Modalidad: {manualPricingTier === 'BCV' ? 'Precio 1 (Tasa BCV)' : 'Precio 2 (Divisas / Zelle)'}
-                  </span>
-                  <span className="text-xs text-slate-300 font-mono">
-                    Tasa Oficial BCV: Bs. {bcvRate.toFixed(2)}
-                  </span>
-                </div>
+              {(() => {
+                const subtotalBrutoUSD = manualItems.reduce((acc, i) => {
+                  const base = i.basePriceUSD !== undefined ? i.basePriceUSD : i.unitPriceUSD;
+                  return acc + (base * i.quantity);
+                }, 0);
+                const totalUSD = manualItems.reduce((acc, i) => acc + (i.subtotalUSD || 0), 0);
+                const totalDiscountsUSD = manualItems.reduce((acc, i) => {
+                  const base = i.basePriceUSD !== undefined ? i.basePriceUSD : i.unitPriceUSD;
+                  const lineBruto = base * i.quantity;
+                  const lineFinal = i.subtotalUSD || (i.unitPriceUSD * i.quantity);
+                  return lineFinal < lineBruto ? acc + (lineBruto - lineFinal) : acc;
+                }, 0);
+                const totalIncrementsUSD = manualItems.reduce((acc, i) => {
+                  const base = i.basePriceUSD !== undefined ? i.basePriceUSD : i.unitPriceUSD;
+                  const lineBruto = base * i.quantity;
+                  const lineFinal = i.subtotalUSD || (i.unitPriceUSD * i.quantity);
+                  return lineFinal > lineBruto ? acc + (lineFinal - lineBruto) : acc;
+                }, 0);
 
-                <div className="text-right">
-                  <div className="text-lg font-extrabold font-mono text-emerald-400">
-                    ${manualItems.reduce((acc, i) => acc + (i.subtotalUSD || 0), 0).toFixed(2)} USD
+                return (
+                  <div className="bg-slate-900 text-white p-4 rounded-2xl flex flex-wrap items-center justify-between gap-4 shadow-md">
+                    <div>
+                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block">
+                        Modalidad: {manualPricingTier === 'BCV' ? 'Precio 1 (Tasa BCV)' : 'Precio 2 (Divisas / Zelle)'}
+                      </span>
+                      <span className="text-xs text-slate-300 font-mono">
+                        Tasa Oficial BCV: Bs. {bcvRate.toFixed(2)}
+                      </span>
+                      {(totalDiscountsUSD > 0 || totalIncrementsUSD > 0) && (
+                        <div className="mt-2 text-xs space-y-0.5 font-mono">
+                          <div className="text-slate-400 text-[11px]">
+                            Subtotal Bruto: <span className="text-slate-200 font-semibold">${subtotalBrutoUSD.toFixed(2)}</span>
+                          </div>
+                          {totalDiscountsUSD > 0 && (
+                            <div className="text-red-400 text-[11px]">
+                              Descuentos (-): <span className="font-semibold">-${totalDiscountsUSD.toFixed(2)}</span>
+                            </div>
+                          )}
+                          {totalIncrementsUSD > 0 && (
+                            <div className="text-blue-300 text-[11px]">
+                              Incrementos (+): <span className="font-semibold">+${totalIncrementsUSD.toFixed(2)}</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="text-right">
+                      {(totalDiscountsUSD > 0 || totalIncrementsUSD > 0) && (
+                        <span className="text-[10px] text-emerald-400 font-bold uppercase tracking-wider block">
+                          Total Neto
+                        </span>
+                      )}
+                      <div className="text-xl font-extrabold font-mono text-emerald-400">
+                        ${totalUSD.toFixed(2)} USD
+                      </div>
+                      <div className="text-xs font-bold font-mono text-amber-300">
+                        Bs. {(totalUSD * bcvRate).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </div>
+                    </div>
                   </div>
-                  <div className="text-xs font-bold font-mono text-amber-300">
-                    Bs. {(manualItems.reduce((acc, i) => acc + (i.subtotalUSD || 0), 0) * bcvRate).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </div>
-                </div>
-              </div>
+                );
+              })()}
 
             </div>
 

@@ -132,17 +132,30 @@ export const createQuotation = async (req: Request, res: Response) => {
         paralelo: Number(body.rates?.paralelo || 929.80),
         eur: Number(body.rates?.eur || 916.03)
       },
-      items: Array.isArray(body.items) ? body.items.map((i: any) => ({
-        sku: i.sku || i.product?.sku || 'N/A',
-        name: i.name || i.product?.name || '',
-        quantity: Number(i.quantity || 1),
-        unit: i.unit || i.product?.unit || 'UNIDAD',
-        unitPriceUSD: Number(i.unitPriceUSD || i.unitPrice || 0),
-        unitPriceBs: Number(i.unitPriceBs || (Number(i.unitPriceUSD || i.unitPrice || 0) * Number(body.rates?.bcv || 785.07))),
-        subtotalUSD: Number(i.subtotalUSD || (Number(i.unitPriceUSD || i.unitPrice || 0) * Number(i.quantity || 1))),
-        subtotalBs: Number(i.subtotalBs || (Number(i.subtotalUSD || 0) * Number(body.rates?.bcv || 785.07))),
-        medidas: i.medidas || i.product?.medidas || ''
-      })) : [],
+      items: Array.isArray(body.items) ? body.items.map((i: any) => {
+        const qty = Number(i.quantity || 1);
+        const unitPriceUSD = Number(i.unitPriceUSD || i.unitPrice || 0);
+        const basePriceUSD = i.basePriceUSD !== undefined ? Number(i.basePriceUSD) : unitPriceUSD;
+        const adjustmentType = i.adjustmentType === 'AMOUNT' ? 'AMOUNT' : 'PERCENT';
+        const adjustmentValue = Number(i.adjustmentValue || 0);
+        const rateBcv = Number(body.rates?.bcv || body.tasaBCV || 785.07);
+        const subtotalUSD = Number(i.subtotalUSD !== undefined ? i.subtotalUSD : (unitPriceUSD * qty));
+        return {
+          sku: i.sku || i.product?.sku || 'N/A',
+          name: i.name || i.product?.name || '',
+          quantity: qty,
+          unit: i.unit || i.product?.unit || 'UNIDAD',
+          basePriceUSD,
+          adjustmentType,
+          adjustmentValue,
+          unitPriceUSD,
+          unitPriceBs: Number((unitPriceUSD * rateBcv).toFixed(2)),
+          subtotalUSD: Number(subtotalUSD.toFixed(2)),
+          subtotalBs: Number((subtotalUSD * rateBcv).toFixed(2)),
+          medidas: i.medidas || i.product?.medidas || '',
+          costPrice: i.costPrice !== undefined ? Number(i.costPrice) : undefined
+        };
+      }) : [],
       totalUSD: Number(body.totalUSD || 0),
       totalBs: Number(body.totalBs || (Number(body.totalUSD || 0) * Number(body.rates?.bcv || 785.07))),
       notes: body.notes || '',
@@ -201,12 +214,18 @@ export const updateQuotation = async (req: Request, res: Response) => {
     const updatedItems = Array.isArray(body.items) ? body.items.map((i: any) => {
       const qty = Number(i.quantity || 1);
       const unitPriceUSD = Number(i.unitPriceUSD || i.unitPrice || 0);
+      const basePriceUSD = i.basePriceUSD !== undefined ? Number(i.basePriceUSD) : unitPriceUSD;
+      const adjustmentType = i.adjustmentType === 'AMOUNT' ? 'AMOUNT' : 'PERCENT';
+      const adjustmentValue = Number(i.adjustmentValue || 0);
       const subtotalUSD = Number(i.subtotalUSD !== undefined ? i.subtotalUSD : (unitPriceUSD * qty));
       return {
         sku: i.sku || i.product?.sku || 'N/A',
         name: i.name || i.product?.name || '',
         quantity: qty,
         unit: i.unit || i.product?.unit || 'UNIDAD',
+        basePriceUSD,
+        adjustmentType,
+        adjustmentValue,
         unitPriceUSD,
         unitPriceBs: Number((unitPriceUSD * bcvRate).toFixed(2)),
         subtotalUSD: Number(subtotalUSD.toFixed(2)),
@@ -1035,6 +1054,9 @@ export const viewQuotationPDF = async (req: Request, res: Response) => {
         name: it.name,
         quantity: Number(it.quantity || 1),
         unit: it.unit || 'UNIDAD',
+        basePrice: it.basePriceUSD !== undefined ? Number(it.basePriceUSD) : Number(it.unitPriceUSD || it.unitPrice || 0),
+        adjustmentType: it.adjustmentType || 'PERCENT',
+        adjustmentValue: Number(it.adjustmentValue || 0),
         unitPrice: Number(it.unitPriceUSD || it.unitPrice || 0),
         priceList: Number(it.unitPriceUSD || it.unitPrice || 0),
         medidas: it.medidas,

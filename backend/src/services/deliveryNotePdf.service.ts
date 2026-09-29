@@ -7,6 +7,9 @@ export interface DeliveryNoteItem {
     description: string;
     quantity: number;
     unit?: string;
+    basePrice?: number;
+    adjustmentType?: 'PERCENT' | 'AMOUNT';
+    adjustmentValue?: number;
     unitPrice?: number;
     total?: number;
     empaqueCantidad?: number;
@@ -267,11 +270,29 @@ export async function generateDeliveryNotePDFBuffer(options: DeliveryNotePDFOpti
                 bultosStr = `${Number(bVal.toFixed(2)).toLocaleString('es-VE')} ${bVal === 1 ? unidad : `${unidad}s`}`;
             }
 
+            let extraParts: string[] = [];
+            const adjVal = Number(item.adjustmentValue || 0);
+            if (adjVal !== 0) {
+                const isPercent = item.adjustmentType !== 'AMOUNT';
+                const sign = adjVal > 0 ? '+' : '';
+                const sym = isPercent ? '%' : '$';
+                const label = adjVal < 0 ? 'Descuento' : 'Incremento';
+                const baseP = item.basePrice !== undefined ? Number(item.basePrice) : unitPrice;
+                extraParts.push(`${label}: ${sign}${adjVal}${sym} (Base: $${baseP.toFixed(2)})`);
+            }
+            if (item.notes) {
+                extraParts.push(item.notes);
+            }
+            const hasExtra = extraParts.length > 0;
+            const extraText = extraParts.join('  |  ');
+
             doc.fontSize(7).font('Helvetica');
             const descHeight = doc.heightOfString(item.description, { width: colWidths.desc - 5 });
+            doc.fontSize(6).font('Helvetica-Oblique');
+            const extraHeight = hasExtra ? doc.heightOfString(extraText, { width: colWidths.desc - 5 }) + 2 : 0;
             doc.fontSize(6.5).font('Helvetica-Bold');
             const skuHeight = doc.heightOfString(item.sku || 'N/A', { width: colWidths.sku - 4 });
-            const rowHeight = Math.max(18, Math.max(descHeight, skuHeight) + 6);
+            const rowHeight = Math.max(18, Math.max(descHeight + extraHeight, skuHeight) + 6);
 
             // Verificar salto de página
             if (y + rowHeight > doc.page.height - 130) {
@@ -291,6 +312,11 @@ export async function generateDeliveryNotePDFBuffer(options: DeliveryNotePDFOpti
 
             doc.fontSize(7).fillColor(DARK).font('Helvetica')
                .text(item.description, cols.desc + 3, y + 4, { width: colWidths.desc - 5 });
+
+            if (hasExtra) {
+                doc.fontSize(6).fillColor(GRAY).font('Helvetica-Oblique')
+                   .text(extraText, cols.desc + 3, y + 4 + descHeight + 1, { width: colWidths.desc - 5 });
+            }
 
             doc.fontSize(7.5).fillColor(DARK).font('Helvetica-Bold')
                .text(qty.toLocaleString('es-VE'), cols.cant, y + 4, { width: colWidths.cant, align: 'center', lineBreak: false });

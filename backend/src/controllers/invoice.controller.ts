@@ -1594,6 +1594,9 @@ export const getInvoicePdf = async (req: Request, res: Response) => {
           description: name,
           quantity: qty,
           unit: it.unit || 'UNIDAD',
+          basePrice: it.basePrice !== undefined ? Number(it.basePrice) : finalUnitPrice,
+          adjustmentType: it.adjustmentType || 'PERCENT',
+          adjustmentValue: Number(it.adjustmentValue || 0),
           unitPrice: finalUnitPrice,
           total: finalTotal,
           empaqueCantidad,
@@ -1659,13 +1662,17 @@ export const getInvoicePdf = async (req: Request, res: Response) => {
           }
         }
 
+        const costPrice = Number(it.unitPrice || it.price || 0);
         return {
           sku,
           supplierCode,
           name,
           quantity: Number(it.quantity || 1),
           unit: it.unit || 'UNIDAD',
-          costPrice: Number(it.unitPrice || it.price || 0),
+          basePrice: it.basePrice !== undefined ? Number(it.basePrice) : costPrice,
+          adjustmentType: it.adjustmentType || 'PERCENT',
+          adjustmentValue: Number(it.adjustmentValue || 0),
+          costPrice,
           notes: it.notes || ''
         };
       });

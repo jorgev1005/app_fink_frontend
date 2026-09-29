@@ -8,6 +8,9 @@ export interface PurchaseOrderItem {
     name: string;
     quantity: number;
     unit?: string;
+    basePrice?: number;
+    adjustmentType?: 'PERCENT' | 'AMOUNT';
+    adjustmentValue?: number;
     costPrice: number;   // Costo unitario acordado con el proveedor
     empaqueCantidad?: number;
     medidas?: string;
@@ -219,6 +222,15 @@ export async function generatePurchaseOrderPDFBuffer(options: PurchaseOrderPDFOp
             totalItemsCount += qty;
 
             let extraParts: string[] = [];
+            const adjVal = Number(item.adjustmentValue || 0);
+            if (adjVal !== 0) {
+                const isPercent = item.adjustmentType !== 'AMOUNT';
+                const sign = adjVal > 0 ? '+' : '';
+                const sym = isPercent ? '%' : '$';
+                const label = adjVal < 0 ? 'Descuento' : 'Incremento';
+                const baseP = item.basePrice !== undefined ? Number(item.basePrice) : unitCost;
+                extraParts.push(`${label}: ${sign}${adjVal}${sym} (Base: $${baseP.toFixed(2)})`);
+            }
             if (item.unit && item.unit.toLowerCase() !== 'unidades' && item.unit.toLowerCase() !== 'unidad' && item.unit.toLowerCase() !== 'und') {
                 extraParts.push(`Unidad: ${item.unit}`);
             }

@@ -7,6 +7,9 @@ export interface QuotationItem {
     name: string;
     quantity: number;
     unit?: string;
+    basePrice?: number;
+    adjustmentType?: 'PERCENT' | 'AMOUNT';
+    adjustmentValue?: number;
     unitPrice: number;   // Precio base de contado en Divisas
     priceList?: number;  // Precio base en Bolívares a tasa BCV
     costPrice?: number;
@@ -247,6 +250,9 @@ export async function generateQuotationPDFBuffer(options: QuotationPDFOptions): 
 
         let subtotalDivisas = 0;
         let subtotalBcvUsd = 0;
+        let subtotalBrutoDivisas = 0;
+        let totalDiscountsDivisas = 0;
+        let totalIncrementsDivisas = 0;
         const freightFactor = 1 + ((freightAdjustmentPercent || 0) / 100);
 
         items.forEach((item, itemIdx) => {
@@ -271,7 +277,26 @@ export async function generateQuotationPDFBuffer(options: QuotationPDFOptions): 
             subtotalDivisas += lineTotDivisas;
             subtotalBcvUsd += lineTotBcvUsd;
 
+            // Gross & adjustments tracking
+            const origBase = item.basePrice !== undefined ? Number(item.basePrice) : baseDivisas;
+            const lineBrutoDivisas = origBase * freightFactor * qty;
+            subtotalBrutoDivisas += lineBrutoDivisas;
+            if (lineTotDivisas < lineBrutoDivisas - 0.001) {
+                totalDiscountsDivisas += (lineBrutoDivisas - lineTotDivisas);
+            } else if (lineTotDivisas > lineBrutoDivisas + 0.001) {
+                totalIncrementsDivisas += (lineTotDivisas - lineBrutoDivisas);
+            }
+
             let extraParts: string[] = [];
+            const adjVal = Number(item.adjustmentValue || 0);
+            if (adjVal !== 0) {
+                const isPercent = item.adjustmentType !== 'AMOUNT';
+                const sign = adjVal > 0 ? '+' : '';
+                const sym = isPercent ? '%' : '$';
+                const label = adjVal < 0 ? 'Descuento' : 'Incremento';
+                extraParts.push(`${label}: ${sign}${adjVal}${sym} (Base: $${origBase.toFixed(2)})`);
+            }
+
             if (item.unit && item.unit.toLowerCase() !== 'unidades' && item.unit.toLowerCase() !== 'unidad' && item.unit.toLowerCase() !== 'und') {
                 extraParts.push(`Unidad: ${item.unit}`);
             }
@@ -338,6 +363,8 @@ export async function generateQuotationPDFBuffer(options: QuotationPDFOptions): 
         // ── 6. CUADRO DE TOTALES Y CONDICIONES ────────────────────
         const totalBs = subtotalBcvUsd * tasaBCV;
         const totalBsFmt = totalBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const hasAdjustments = totalDiscountsDivisas > 0.009 || totalIncrementsDivisas > 0.009;
+        const boxH = hasAdjustments ? 78 : 58;
 
         if (y > doc.page.height - 180) {
             doc.addPage();
@@ -349,25 +376,55 @@ export async function generateQuotationPDFBuffer(options: QuotationPDFOptions): 
         const totX = LEFT + W - totW;
         const totY = y;
 
-        doc.rect(totX, totY, totW, 58).fill('#f8fafc');
-        doc.rect(totX, totY, totW, 58).strokeColor('#cbd5e1').lineWidth(0.5).stroke();
+        doc.rect(totX, totY, totW, boxH).fill('#f8fafc');
+        doc.rect(totX, totY, totW, boxH).strokeColor('#cbd5e1').lineWidth(0.5).stroke();
 
-        doc.fontSize(7.5).fillColor(GRAY).font('Helvetica')
-           .text('Total a Pagar en Moneda Extranjera:', totX + 10, totY + 8);
-        doc.fontSize(11).fillColor(GREEN).font('Helvetica-Bold')
-           .text(`$${subtotalDivisas.toFixed(2)} USD`, totX + 10, totY + 18);
+        let curTotY = totY + 5;
+        if (hasAdjustments) {
+            doc.fontSize(6.5).fillColor(GRAY).font('Helvetica')
+               .text('Subtotal Bruto:', totX + 10, curTotY, { width: 90 });
+            doc.fontSize(6.5).fillColor(DARK).font('Helvetica-Bold')
+               .text(`$${subtotalBrutoDivisas.toFixed(2)}`, totX + 100, curTotY, { width: totW - 110, align: 'right' });
+            curTotY += 9;
 
-        doc.moveTo(totX + 10, totY + 34).lineTo(totX + totW - 10, totY + 34).strokeColor('#e2e8f0').lineWidth(0.5).stroke();
+            if (totalDiscountsDivisas > 0.009) {
+                doc.fontSize(6.5).fillColor('#dc2626').font('Helvetica')
+                   .text('Descuentos (-):', totX + 10, curTotY, { width: 90 });
+                doc.fontSize(6.5).fillColor('#dc2626').font('Helvetica-Bold')
+                   .text(`-$${totalDiscountsDivisas.toFixed(2)}`, totX + 100, curTotY, { width: totW - 110, align: 'right' });
+                curTotY += 9;
+            }
+            if (totalIncrementsDivisas > 0.009) {
+                doc.fontSize(6.5).fillColor('#2563eb').font('Helvetica')
+                   .text('Incrementos (+):', totX + 10, curTotY, { width: 90 });
+                doc.fontSize(6.5).fillColor('#2563eb').font('Helvetica-Bold')
+                   .text(`+$${totalIncrementsDivisas.toFixed(2)}`, totX + 100, curTotY, { width: totW - 110, align: 'right' });
+                curTotY += 9;
+            }
+            doc.moveTo(totX + 10, curTotY).lineTo(totX + totW - 10, curTotY).strokeColor('#e2e8f0').lineWidth(0.5).stroke();
+            curTotY += 4;
+        }
 
-        doc.fontSize(7.5).fillColor(GRAY).font('Helvetica')
-           .text('Total a Pagar en Bolívares (BCV):', totX + 10, totY + 38);
-        doc.fontSize(10).fillColor(DARK).font('Helvetica-Bold')
-           .text(`Bs. ${totalBsFmt}`, totX + 10, totY + 47);
+        doc.fontSize(7).fillColor(GRAY).font('Helvetica')
+           .text(hasAdjustments ? 'Total Neto Moneda Extranjera:' : 'Total a Pagar en Moneda Extranjera:', totX + 10, curTotY);
+        curTotY += 9;
+        doc.fontSize(10.5).fillColor(GREEN).font('Helvetica-Bold')
+           .text(`$${subtotalDivisas.toFixed(2)} USD`, totX + 10, curTotY);
+        curTotY += 13;
+
+        doc.moveTo(totX + 10, curTotY).lineTo(totX + totW - 10, curTotY).strokeColor('#e2e8f0').lineWidth(0.5).stroke();
+        curTotY += 4;
+
+        doc.fontSize(6.5).fillColor(GRAY).font('Helvetica')
+           .text('Total a Pagar en Bolívares (BCV):', totX + 10, curTotY);
+        curTotY += 8;
+        doc.fontSize(9.5).fillColor(DARK).font('Helvetica-Bold')
+           .text(`Bs. ${totalBsFmt}`, totX + 10, curTotY);
 
         // Cuentas Bancarias (Izquierda)
         const bankW = W - totW - 10;
-        doc.rect(LEFT, totY, bankW, 58).fill('#f8fafc');
-        doc.rect(LEFT, totY, bankW, 58).strokeColor('#cbd5e1').lineWidth(0.5).stroke();
+        doc.rect(LEFT, totY, bankW, boxH).fill('#f8fafc');
+        doc.rect(LEFT, totY, bankW, boxH).strokeColor('#cbd5e1').lineWidth(0.5).stroke();
         
         doc.fontSize(7.5).fillColor(DARK).font('Helvetica-Bold')
            .text('Cuentas Bancarias / Métodos de Pago:', LEFT + 10, totY + 6, { lineBreak: false });
@@ -378,7 +435,7 @@ export async function generateQuotationPDFBuffer(options: QuotationPDFOptions): 
            .text(`• Divisas: Zelle (${zelleTarget}) | Banesco Panamá | Binance USDT`, LEFT + 10, totY + 28, { width: bankW - 15, lineBreak: false })
            .text('• Efectivo: Dólares en billetes en buen estado.', LEFT + 10, totY + 38, { width: bankW - 15, lineBreak: false });
 
-        y = totY + 66;
+        y = totY + boxH + 8;
 
         // ── 7. CONDICIONES Y QR CODE ──────────────────────────────
         if (y > doc.page.height - 95) {
