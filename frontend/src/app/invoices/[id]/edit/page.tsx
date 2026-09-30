@@ -391,7 +391,7 @@ export default function EditInvoicePage() {
   }
 
   return (
-    <div className="max-w-4xl mx-auto p-4 md:p-8 pb-20">
+    <div className="max-w-6xl mx-auto p-4 md:p-8 pb-20">
       {/* Header */}
       <div className="flex items-center gap-4 mb-6">
         <Link 
@@ -641,10 +641,10 @@ export default function EditInvoicePage() {
                 </h3>
 
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-6 bg-slate-50 p-5 rounded-2xl border border-slate-100 shadow-inner">
-                    <div className="md:col-span-3">
-                        <label className="block text-sm font-medium text-slate-700 mb-1">Moneda</label>
+                    <div className="md:col-span-4">
+                        <label className="block text-sm font-semibold text-slate-700 mb-1.5">Moneda del Documento</label>
                         <select 
-                             className="w-full p-2.5 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-100"
+                             className="w-full p-2.5 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-100 font-semibold text-slate-800"
                              value={currency}
                              onChange={(e) => setCurrency(e.target.value)}
                         >
@@ -654,29 +654,48 @@ export default function EditInvoicePage() {
                         </select>
                     </div>
                     
-                    <div className="md:col-span-5">
-                        <div className="flex justify-between items-center mb-1">
-                             <label className="block text-sm font-medium text-slate-700 font-semibold">Monto {useItemsMode ? '(Calculado)' : '(Base Imponible)'}</label>
-                             <button
-                                type="button"
-                                onClick={() => setUseItemsMode(!useItemsMode)}
-                                className="text-[10px] font-bold uppercase tracking-wide text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full hover:bg-blue-100 transition-colors"
-                             >
-                                {useItemsMode ? 'Modo Simple' : 'Detallar Items'}
-                             </button>
-                        </div>
-                        <div className="relative">
-                            <span className="absolute left-3 top-2.5 text-slate-400 font-bold">$</span>
-                            <input 
-                                type="number"
-                                step="any"
-                                className={`w-full pl-8 p-2.5 border border-slate-200 rounded-xl text-lg font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-100 ${useItemsMode ? 'bg-slate-100 text-slate-500' : 'bg-white'}`}
-                                placeholder="0.00"
-                                value={total}
-                                onChange={(e) => setTotal(e.target.value)}
-                                readOnly={useItemsMode}
-                            />
-                        </div>
+                    <div className="md:col-span-8 flex items-end">
+                        {useItemsMode ? (
+                            <div className="flex items-center justify-between w-full bg-white border border-slate-200/80 rounded-xl px-4 py-2 shadow-xs">
+                                <div>
+                                    <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">Monto Subtotal Calculado</span>
+                                    <span className="text-xl font-black text-slate-900 font-mono">
+                                        ${Number(total || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} <span className="text-xs font-bold text-slate-500 font-sans">{currency}</span>
+                                    </span>
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={() => setUseItemsMode(false)}
+                                    className="text-xs font-semibold text-slate-600 hover:text-blue-600 bg-slate-50 hover:bg-blue-50 px-3 py-1.5 rounded-lg border border-slate-200 transition-colors cursor-pointer"
+                                >
+                                    Modo Simple (Sin Ítems)
+                                </button>
+                            </div>
+                        ) : (
+                            <div className="w-full">
+                                <div className="flex justify-between items-center mb-1">
+                                     <label className="block text-sm font-semibold text-slate-700">Monto Base Imponible</label>
+                                     <button
+                                        type="button"
+                                        onClick={() => setUseItemsMode(true)}
+                                        className="text-xs font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg hover:bg-blue-100 transition-colors cursor-pointer"
+                                     >
+                                        Detallar Ítems
+                                     </button>
+                                </div>
+                                <div className="relative">
+                                    <span className="absolute left-3 top-2.5 text-slate-400 font-bold">$</span>
+                                    <input 
+                                        type="number"
+                                        step="any"
+                                        className="w-full pl-8 p-2.5 border border-slate-200 rounded-xl text-lg font-bold text-slate-900 outline-none focus:ring-2 focus:ring-blue-100 bg-white"
+                                        placeholder="0.00"
+                                        value={total}
+                                        onChange={(e) => setTotal(e.target.value)}
+                                    />
+                                </div>
+                            </div>
+                        )}
                     </div>
 
                     {/* ITEMS TABLE (Full Width) */}
@@ -687,12 +706,11 @@ export default function EditInvoicePage() {
                             </h4>
                             <div className="space-y-3">
                                 {/* Header solo visible en pantallas sm (tabletas/desktop) */}
-                                <div className="hidden sm:grid grid-cols-12 gap-2 text-xs font-semibold text-slate-400 uppercase tracking-wider mb-1 px-1">
-                                    <div className="col-span-4">Producto / Servicio</div>
+                                <div className="hidden sm:grid grid-cols-12 gap-3 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 px-1">
+                                    <div className="col-span-5">Producto / Servicio</div>
                                     <div className="col-span-1 text-center">Cant.</div>
-                                    <div className="col-span-2 text-right">P. Base ($)</div>
+                                    <div className="col-span-2 text-right">Precio Unit. ($)</div>
                                     <div className="col-span-2 text-center">Ajuste (+/-)</div>
-                                    <div className="col-span-1 text-right">P. Final ($)</div>
                                     <div className="col-span-2 text-right">Subtotal ($)</div>
                                 </div>
                                 {lines.map((line) => {
@@ -704,8 +722,9 @@ export default function EditInvoicePage() {
                                     return (
                                     <div key={line.id}>
                                         {/* Versión Desktop / Tablet (sm en adelante) */}
-                                        <div className="hidden sm:grid grid-cols-12 gap-2 items-center group py-1">
-                                            <div className="col-span-4 space-y-1">
+                                        <div className="hidden sm:grid grid-cols-12 gap-3 items-center group py-2 hover:bg-slate-50/70 rounded-lg px-1 transition-colors">
+                                            {/* 1. Producto / Servicio (col-span-5) */}
+                                            <div className="col-span-5 space-y-1">
                                                 <ProductAutocomplete
                                                     products={products}
                                                     value={line.productId}
@@ -741,37 +760,53 @@ export default function EditInvoicePage() {
                                                     onChange={(e) => updateLine(line.id, 'notes', e.target.value)}
                                                 />
                                             </div>
+
+                                            {/* 2. Cantidad (col-span-1) */}
                                             <div className="col-span-1">
                                                 <input 
-                                                    type="number" className="w-full p-2 text-sm text-center bg-white border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-100 font-bold"
-                                                    min="1" value={line.quantity} onChange={(e) => updateLine(line.id, 'quantity', Number(e.target.value))}
+                                                    type="number" 
+                                                    className="w-full p-2 text-sm text-center bg-white border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-100 font-bold"
+                                                    min="1" 
+                                                    value={line.quantity} 
+                                                    onChange={(e) => updateLine(line.id, 'quantity', Number(e.target.value))}
                                                 />
                                             </div>
+
+                                            {/* 3. Precio Unitario Base (col-span-2) */}
                                             <div className="col-span-2">
                                                 <input 
-                                                    type="number" className="w-full p-2 text-sm text-right bg-white border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-100 font-mono"
-                                                    min="0" step="0.01" value={basePrice} 
+                                                    type="number" 
+                                                    className="w-full p-2 text-sm text-right bg-white border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-100 font-mono"
+                                                    min="0" 
+                                                    step="0.01" 
+                                                    value={basePrice} 
                                                     onChange={(e) => handleUpdateLineBasePrice(line.id, Number(e.target.value))}
                                                     placeholder="0.00"
                                                 />
+                                                {hasAdj && (
+                                                    <div className="text-[10.5px] text-right font-mono mt-0.5 text-slate-500 font-medium">
+                                                        Neto: <span className="font-bold text-slate-800">${Number(line.price || 0).toFixed(2)}</span>
+                                                    </div>
+                                                )}
                                             </div>
-                                            {/* Ajuste (+/-) */}
+
+                                            {/* 4. Ajuste (+/-) (col-span-2) */}
                                             <div className="col-span-2">
-                                                <div className="flex items-center gap-1 bg-slate-50 border border-slate-200 rounded-lg p-1">
+                                                <div className="flex items-center rounded-lg border border-slate-200 bg-white overflow-hidden focus-within:ring-2 focus-within:ring-blue-100 focus-within:border-blue-300 transition-all">
                                                     <input
                                                         type="number"
                                                         step={adjType === 'AMOUNT' ? '0.01' : '1'}
                                                         value={adjVal === 0 ? '' : adjVal}
-                                                        placeholder="0"
+                                                        placeholder="±0"
                                                         onChange={(e) => handleUpdateLineAdjustment(line.id, adjType, Number(e.target.value))}
-                                                        className={`w-full text-center font-mono font-bold text-xs bg-white rounded border outline-none py-1 transition-all ${
+                                                        className={`w-full text-center font-mono font-bold text-xs py-2 px-1 outline-none bg-transparent ${
                                                             hasAdj
                                                                 ? adjVal < 0
-                                                                    ? 'text-red-600 border-red-200 bg-red-50/50'
-                                                                    : 'text-blue-600 border-blue-200 bg-blue-50/50'
-                                                                : 'text-slate-600 border-slate-200'
+                                                                    ? 'text-rose-600'
+                                                                    : 'text-emerald-600'
+                                                                : 'text-slate-600'
                                                         }`}
-                                                        title="Ingresa valor positivo (+) para incremento o negativo (-) para descuento"
+                                                        title="Valor positivo (+) para incremento o negativo (-) para descuento"
                                                     />
                                                     <button
                                                         type="button"
@@ -779,10 +814,10 @@ export default function EditInvoicePage() {
                                                             const newType = adjType === 'AMOUNT' ? 'PERCENT' : 'AMOUNT';
                                                             handleUpdateLineAdjustment(line.id, newType, adjVal);
                                                         }}
-                                                        className={`px-1.5 py-1 text-[10px] font-black rounded cursor-pointer transition-colors shrink-0 ${
+                                                        className={`px-2.5 py-2 text-xs font-bold transition-colors cursor-pointer border-l border-slate-100 shrink-0 ${
                                                             adjType === 'AMOUNT'
-                                                                ? 'bg-emerald-100 text-emerald-800 hover:bg-emerald-200'
-                                                                : 'bg-blue-100 text-blue-800 hover:bg-blue-200'
+                                                                ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                                                                : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
                                                         }`}
                                                         title={adjType === 'AMOUNT' ? 'Monto Fijo ($). Clic para cambiar a %' : 'Porcentaje (%). Clic para cambiar a $'}
                                                     >
@@ -790,24 +825,24 @@ export default function EditInvoicePage() {
                                                     </button>
                                                 </div>
                                             </div>
-                                            {/* P. Final */}
-                                            <div className="col-span-1 text-right">
-                                                <span className={`font-mono font-extrabold text-xs ${hasAdj ? (adjVal < 0 ? 'text-emerald-700' : 'text-blue-800') : 'text-slate-800'}`}>
-                                                    ${Number(line.price || 0).toFixed(2)}
-                                                </span>
-                                            </div>
-                                            {/* Subtotal */}
-                                            <div className="col-span-2 flex items-center justify-end gap-1 text-right">
+
+                                            {/* 5. Subtotal (col-span-2) */}
+                                            <div className="col-span-2 flex items-center justify-end gap-1.5 text-right">
                                                 <div className="font-mono">
-                                                    <span className="text-sm font-bold text-slate-800">${Number(line.total || 0).toFixed(2)}</span>
+                                                    <span className="text-sm font-bold text-slate-900">${Number(line.total || 0).toFixed(2)}</span>
                                                     {hasAdj && (
-                                                        <div className={`text-[9.5px] font-medium ${adjVal < 0 ? 'text-red-500' : 'text-blue-600'}`}>
+                                                        <div className={`text-[10px] font-semibold ${adjVal < 0 ? 'text-rose-500' : 'text-emerald-600'}`}>
                                                             {adjVal < 0 ? `-${(Math.abs(basePrice - line.price) * line.quantity).toFixed(2)}` : `+${((line.price - basePrice) * line.quantity).toFixed(2)}`}
                                                         </div>
                                                     )}
                                                 </div>
-                                                <button type="button" onClick={() => removeLine(line.id)} className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100 cursor-pointer">
-                                                    <Trash2 size={14} />
+                                                <button 
+                                                    type="button" 
+                                                    onClick={() => removeLine(line.id)} 
+                                                    className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100 cursor-pointer ml-1"
+                                                    title="Eliminar línea"
+                                                >
+                                                    <Trash2 size={15} />
                                                 </button>
                                             </div>
                                         </div>
@@ -876,7 +911,7 @@ export default function EditInvoicePage() {
                                                     />
                                                 </div>
                                                 <div className="col-span-3">
-                                                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">P. Base ($)</label>
+                                                    <label className="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Precio ($)</label>
                                                     <input 
                                                         type="number" 
                                                         className="w-full p-2 text-sm text-right bg-white border border-slate-200 rounded-lg outline-none focus:ring-2 focus:ring-blue-100 font-mono"
@@ -888,16 +923,16 @@ export default function EditInvoicePage() {
                                                 </div>
                                                 <div className="col-span-3">
                                                     <label className="block text-[10px] font-bold text-slate-400 uppercase mb-0.5">Ajuste</label>
-                                                    <div className="flex items-center gap-0.5 bg-white border border-slate-200 rounded-lg p-1 h-[38px]">
+                                                    <div className="flex items-center rounded-lg border border-slate-200 bg-white overflow-hidden h-[38px]">
                                                         <input
                                                             type="number"
                                                             step={adjType === 'AMOUNT' ? '0.01' : '1'}
                                                             value={adjVal === 0 ? '' : adjVal}
-                                                            placeholder="0"
+                                                            placeholder="±0"
                                                             onChange={(e) => handleUpdateLineAdjustment(line.id, adjType, Number(e.target.value))}
-                                                            className={`w-full text-center font-mono font-bold text-xs bg-transparent outline-none ${
+                                                            className={`w-full text-center font-mono font-bold text-xs py-1 px-1 outline-none bg-transparent ${
                                                                 hasAdj
-                                                                    ? adjVal < 0 ? 'text-red-600' : 'text-blue-600'
+                                                                    ? adjVal < 0 ? 'text-rose-600' : 'text-emerald-600'
                                                                     : 'text-slate-600'
                                                             }`}
                                                         />
@@ -907,10 +942,10 @@ export default function EditInvoicePage() {
                                                                 const newType = adjType === 'AMOUNT' ? 'PERCENT' : 'AMOUNT';
                                                                 handleUpdateLineAdjustment(line.id, newType, adjVal);
                                                             }}
-                                                            className={`px-1 py-0.5 text-[9px] font-black rounded cursor-pointer ${
+                                                            className={`px-2 h-full text-xs font-bold transition-colors cursor-pointer border-l border-slate-100 shrink-0 ${
                                                                 adjType === 'AMOUNT'
-                                                                    ? 'bg-emerald-100 text-emerald-800'
-                                                                    : 'bg-blue-100 text-blue-800'
+                                                                    ? 'bg-emerald-50 text-emerald-700'
+                                                                    : 'bg-blue-50 text-blue-700'
                                                             }`}
                                                         >
                                                             {adjType === 'AMOUNT' ? '$' : '%'}
