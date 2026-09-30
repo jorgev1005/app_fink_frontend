@@ -3,7 +3,7 @@ import React, { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import api from '@/lib/api';
 import Link from 'next/link';
-import { ArrowLeft, Save, Building, Calendar, FileText, DollarSign, AlertCircle, User, CreditCard, Wallet, Percent, Plus, Trash2, Box, Package, Search, X, Check, Clock, ChevronRight, Sparkles, ExternalLink, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Save, Building, Calendar, FileText, DollarSign, AlertCircle, User, CreditCard, Wallet, Percent, Plus, Trash2, Box, Package, Search, X, Check, Clock, ChevronRight, ChevronDown, Sparkles, ExternalLink, RefreshCw, SlidersHorizontal, MessageSquare } from 'lucide-react';
 import { toast } from 'sonner';
 import ProductAutocomplete from '@/components/ProductAutocomplete';
 
@@ -29,8 +29,11 @@ function NewInvoiceContent() {
   const [suggestedCode, setSuggestedCode] = useState<string>('');
   const [loadingSuggestedCode, setLoadingSuggestedCode] = useState<boolean>(false);
   
-  // Items Mode
+  // Items Mode & Minimalist View Options
   const [useItemsMode, setUseItemsMode] = useState(false);
+  const [showAdjustments, setShowAdjustments] = useState(false);
+  const [showMoreDetails, setShowMoreDetails] = useState(false);
+  const [activeNoteLines, setActiveNoteLines] = useState<Record<string, boolean>>({});
   const [lines, setLines] = useState<any[]>([
       { id: Date.now(), productId: '', name: '', quantity: 1, basePrice: 0, adjustmentType: 'PERCENT', adjustmentValue: 0, price: 0, total: 0, notes: '' }
   ]);
@@ -829,16 +832,7 @@ function NewInvoiceContent() {
                         </div>
                     </div>
 
-                    <div className="md:col-span-2">
-                         <label className="block text-sm font-medium text-gray-700 mb-1">Descripción / Notas</label>
-                         <textarea 
-                            rows={3}
-                            className="w-full p-3 bg-white border border-gray-200 focus:ring-2 focus:ring-blue-100 rounded-xl transition-all outline-none resize-none"
-                            placeholder="Ej. Servicios de consultoría mes de Enero..."
-                            value={description}
-                            onChange={(e) => setDescription(e.target.value)}
-                         />
-                    </div>
+
 
                     {/* Code */}
                     <div>
@@ -970,34 +964,63 @@ function NewInvoiceContent() {
                         </div>
                     </div>
 
-                    {/* Purchase Order (Only for Sales Invoices) */}
-                    {type === 'INVOICE' && (
-                        <div className="grid grid-cols-2 gap-4 md:col-span-2">
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    O.C. / Nro. de Pedido del Cliente <span className="text-gray-400 font-normal">(Opcional)</span>
-                                </label>
-                                <input 
-                                    className="w-full p-2.5 bg-white border border-gray-200 focus:ring-2 focus:ring-blue-100 rounded-xl transition-all outline-none text-sm"
-                                    placeholder="Ej. O.C. del cliente, nro de pedido o referencia"
-                                    value={purchaseOrder}
-                                    onChange={(e) => setPurchaseOrder(e.target.value)}
-                                />
+                    {/* Campos Adicionales Plegables (O.C. de Referencia, Descripción / Notas) */}
+                    <div className="md:col-span-2 pt-2 border-t border-slate-100">
+                        <button
+                            type="button"
+                            onClick={() => setShowMoreDetails(!showMoreDetails)}
+                            className="text-xs font-semibold text-blue-600 hover:text-blue-700 flex items-center gap-1.5 py-1 px-2 rounded-lg hover:bg-blue-50 transition-colors cursor-pointer"
+                        >
+                            {showMoreDetails ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                            <span>{showMoreDetails ? 'Ocultar campos adicionales' : 'Opciones adicionales (+ Notas generales, O.C. de Referencia)'}</span>
+                            {(description || purchaseOrder || purchaseOrderDate) && !showMoreDetails && (
+                                <span className="w-2 h-2 rounded-full bg-blue-500"></span>
+                            )}
+                        </button>
+
+                        {showMoreDetails && (
+                            <div className="mt-3 p-4 bg-slate-50/70 border border-slate-200/80 rounded-xl space-y-4 animate-in fade-in duration-150">
+                                <div>
+                                    <label className="block text-xs font-semibold text-gray-600 mb-1">Descripción General / Notas del Documento</label>
+                                    <textarea 
+                                        rows={2}
+                                        className="w-full p-2.5 bg-white border border-gray-200 focus:ring-2 focus:ring-blue-100 rounded-xl transition-all outline-none resize-none text-sm"
+                                        placeholder="Ej. Servicios de consultoría, condiciones particulares o notas..."
+                                        value={description}
+                                        onChange={(e) => setDescription(e.target.value)}
+                                    />
+                                </div>
+
+                                {type === 'INVOICE' && (
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-xs font-semibold text-gray-600 mb-1">
+                                                O.C. / Nro. de Pedido del Cliente <span className="text-gray-400 font-normal">(Opcional)</span>
+                                            </label>
+                                            <input 
+                                                className="w-full p-2.5 bg-white border border-gray-200 focus:ring-2 focus:ring-blue-100 rounded-xl transition-all outline-none text-sm"
+                                                placeholder="Ej. OC-10293, Nro. Pedido"
+                                                value={purchaseOrder}
+                                                onChange={(e) => setPurchaseOrder(e.target.value)}
+                                            />
+                                        </div>
+                                        <div>
+                                            <label className="block text-xs font-semibold text-gray-600 mb-1">
+                                                Fecha de O.C. / Pedido <span className="text-gray-400 font-normal">(Opcional)</span>
+                                            </label>
+                                            <input 
+                                                type="text"
+                                                className="w-full p-2.5 bg-white border border-gray-200 focus:ring-2 focus:ring-blue-100 rounded-xl transition-all outline-none text-sm"
+                                                placeholder="Ej. 05/06/2026"
+                                                value={purchaseOrderDate}
+                                                onChange={(e) => setPurchaseOrderDate(e.target.value)}
+                                            />
+                                        </div>
+                                    </div>
+                                )}
                             </div>
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Fecha de O.C. / Pedido <span className="text-gray-400 font-normal">(Opcional)</span>
-                                </label>
-                                <input 
-                                    type="text"
-                                    className="w-full p-2.5 bg-white border border-gray-200 focus:ring-2 focus:ring-blue-100 rounded-xl transition-all outline-none text-sm"
-                                    placeholder="Ej. 05/06/2026, 10/06/2026"
-                                    value={purchaseOrderDate}
-                                    onChange={(e) => setPurchaseOrderDate(e.target.value)}
-                                />
-                            </div>
-                        </div>
-                    )}
+                        )}
+                    </div>
                 </div>
             </section>
 
@@ -1070,16 +1093,35 @@ function NewInvoiceContent() {
                     {/* ITEMS TABLE (Full Width) */}
                     {useItemsMode && (
                         <div className="md:col-span-12 bg-white rounded-xl border border-slate-200 p-4 animate-in fade-in zoom-in-95 duration-200">
-                            <h4 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2">
-                                <Package size={16} className="text-blue-500" /> Items del Documento
-                            </h4>
+                            <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+                                <h4 className="text-sm font-bold text-slate-700 flex items-center gap-2">
+                                    <Package size={16} className="text-blue-500" /> Items del Documento
+                                </h4>
+                                <div className="flex items-center gap-2">
+                                    <button
+                                        type="button"
+                                        onClick={() => setShowAdjustments(!showAdjustments)}
+                                        className={`text-xs font-semibold px-2.5 py-1.5 rounded-lg border transition-all flex items-center gap-1.5 cursor-pointer ${
+                                            showAdjustments 
+                                                ? 'bg-blue-50 text-blue-700 border-blue-200 shadow-2xs font-bold' 
+                                                : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
+                                        }`}
+                                        title={showAdjustments ? 'Ocultar columna de ajustes' : 'Mostrar columna para configurar descuentos o incrementos'}
+                                    >
+                                        <SlidersHorizontal size={13} className={showAdjustments ? 'text-blue-600' : 'text-slate-400'} />
+                                        <span>{showAdjustments ? 'Ocultar Ajustes (+/-)' : 'Ajustes y Descuentos (+/-)'}</span>
+                                    </button>
+                                </div>
+                            </div>
                             <div className="space-y-3">
                                 {/* Header solo visible en pantallas sm (tabletas/desktop) */}
-                                <div className="hidden sm:grid grid-cols-12 gap-3 text-xs font-bold text-slate-500 uppercase tracking-wider mb-2 px-1">
-                                    <div className="col-span-5">Producto / Servicio</div>
+                                <div className="hidden sm:grid grid-cols-12 gap-3 text-xs font-bold text-slate-400 uppercase tracking-wider mb-2 px-1">
+                                    <div className={showAdjustments ? "col-span-5" : "col-span-7"}>Producto / Servicio</div>
                                     <div className="col-span-1 text-center">Cant.</div>
-                                    <div className="col-span-2 text-right">Precio Unit. ($)</div>
-                                    <div className="col-span-2 text-center">Ajuste (+/-)</div>
+                                    <div className="col-span-2 text-right">Precio ($)</div>
+                                    {showAdjustments && (
+                                        <div className="col-span-2 text-center">Ajuste (+/-)</div>
+                                    )}
                                     <div className="col-span-2 text-right">Subtotal ($)</div>
                                 </div>
                                 {lines.map((line) => {
@@ -1092,8 +1134,8 @@ function NewInvoiceContent() {
                                     <div key={line.id}>
                                         {/* Versión Desktop / Tablet (sm en adelante) */}
                                         <div className="hidden sm:grid grid-cols-12 gap-3 items-center group py-2 hover:bg-slate-50/70 rounded-lg px-1 transition-colors">
-                                            {/* 1. Producto / Servicio (col-span-5) */}
-                                            <div className="col-span-5 space-y-1">
+                                            {/* 1. Producto / Servicio */}
+                                            <div className={`${showAdjustments ? 'col-span-5' : 'col-span-7'} space-y-1`}>
                                                 <ProductAutocomplete
                                                     products={products}
                                                     value={line.productId}
@@ -1122,12 +1164,37 @@ function NewInvoiceContent() {
                                                     }}
                                                     placeholder="Buscar por nombre, SKU, código..."
                                                 />
-                                                <input 
-                                                    className="w-full mt-1 p-1 text-[11px] border-b border-dashed border-slate-200 focus:border-blue-300 outline-none bg-transparent text-gray-500 placeholder:text-slate-300"
-                                                    placeholder="Anotación / Comentario opcional de línea..."
-                                                    value={line.notes || ''}
-                                                    onChange={(e) => updateLine(line.id, 'notes', e.target.value)}
-                                                />
+                                                {(line.notes || activeNoteLines[line.id]) ? (
+                                                    <div className="flex items-center gap-1.5 mt-1">
+                                                        <input 
+                                                            className="w-full p-1 text-[11px] border-b border-dashed border-slate-200 focus:border-blue-300 outline-none bg-transparent text-gray-500 placeholder:text-slate-300"
+                                                            placeholder="Anotación / Comentario opcional de línea..."
+                                                            value={line.notes || ''}
+                                                            onChange={(e) => updateLine(line.id, 'notes', e.target.value)}
+                                                            autoFocus={!line.notes}
+                                                        />
+                                                        {!line.notes && (
+                                                            <button 
+                                                                type="button" 
+                                                                onClick={() => setActiveNoteLines(prev => ({ ...prev, [line.id]: false }))}
+                                                                className="text-slate-300 hover:text-slate-500 text-xs p-0.5 cursor-pointer"
+                                                                title="Cerrar nota"
+                                                            >
+                                                                <X size={12} />
+                                                            </button>
+                                                        )}
+                                                    </div>
+                                                ) : (
+                                                    <div className="flex items-center gap-2">
+                                                        <button 
+                                                            type="button"
+                                                            onClick={() => setActiveNoteLines(prev => ({ ...prev, [line.id]: true }))}
+                                                            className="text-[10.5px] text-slate-400 hover:text-blue-600 transition-colors flex items-center gap-1 opacity-0 group-hover:opacity-100 cursor-pointer"
+                                                        >
+                                                            <MessageSquare size={11} /> + Agregar nota
+                                                        </button>
+                                                    </div>
+                                                )}
                                             </div>
 
                                             {/* 2. Cantidad (col-span-1) */}
@@ -1153,47 +1220,52 @@ function NewInvoiceContent() {
                                                     placeholder="0.00"
                                                 />
                                                 {hasAdj && (
-                                                    <div className="text-[10.5px] text-right font-mono mt-0.5 text-slate-500 font-medium">
-                                                        Neto: <span className="font-bold text-slate-800">${Number(line.price || 0).toFixed(2)}</span>
+                                                    <div className="text-[10px] text-right font-mono mt-0.5 text-slate-500 flex items-center justify-end gap-1">
+                                                        <span className={`font-semibold px-1 py-0.2 rounded text-[9.5px] ${adjVal < 0 ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                                                            {adjVal < 0 ? 'Desc ' : 'Inc '}{adjVal > 0 ? `+${adjVal}` : adjVal}{adjType === 'AMOUNT' ? '$' : '%'}
+                                                        </span>
+                                                        <span className="font-bold text-slate-700">${Number(line.price || 0).toFixed(2)}</span>
                                                     </div>
                                                 )}
                                             </div>
 
-                                            {/* 4. Ajuste (+/-) (col-span-2) */}
-                                            <div className="col-span-2">
-                                                <div className="flex items-center rounded-lg border border-slate-200 bg-white overflow-hidden focus-within:ring-2 focus-within:ring-blue-100 focus-within:border-blue-300 transition-all">
-                                                    <input
-                                                        type="number"
-                                                        step={adjType === 'AMOUNT' ? '0.01' : '1'}
-                                                        value={adjVal === 0 ? '' : adjVal}
-                                                        placeholder="±0"
-                                                        onChange={(e) => handleUpdateLineAdjustment(line.id, adjType, Number(e.target.value))}
-                                                        className={`w-full text-center font-mono font-bold text-xs py-2 px-1 outline-none bg-transparent ${
-                                                            hasAdj
-                                                                ? adjVal < 0
-                                                                    ? 'text-rose-600'
-                                                                    : 'text-emerald-600'
-                                                                : 'text-slate-600'
-                                                        }`}
-                                                        title="Valor positivo (+) para incremento o negativo (-) para descuento"
-                                                    />
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => {
-                                                            const newType = adjType === 'AMOUNT' ? 'PERCENT' : 'AMOUNT';
-                                                            handleUpdateLineAdjustment(line.id, newType, adjVal);
-                                                        }}
-                                                        className={`px-2.5 py-2 text-xs font-bold transition-colors cursor-pointer border-l border-slate-100 shrink-0 ${
-                                                            adjType === 'AMOUNT'
-                                                                ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
-                                                                : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
-                                                        }`}
-                                                        title={adjType === 'AMOUNT' ? 'Monto Fijo ($). Clic para cambiar a %' : 'Porcentaje (%). Clic para cambiar a $'}
-                                                    >
-                                                        {adjType === 'AMOUNT' ? '$' : '%'}
-                                                    </button>
+                                            {/* 4. Ajuste (+/-) (col-span-2 solo si showAdjustments) */}
+                                            {showAdjustments && (
+                                                <div className="col-span-2">
+                                                    <div className="flex items-center rounded-lg border border-slate-200 bg-white overflow-hidden focus-within:ring-2 focus-within:ring-blue-100 focus-within:border-blue-300 transition-all">
+                                                        <input
+                                                            type="number"
+                                                            step={adjType === 'AMOUNT' ? '0.01' : '1'}
+                                                            value={adjVal === 0 ? '' : adjVal}
+                                                            placeholder="±0"
+                                                            onChange={(e) => handleUpdateLineAdjustment(line.id, adjType, Number(e.target.value))}
+                                                            className={`w-full text-center font-mono font-bold text-xs py-2 px-1 outline-none bg-transparent ${
+                                                                hasAdj
+                                                                    ? adjVal < 0
+                                                                        ? 'text-rose-600'
+                                                                        : 'text-emerald-600'
+                                                                    : 'text-slate-600'
+                                                            }`}
+                                                            title="Valor positivo (+) para incremento o negativo (-) para descuento"
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                const newType = adjType === 'AMOUNT' ? 'PERCENT' : 'AMOUNT';
+                                                                handleUpdateLineAdjustment(line.id, newType, adjVal);
+                                                            }}
+                                                            className={`px-2.5 py-2 text-xs font-bold transition-colors cursor-pointer border-l border-slate-100 shrink-0 ${
+                                                                adjType === 'AMOUNT'
+                                                                    ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-100'
+                                                                    : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+                                                            }`}
+                                                            title={adjType === 'AMOUNT' ? 'Monto Fijo ($). Clic para cambiar a %' : 'Porcentaje (%). Clic para cambiar a $'}
+                                                        >
+                                                            {adjType === 'AMOUNT' ? '$' : '%'}
+                                                        </button>
+                                                    </div>
                                                 </div>
-                                            </div>
+                                            )}
 
                                             {/* 5. Subtotal (col-span-2) */}
                                             <div className="col-span-2 flex items-center justify-end gap-1.5 text-right">
@@ -1205,14 +1277,30 @@ function NewInvoiceContent() {
                                                         </div>
                                                     )}
                                                 </div>
-                                                <button 
-                                                    type="button" 
-                                                    onClick={() => removeLine(line.id)} 
-                                                    className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100 cursor-pointer ml-1"
-                                                    title="Eliminar línea"
-                                                >
-                                                    <Trash2 size={15} />
-                                                </button>
+                                                <div className="flex items-center gap-0.5 ml-1">
+                                                    {!showAdjustments && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => {
+                                                                setShowAdjustments(true);
+                                                            }}
+                                                            className={`p-1.5 rounded-lg transition-colors cursor-pointer ${
+                                                                hasAdj ? 'text-blue-600 bg-blue-50 hover:bg-blue-100' : 'text-slate-300 hover:text-blue-600 hover:bg-blue-50 opacity-0 group-hover:opacity-100'
+                                                            }`}
+                                                            title={hasAdj ? "Editar ajuste" : "Agregar ajuste (+/-)"}
+                                                        >
+                                                            <Percent size={13} />
+                                                        </button>
+                                                    )}
+                                                    <button 
+                                                        type="button" 
+                                                        onClick={() => removeLine(line.id)} 
+                                                        className="p-1.5 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors opacity-0 group-hover:opacity-100 cursor-pointer"
+                                                        title="Eliminar línea"
+                                                    >
+                                                        <Trash2 size={14} />
+                                                    </button>
+                                                </div>
                                             </div>
                                         </div>
 
