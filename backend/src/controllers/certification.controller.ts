@@ -35,6 +35,61 @@ export const registerDocument = async (req: Request, res: Response) => {
       fileBuffer = req.file.buffer;
     }
 
+    if (!fileBuffer && !filePath && docCategory === 'QUOTATION') {
+      try {
+        const { loadAllQuotes, resolveProjectCompanyData } = require('./quotation.controller');
+        const { generateQuotationPDFBuffer } = require('../services/quotationPdf.service');
+        const quotes = loadAllQuotes();
+        const cleanDocNum = String(documentNumber).trim().toLowerCase();
+        const quote = quotes.find((q: any) => 
+          String(q.correlative || '').trim().toLowerCase() === cleanDocNum ||
+          String(q.id || '').trim().toLowerCase() === cleanDocNum
+        );
+        if (quote) {
+          const {
+            companyName,
+            companyTaxId,
+            companyAddress,
+            companyPhone,
+            companyEmail,
+            logoPath,
+            tasaBCV
+          } = await resolveProjectCompanyData((quote as any).projectId || projectId);
+
+          const pdfGen = await generateQuotationPDFBuffer({
+            quotationNumber: quote.correlative || quote.id,
+            clientName: quote.customer?.name || quote.clientName || recipientName || 'CLIENTE ESTIMADO',
+            clientTaxId: quote.customer?.taxId || quote.clientTaxId || recipientTaxId,
+            clientPhone: quote.customer?.phone || quote.clientPhone || recipientPhone,
+            clientEmail: quote.customer?.email || quote.clientEmail || recipientEmail,
+            clientAddress: quote.customer?.address || quote.clientAddress,
+            destinationCity: quote.customer?.city || quote.destinationCity,
+            companyName,
+            companyTaxId,
+            companyAddress,
+            companyPhone,
+            companyEmail,
+            logoPath,
+            tasaBCV: Number(quote.rates?.bcv || tasaBCV || 832.48),
+            tasaParalelo: Number(quote.rates?.paralelo || undefined),
+            tasaEUR: Number(quote.rates?.eur || undefined),
+            freightAdjustmentPercent: quote.freightAdjustmentPercent,
+            minOrderForFreeFreight: quote.minOrderForFreeFreight,
+            freightCost: quote.freightCost,
+            isFreeFreight: quote.isFreeFreight,
+            applyTax: quote.applyTax,
+            taxRate: quote.taxRate,
+            notes: quote.notes,
+            zelleAccount: quote.zelleAccount,
+            items: quote.items || []
+          });
+          fileBuffer = pdfGen.buffer;
+        }
+      } catch (genErr) {
+        console.warn('Advertencia: error autogenerando PDF de cotización para certificación:', genErr);
+      }
+    }
+
     const result = await CertificationService.registerCertifiedDelivery({
       projectId,
       docCategory,
@@ -360,6 +415,12 @@ export const renderCertifiedViewer = async (req: Request, res: Response) => {
     const ip = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '';
     const userAgent = req.headers['user-agent'] || '';
 
+    // Permitir visor móvil responsivo, preview en iframe y scripts interactivos
+    res.setHeader(
+      'Content-Security-Policy',
+      "default-src 'self' 'unsafe-inline' https: data: blob:; script-src 'self' 'unsafe-inline' https:; style-src 'self' 'unsafe-inline' https:; frame-src 'self' blob: data:; object-src 'self' blob: data:;"
+    );
+
     const delivery = await CertificationService.getDeliveryAndRecordView(token, ip, userAgent);
 
     if (!delivery) {
@@ -558,6 +619,8 @@ export const serveCertifiedFile = async (req: Request, res: Response) => {
       'Content-Disposition',
       download ? `attachment; filename="${filename}"` : `inline; filename="${filename}"`
     );
+    res.removeHeader('X-Frame-Options');
+    res.setHeader('Content-Security-Policy', "frame-ancestors 'self' https://fink.grupoaludra.com;");
 
     return res.sendFile(fullPath);
   } catch (error: any) {

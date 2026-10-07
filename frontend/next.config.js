@@ -28,6 +28,12 @@ const nextConfig = {
           ? 'http://127.0.0.1:4002/:path*' 
           : 'http://75.119.154.6:4002/:path*',
       },
+      {
+        source: '/cert/:path*',
+        destination: process.env.NODE_ENV === 'development' 
+          ? 'http://127.0.0.1:4002/cert/:path*' 
+          : 'http://75.119.154.6:4002/cert/:path*',
+      },
     ]
   },
 }

@@ -663,7 +663,7 @@ export const updateQuotationStatus = async (req: Request, res: Response) => {
   }
 };
 
-async function resolveProjectCompanyData(projectId?: string) {
+export async function resolveProjectCompanyData(projectId?: string) {
   let companyName = 'Inversiones Lucem C.A. / Grupo Aludra';
   let companyTaxId = 'J-40500250-6';
   let companyAddress = 'Ciudad de La Victoria, Estado Aragua, Venezuela';
