@@ -360,7 +360,7 @@ export default function QuotationsPage() {
   const loadAvailableProducts = async () => {
     try {
       const [prodRes, rateRes] = await Promise.all([
-        (api as any).products.getAll({ limit: 3000 }),
+        (api as any).products.getAll({ limit: 10000 }),
         (api as any).exchangeRates.getLatest ? (api as any).exchangeRates.getLatest() : Promise.resolve(null)
       ]);
       if (prodRes?.data?.data) {

@@ -3,6 +3,8 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { Search, X, Package, Check, Tag, Info } from 'lucide-react';
 
+import api from '@/lib/api';
+
 export interface ProductItem {
   id: string;
   name: string;
@@ -14,6 +16,7 @@ export interface ProductItem {
   unit?: string;
   division?: string;
   currency?: string;
+  project?: { id: string; name: string; code?: string };
 }
 
 interface ProductAutocompleteProps {
@@ -43,6 +46,35 @@ export default function ProductAutocomplete({
   const [hoveredProduct, setHoveredProduct] = useState<ProductItem | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  const [remoteProducts, setRemoteProducts] = useState<ProductItem[]>([]);
+  const [searchingRemote, setSearchingRemote] = useState(false);
+
+  // Búsqueda remota y cross-project cuando el usuario escribe al menos 2 letras
+  useEffect(() => {
+    if (!isOpen || !search.trim() || search.trim().length < 2) {
+      setRemoteProducts([]);
+      setSearchingRemote(false);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        setSearchingRemote(true);
+        const res = await api.products.getAll({ search: search.trim(), limit: 40 });
+        const list: ProductItem[] = res.data?.data || [];
+        const localIds = new Set(products.map(p => p.id));
+        const novel = list.filter(p => !localIds.has(p.id));
+        setRemoteProducts(novel);
+      } catch (err) {
+        console.warn('Error en búsqueda remota de productos:', err);
+      } finally {
+        setSearchingRemote(false);
+      }
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [search, isOpen, products]);
 
   // Match selected product either from prop value or by customName
   const selectedProduct = useMemo(() => {
@@ -232,61 +264,126 @@ export default function ProductAutocomplete({
           {/* Header del dropdown con contador */}
           <div className="px-3 py-2 bg-slate-50 flex items-center justify-between text-[11px] text-slate-500 border-b border-slate-200">
             <span className="font-semibold">
-              {filteredProducts.length} producto{filteredProducts.length === 1 ? '' : 's'} encontrado{filteredProducts.length === 1 ? '' : 's'}
+              {(filteredProducts.length + remoteProducts.length)} producto{(filteredProducts.length + remoteProducts.length) === 1 ? '' : 's'} encontrado{(filteredProducts.length + remoteProducts.length) === 1 ? '' : 's'}
             </span>
             <span className="text-[10px] text-slate-400">Pasa el cursor para ver el nombre completo</span>
           </div>
 
           {/* Lista scrolleable de productos */}
           <div className="max-h-72 overflow-y-auto divide-y divide-slate-100">
-            {filteredProducts.length > 0 ? (
-              filteredProducts.map((p) => (
-                <div
-                  key={p.id}
-                  onClick={() => handleSelectProduct(p)}
-                  onMouseEnter={() => setHoveredProduct(p)}
-                  className="p-2.5 hover:bg-blue-50/80 cursor-pointer flex items-start justify-between gap-3 transition-colors text-left group"
-                  title={p.name}
-                >
-                  <div className="min-w-0 flex-1 space-y-0.5">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      {p.sku && (
-                        <span className="bg-slate-100 group-hover:bg-blue-600 group-hover:text-white text-slate-700 font-mono text-[9px] font-bold px-1.5 py-0.5 rounded transition-colors shrink-0">
-                          {p.sku}
-                        </span>
-                      )}
-                      {p.division && (
-                        <span className="text-[10px] text-slate-400 truncate">
-                          {p.division}
-                        </span>
-                      )}
-                    </div>
-
-                    {/* Nombre completo legible */}
-                    <p className="text-xs font-semibold text-slate-800 group-hover:text-blue-900 leading-snug whitespace-normal break-words">
-                      {p.name}
-                    </p>
-                  </div>
-
-                  {/* Precios y Stock */}
-                  <div className="text-right shrink-0 pl-2">
-                    <span className="text-xs font-extrabold text-emerald-600 font-mono block">
-                      ${p.unitPrice !== undefined ? p.unitPrice.toFixed(2) : '0.00'}
-                    </span>
-                    {p.stock !== undefined && (
-                      <span className={`text-[10px] font-medium block ${(p.stock || 0) > 0 ? 'text-slate-600' : 'text-amber-600'}`}>
-                        Stock: {p.stock} {p.unit || 'und'}
+            {/* 1. Productos locales del proyecto actual */}
+            {filteredProducts.map((p) => (
+              <div
+                key={p.id}
+                onClick={() => handleSelectProduct(p)}
+                onMouseEnter={() => setHoveredProduct(p)}
+                className="p-2.5 hover:bg-blue-50/80 cursor-pointer flex items-start justify-between gap-3 transition-colors text-left group"
+                title={p.name}
+              >
+                <div className="min-w-0 flex-1 space-y-0.5">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    {p.sku && (
+                      <span className="bg-slate-100 group-hover:bg-blue-600 group-hover:text-white text-slate-700 font-mono text-[9px] font-bold px-1.5 py-0.5 rounded transition-colors shrink-0">
+                        {p.sku}
+                      </span>
+                    )}
+                    {p.division && (
+                      <span className="text-[10px] text-slate-400 truncate">
+                        {p.division}
                       </span>
                     )}
                   </div>
+
+                  {/* Nombre completo legible */}
+                  <p className="text-xs font-semibold text-slate-800 group-hover:text-blue-900 leading-snug whitespace-normal break-words">
+                    {p.name}
+                  </p>
                 </div>
-              ))
-            ) : (
-              <div className="p-5 text-center text-xs text-slate-500 space-y-1">
-                <Package size={24} className="mx-auto text-slate-300 mb-1" />
-                <p className="font-semibold">No se encontraron productos con "{search}"</p>
-                <p className="text-[11px] text-slate-400">Puedes usar la opción de texto personalizado abajo</p>
+
+                {/* Precios y Stock */}
+                <div className="text-right shrink-0 pl-2">
+                  <span className="text-xs font-extrabold text-emerald-600 font-mono block">
+                    ${p.unitPrice !== undefined ? p.unitPrice.toFixed(2) : '0.00'}
+                  </span>
+                  {p.stock !== undefined && (
+                    <span className={`text-[10px] font-medium block ${(p.stock || 0) > 0 ? 'text-slate-600' : 'text-amber-600'}`}>
+                      Stock: {p.stock} {p.unit || 'und'}
+                    </span>
+                  )}
+                </div>
               </div>
+            ))}
+
+            {/* 2. Productos remotos / catálogo de otros proyectos */}
+            {remoteProducts.length > 0 && (
+              <>
+                <div className="px-3 py-1.5 bg-indigo-50/90 text-indigo-800 font-bold text-[10px] uppercase tracking-wider flex items-center justify-between border-y border-indigo-200/80">
+                  <span>Encontrados en Catálogo General ({remoteProducts.length})</span>
+                  <span className="text-[9px] font-semibold lowercase text-indigo-600">Otros proyectos / catálogo extendido</span>
+                </div>
+                {remoteProducts.map((p) => (
+                  <div
+                    key={p.id}
+                    onClick={() => handleSelectProduct(p)}
+                    onMouseEnter={() => setHoveredProduct(p)}
+                    className="p-2.5 hover:bg-indigo-50/80 cursor-pointer flex items-start justify-between gap-3 transition-colors text-left group bg-slate-50/40"
+                    title={p.name}
+                  >
+                    <div className="min-w-0 flex-1 space-y-0.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {p.project?.name && (
+                          <span className="bg-indigo-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow-xs shrink-0">
+                            {p.project.name}
+                          </span>
+                        )}
+                        {p.sku && (
+                          <span className="bg-slate-200 group-hover:bg-indigo-700 group-hover:text-white text-slate-700 font-mono text-[9px] font-bold px-1.5 py-0.5 rounded transition-colors shrink-0">
+                            {p.sku}
+                          </span>
+                        )}
+                        {p.division && (
+                          <span className="text-[10px] text-slate-400 truncate">
+                            {p.division}
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Nombre completo legible */}
+                      <p className="text-xs font-semibold text-slate-800 group-hover:text-indigo-950 leading-snug whitespace-normal break-words">
+                        {p.name}
+                      </p>
+                    </div>
+
+                    {/* Precios y Stock */}
+                    <div className="text-right shrink-0 pl-2">
+                      <span className="text-xs font-extrabold text-emerald-600 font-mono block">
+                        ${p.unitPrice !== undefined ? p.unitPrice.toFixed(2) : '0.00'}
+                      </span>
+                      {p.stock !== undefined && (
+                        <span className={`text-[10px] font-medium block ${(p.stock || 0) > 0 ? 'text-slate-600' : 'text-amber-600'}`}>
+                          Stock: {p.stock} {p.unit || 'und'}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </>
+            )}
+
+            {/* 3. Estado de búsqueda o sin resultados */}
+            {filteredProducts.length === 0 && remoteProducts.length === 0 && (
+              searchingRemote ? (
+                <div className="p-5 text-center text-xs text-slate-500 space-y-2">
+                  <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto" />
+                  <p className="font-semibold text-slate-600">Buscando en catálogo del sistema...</p>
+                </div>
+              ) : (
+                <div className="p-5 text-center text-xs text-slate-500 space-y-1">
+                  <Package size={24} className="mx-auto text-slate-300 mb-1" />
+                  <p className="font-semibold">No se encontraron productos con "{search}"</p>
+                  <p className="text-[11px] text-slate-400">Puedes usar la opción de texto personalizado abajo</p>
+                </div>
+              )
             )}
           </div>
 

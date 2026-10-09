@@ -482,7 +482,7 @@ function POSComponent() {
 
   const loadProducts = async (projId: string) => {
     try {
-      const res = await productsAPI.getAll({ projectId: projId, search, limit: 3000, forSale: true });
+      const res = await productsAPI.getAll({ projectId: projId, search, limit: 10000, forSale: true });
       const rawList: any[] = Array.isArray(res?.data?.data) ? res.data.data : [];
       // Solo mostrar productos con forSale = true (Para la Venta)
       const forSaleOnly = rawList.filter(p => p && p.forSale !== false);

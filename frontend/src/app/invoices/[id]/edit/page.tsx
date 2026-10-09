@@ -177,7 +177,7 @@ export default function EditInvoicePage() {
         try {
             const [resContacts, resProducts] = await Promise.all([
                 api.contacts.getAll({ projectId }),
-                api.products.getAll({ projectId, limit: 3000 })
+                api.products.getAll({ projectId, limit: 10000 })
             ]);
             setContacts(resContacts.data.data || []);
             setProducts(resProducts.data.data || []);

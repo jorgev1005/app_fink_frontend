@@ -5,7 +5,7 @@ import { getProjectAccessFilter, checkProjectWriteAccess } from '../utils/projec
 // GET /api/products - listar productos (opcional por proyecto y búsqueda)
 export const getProducts = async (req: Request, res: Response) => {
   try {
-    const { projectId, search, division, limit = '3000' } = req.query;
+    const { projectId, search, division, limit = '10000' } = req.query;
     const where: any = { 
       isActive: true,
       ...getProjectAccessFilter(req.user!)
@@ -30,6 +30,9 @@ export const getProducts = async (req: Request, res: Response) => {
 
     const products = await prisma.product.findMany({
       where,
+      include: {
+        project: { select: { id: true, name: true, code: true } }
+      },
       take: parseInt(limit as string),
       orderBy: { name: 'asc' },
     });
