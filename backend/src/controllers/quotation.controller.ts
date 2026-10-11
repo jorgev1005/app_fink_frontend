@@ -110,11 +110,21 @@ export const createQuotation = async (req: Request, res: Response) => {
     const quotes = loadAllQuotes();
     const correlative = body.correlative || body.id || `COT-${new Date().getFullYear()}${String(new Date().getMonth() + 1).padStart(2, '0')}${String(new Date().getDate()).padStart(2, '0')}-${Math.floor(1000 + Math.random() * 9000)}`;
 
+    let projectName = body.projectName;
+    if (body.projectId && !projectName) {
+      try {
+        const prj = await prisma.project.findUnique({ where: { id: body.projectId }, select: { name: true } });
+        if (prj) projectName = prj.name;
+      } catch (_) {}
+    }
+
     const quoteRecord = {
       id: correlative,
       correlative,
       createdAt: body.createdAt || new Date().toISOString(),
       channel: body.channel || 'CATALOGO_WEB',
+      projectId: body.projectId || undefined,
+      projectName: projectName || undefined,
       customer: {
         name: body.customer?.name || body.clientName || 'Cliente Particular',
         taxId: body.customer?.taxId || body.clientTaxId || '',
@@ -238,8 +248,19 @@ export const updateQuotation = async (req: Request, res: Response) => {
     const totalUSD = Number(body.totalUSD !== undefined ? body.totalUSD : updatedItems.reduce((acc: number, it: any) => acc + (it.subtotalUSD || 0), 0));
     const totalBs = Number(body.totalBs !== undefined ? body.totalBs : (totalUSD * bcvRate));
 
+    let updatedProjectId = body.projectId !== undefined ? body.projectId : existing.projectId;
+    let updatedProjectName = body.projectName !== undefined ? body.projectName : existing.projectName;
+    if (body.projectId && !body.projectName && body.projectId !== existing.projectId) {
+      try {
+        const prj = await prisma.project.findUnique({ where: { id: body.projectId }, select: { name: true } });
+        if (prj) updatedProjectName = prj.name;
+      } catch (_) {}
+    }
+
     quotes[idx] = {
       ...existing,
+      projectId: updatedProjectId || undefined,
+      projectName: updatedProjectName || undefined,
       customer: {
         ...existing.customer,
         ...(body.customer || {}),
@@ -280,7 +301,7 @@ export const updateQuotation = async (req: Request, res: Response) => {
 // GET /api/quotations
 export const getQuotations = async (req: Request, res: Response) => {
   try {
-    const { status, channel, search, limit = '100', offset = '0' } = req.query;
+    const { status, channel, search, projectId, limit = '100', offset = '0' } = req.query;
     let quotes = loadAllQuotes();
 
     // Normalizar status si viene ausente y filtrar elementos nulos
@@ -291,6 +312,10 @@ export const getQuotations = async (req: Request, res: Response) => {
         status: q.status || 'PENDING',
         channel: q.channel || (q.correlative?.startsWith('COT-') ? 'CATALOGO_WEB' : 'FINK_POS'),
       }));
+
+    if (projectId && projectId !== 'ALL') {
+      quotes = quotes.filter(q => q.projectId === projectId);
+    }
 
     if (status && status !== 'ALL') {
       quotes = quotes.filter(q => q.status === status);
@@ -309,7 +334,8 @@ export const getQuotations = async (req: Request, res: Response) => {
         const clientTaxId = (q.customer?.taxId || q.clientTaxId || '').toLowerCase();
         const seller = (q.customer?.seller || q.seller || '').toLowerCase();
         const city = (q.customer?.city || q.destinationCity || '').toLowerCase();
-        return correlative.includes(s) || clientName.includes(s) || clientPhone.includes(s) || clientTaxId.includes(s) || seller.includes(s) || city.includes(s);
+        const projectName = (q.projectName || '').toLowerCase();
+        return correlative.includes(s) || clientName.includes(s) || clientPhone.includes(s) || clientTaxId.includes(s) || seller.includes(s) || city.includes(s) || projectName.includes(s);
       });
     }
 
@@ -398,15 +424,19 @@ export const getQuotations = async (req: Request, res: Response) => {
       };
     });
 
-    // Calcular estadísticas globales
+    // Calcular estadísticas (globales o por proyecto seleccionado)
     const allQuotes = loadAllQuotes();
+    const quotesForStats = (projectId && projectId !== 'ALL')
+      ? allQuotes.filter(q => q.projectId === projectId)
+      : allQuotes;
+
     const stats = {
-      total: allQuotes.length,
-      pending: allQuotes.filter(q => !q.status || q.status === 'PENDING').length,
-      approved: allQuotes.filter(q => q.status === 'APPROVED').length,
-      poGenerated: allQuotes.filter(q => q.status === 'PO_GENERATED').length,
-      invoiced: allQuotes.filter(q => q.status === 'INVOICED' || q.status === 'FULLY_INVOICED' || q.status === 'PARTIALLY_INVOICED').length,
-      rejected: allQuotes.filter(q => q.status === 'REJECTED').length,
+      total: quotesForStats.length,
+      pending: quotesForStats.filter(q => !q.status || q.status === 'PENDING').length,
+      approved: quotesForStats.filter(q => q.status === 'APPROVED').length,
+      poGenerated: quotesForStats.filter(q => q.status === 'PO_GENERATED').length,
+      invoiced: quotesForStats.filter(q => q.status === 'INVOICED' || q.status === 'FULLY_INVOICED' || q.status === 'PARTIALLY_INVOICED').length,
+      rejected: quotesForStats.filter(q => q.status === 'REJECTED').length,
     };
 
     res.json({

@@ -55,6 +55,8 @@ interface Quotation {
   correlative: string;
   createdAt: string;
   channel: 'CATALOGO_WEB' | 'FINK_POS' | string;
+  projectId?: string;
+  projectName?: string;
   status: 'PENDING' | 'APPROVED' | 'PO_GENERATED' | 'INVOICED' | 'PARTIALLY_INVOICED' | 'FULLY_INVOICED' | 'REJECTED' | string;
   customer: {
     name: string;
@@ -99,6 +101,8 @@ export default function QuotationsPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('ALL');
   const [channelFilter, setChannelFilter] = useState<string>('ALL');
+  const [projects, setProjects] = useState<any[]>([]);
+  const [selectedProjectFilter, setSelectedProjectFilter] = useState<string>('ALL');
   const [stats, setStats] = useState({
     total: 0,
     pending: 0,
@@ -143,6 +147,7 @@ export default function QuotationsPage() {
   const [showManualQuoteModal, setShowManualQuoteModal] = useState(false);
   const [savingManualQuote, setSavingManualQuote] = useState(false);
   const [editingCorrelative, setEditingCorrelative] = useState<string | null>(null);
+  const [manualProjectId, setManualProjectId] = useState<string>('');
   const [availableProducts, setAvailableProducts] = useState<any[]>([]);
   const [bcvRate, setBcvRate] = useState<number>(785.07);
   const [manualCustomer, setManualCustomer] = useState({
@@ -267,14 +272,14 @@ export default function QuotationsPage() {
       .toLowerCase()
       .trim();
 
-  // Búsqueda inteligente de productos en tiempo real
+  // Búsqueda inteligente de productos en tiempo real (priorizando el proyecto seleccionado)
   const matchingProducts = useMemo(() => {
     const raw = normalizeSearch(quickCodeInput);
     if (!raw) return [];
 
     const tokens = raw.split(/\s+/).filter(Boolean);
 
-    return availableProducts.filter(p => {
+    const matches = availableProducts.filter(p => {
       const pSku = normalizeSearch(p.sku);
       const pName = normalizeSearch(p.name);
       const pCat = normalizeSearch(p.category || p.division);
@@ -288,8 +293,18 @@ export default function QuotationsPage() {
         const singular = t.endsWith('es') ? t.slice(0, -2) : (t.endsWith('s') ? t.slice(0, -1) : t);
         return singular.length >= 3 && haystack.includes(singular);
       });
-    }).slice(0, 15);
-  }, [quickCodeInput, availableProducts]);
+    });
+
+    if (manualProjectId) {
+      return matches.sort((a, b) => {
+        const aIn = (a.projectId === manualProjectId || a.project?.id === manualProjectId) ? 1 : 0;
+        const bIn = (b.projectId === manualProjectId || b.project?.id === manualProjectId) ? 1 : 0;
+        return bIn - aIn;
+      }).slice(0, 15);
+    }
+
+    return matches.slice(0, 15);
+  }, [quickCodeInput, availableProducts, manualProjectId]);
 
   const handleAddProductToManualQuote = (product: any, qtyToAdd?: number) => {
     const qty = (qtyToAdd !== undefined && qtyToAdd > 0) ? qtyToAdd : (Number(quickCodeQty) > 0 ? Number(quickCodeQty) : 1);
@@ -352,10 +367,25 @@ export default function QuotationsPage() {
   };
 
   useEffect(() => {
+    loadProjects();
+  }, []);
+
+  useEffect(() => {
     loadQuotations();
     loadSuppliers();
     loadAvailableProducts();
-  }, [statusFilter, channelFilter]);
+  }, [statusFilter, channelFilter, selectedProjectFilter]);
+
+  const loadProjects = async () => {
+    try {
+      const res = await (api as any).projects.getAll();
+      const list = res.data?.data || (Array.isArray(res.data) ? res.data : []);
+      const active = list.filter((p: any) => p.status !== 'PAUSED' && p.status !== 'ARCHIVED');
+      setProjects(active.length > 0 ? active : list);
+    } catch (e) {
+      console.warn('Error loading projects:', e);
+    }
+  };
 
   const loadAvailableProducts = async () => {
     try {
@@ -524,8 +554,11 @@ export default function QuotationsPage() {
       const totalUSD = manualItems.reduce((acc, i) => acc + (i.subtotalUSD || 0), 0);
       const totalBs = totalUSD * bcvRate;
 
+      const selectedProj = projects.find(p => p.id === manualProjectId);
       const payload: any = {
         channel: 'FINK_MANUAL',
+        projectId: manualProjectId || undefined,
+        projectName: selectedProj?.name || undefined,
         customer: {
           ...manualCustomer,
           name: manualCustomer.name.trim(),
@@ -572,6 +605,7 @@ export default function QuotationsPage() {
             setSelectedQuote(updatedQuote);
           }
           setEditingCorrelative(null);
+          setManualProjectId('');
           setManualItems([]);
           setManualCustomer({ name: '', taxId: '', phone: '', email: '', city: 'La Victoria, Aragua', seller: 'Oficina' });
           setManualNotes('');
@@ -585,6 +619,7 @@ export default function QuotationsPage() {
           toast.success('¡Cotización creada exitosamente!');
           setShowManualQuoteModal(false);
           setEditingCorrelative(null);
+          setManualProjectId('');
           setManualItems([]);
           setManualCustomer({ name: '', taxId: '', phone: '', email: '', city: 'La Victoria, Aragua', seller: 'Oficina' });
           setManualNotes('');
@@ -609,6 +644,7 @@ export default function QuotationsPage() {
     loadAvailableProducts();
     const corr = quote.correlative || quote.id;
     setEditingCorrelative(corr);
+    setManualProjectId(quote.projectId || '');
     setManualCustomer({
       name: quote.customer?.name || (quote as any).clientName || '',
       taxId: quote.customer?.taxId || (quote as any).clientTaxId || '',
@@ -660,6 +696,7 @@ export default function QuotationsPage() {
       const params: any = {};
       if (statusFilter !== 'ALL') params.status = statusFilter;
       if (channelFilter !== 'ALL') params.channel = channelFilter;
+      if (selectedProjectFilter !== 'ALL') params.projectId = selectedProjectFilter;
       if (search.trim()) params.search = search.trim();
 
       const res = await (api as any).quotations.getAll(params);
@@ -1083,6 +1120,7 @@ export default function QuotationsPage() {
               loadSuppliers();
               loadAvailableProducts();
               setEditingCorrelative(null);
+              setManualProjectId(selectedProjectFilter !== 'ALL' ? selectedProjectFilter : (projects[0]?.id || ''));
               setManualItems([]);
               setManualCustomer({ name: '', taxId: '', phone: '', email: '', city: 'La Victoria, Aragua', seller: 'Oficina' });
               setManualNotes('');
@@ -1196,6 +1234,23 @@ export default function QuotationsPage() {
           ))}
         </div>
 
+        {/* Filtro por Proyecto */}
+        <div className="flex items-center gap-2 bg-slate-50 border border-slate-200/80 rounded-xl px-3 py-1.5 shadow-2xs">
+          <Building2 size={15} className="text-blue-600 shrink-0" />
+          <select
+            value={selectedProjectFilter}
+            onChange={e => setSelectedProjectFilter(e.target.value)}
+            className="bg-transparent text-xs font-bold text-slate-700 outline-none cursor-pointer pr-1"
+          >
+            <option value="ALL">🏢 Todos los Proyectos</option>
+            {projects.map(p => (
+              <option key={p.id} value={p.id}>
+                {p.name} {p.code ? `(${p.code})` : ''}
+              </option>
+            ))}
+          </select>
+        </div>
+
         {/* Buscador */}
         <form onSubmit={handleSearchSubmit} className="flex items-center gap-2 flex-1 max-w-md">
           <div className="relative w-full">
@@ -1261,10 +1316,15 @@ export default function QuotationsPage() {
                         <div className="font-bold text-slate-900 flex items-center gap-1.5">
                           {q.correlative || q.id}
                         </div>
-                        <div className="flex items-center gap-1.5 mt-1">
-                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase ${q.channel === 'CATALOGO_WEB' ? 'bg-emerald-100 text-emerald-800' : 'bg-indigo-100 text-indigo-800'}`}>
-                            {q.channel === 'CATALOGO_WEB' ? '🌐 Catálogo Web' : '🏪 FINK POS'}
+                        <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                          <span className={`px-1.5 py-0.5 rounded text-[9px] font-extrabold uppercase ${q.channel === 'CATALOGO_WEB' ? 'bg-emerald-100 text-emerald-800' : (q.channel === 'FINK_MANUAL' ? 'bg-blue-100 text-blue-800' : 'bg-indigo-100 text-indigo-800')}`}>
+                            {q.channel === 'CATALOGO_WEB' ? '🌐 Catálogo Web' : (q.channel === 'FINK_MANUAL' ? '📝 Manual' : '🏪 FINK POS')}
                           </span>
+                          {(q.projectName || (q.projectId && projects.find(p => p.id === q.projectId)?.name)) && (
+                            <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-50 text-amber-800 border border-amber-200/70" title={`Proyecto: ${q.projectName || projects.find(p => p.id === q.projectId)?.name}`}>
+                              <Building2 size={10} /> {q.projectName || projects.find(p => p.id === q.projectId)?.name}
+                            </span>
+                          )}
                           <span className="text-[10px] text-slate-400 font-sans">
                             {new Date(q.createdAt).toLocaleDateString('es-VE')}
                           </span>
@@ -1491,7 +1551,7 @@ export default function QuotationsPage() {
             {/* Contenido Scrollable */}
             <div className="p-6 overflow-y-auto space-y-6 flex-1 text-xs">
               {/* Bloque de Información del Cliente */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-200/80">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-slate-50 p-4 rounded-2xl border border-slate-200/80">
                 <div>
                   <div className="text-[10px] font-bold text-slate-400 uppercase">Cliente / Empresa</div>
                   <div className="font-extrabold text-slate-900 text-sm mt-0.5">{selectedQuote.customer?.name}</div>
@@ -1506,6 +1566,15 @@ export default function QuotationsPage() {
                   <div className="text-slate-600 mt-0.5 flex items-center gap-1">
                     <MapPin size={12} className="text-slate-400" /> {selectedQuote.customer?.city || 'Retiro en Sede'}
                   </div>
+                </div>
+
+                <div>
+                  <div className="text-[10px] font-bold text-slate-400 uppercase">Proyecto Asignado</div>
+                  <div className="text-blue-700 font-bold mt-0.5 flex items-center gap-1.5 text-xs">
+                    <Building2 size={13} className="text-blue-600" />
+                    <span>{selectedQuote.projectName || (selectedQuote.projectId ? projects.find(p => p.id === selectedQuote.projectId)?.name : 'General / Sin Asignar')}</span>
+                  </div>
+                  <div className="text-[10px] text-slate-400 mt-0.5">Emisor comercial</div>
                 </div>
 
                 <div>
@@ -2196,9 +2265,27 @@ export default function QuotationsPage() {
               {/* 1. Datos del Cliente & Modalidad de Precios */}
               <div className="bg-slate-50/80 p-4 rounded-2xl border border-slate-200/80 space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-2.5">
-                  <span className="font-extrabold text-slate-800 text-xs flex items-center gap-1.5">
-                    👤 Datos del Cliente
-                  </span>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <span className="font-extrabold text-slate-800 text-xs flex items-center gap-1.5">
+                      👤 Datos del Cliente
+                    </span>
+                    <div className="flex items-center gap-1.5 bg-white px-2.5 py-1 rounded-xl border border-slate-300 shadow-2xs">
+                      <Building2 size={13} className="text-blue-600" />
+                      <span className="text-[11px] font-bold text-slate-600">Proyecto:</span>
+                      <select
+                        value={manualProjectId}
+                        onChange={e => setManualProjectId(e.target.value)}
+                        className="bg-transparent text-xs font-bold text-slate-800 outline-none cursor-pointer pr-1"
+                      >
+                        <option value="">-- Sin Proyecto (Lucem) --</option>
+                        {projects.map(p => (
+                          <option key={p.id} value={p.id}>
+                            {p.name} {p.code ? `(${p.code})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
 
                   {/* Selector Modalidad de Precios */}
                   <div className="flex items-center gap-2">
@@ -2431,6 +2518,11 @@ export default function QuotationsPage() {
                               {suppCode && (
                                 <span className="text-[10px] font-mono font-semibold text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">
                                   Prov: {suppCode}
+                                </span>
+                              )}
+                              {(p.project?.name || (p.projectId && projects.find(proj => proj.id === p.projectId)?.name)) && (
+                                <span className="inline-flex items-center gap-1 text-[9px] font-bold text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                                  <Building2 size={9} /> {p.project?.name || projects.find(proj => proj.id === p.projectId)?.name}
                                 </span>
                               )}
                               <span className="font-bold text-slate-800 text-xs truncate">
