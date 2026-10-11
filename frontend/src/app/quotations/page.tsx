@@ -201,57 +201,150 @@ export default function QuotationsPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Normalizador de búsqueda sin acentos
+  const normalizeSearch = (str: string) =>
+    (str || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim();
+
+  // Distancia Levenshtein para tolerancia a errores ortográficos o de tipeo (ej. "torinllos" -> "tornillos")
+  const levenshteinDistance = (a: string, b: string): number => {
+    if (a === b) return 0;
+    if (!a.length) return b.length;
+    if (!b.length) return a.length;
+    const row = Array.from({ length: b.length + 1 }, (_, i) => i);
+    for (let i = 1; i <= a.length; i++) {
+      let prev = i;
+      for (let j = 1; j <= b.length; j++) {
+        const val = a[i - 1] === b[j - 1] ? row[j - 1] : Math.min(row[j - 1], prev, row[j]) + 1;
+        row[j - 1] = prev;
+        prev = val;
+      }
+      row[b.length] = prev;
+    }
+    return row[b.length];
+  };
+
+  // Coincidencia tokenizada difusa
+  const fuzzyTokenMatch = (target: string, queryTokens: string[]): boolean => {
+    if (!target || queryTokens.length === 0) return false;
+    const targetTokens = target.split(/\s+/).filter(Boolean);
+    return queryTokens.every(qToken => {
+      if (target.includes(qToken)) return true;
+      const singular = qToken.endsWith('es') ? qToken.slice(0, -2) : (qToken.endsWith('s') ? qToken.slice(0, -1) : qToken);
+      if (target.includes(singular)) return true;
+      return targetTokens.some(tToken => {
+        if (tToken.includes(qToken) || qToken.includes(tToken)) return true;
+        if (qToken.length >= 4 && tToken.length >= 4) {
+          const maxDist = qToken.length >= 7 ? 2 : 1;
+          if (Math.abs(qToken.length - tToken.length) <= 2 && levenshteinDistance(qToken, tToken) <= maxDist) {
+            return true;
+          }
+        }
+        return false;
+      });
+    });
+  };
+
   // Base consolidada de Clientes (Contactos + Clientes de Cotizaciones previas)
   const allCustomerOptions = useMemo(() => {
-    const map = new Map<string, { name: string; taxId: string; phone: string; email: string; city: string; seller: string }>();
+    const map = new Map<string, { name: string; taxId: string; phone: string; email: string; city: string; seller: string; projectId?: string; projectName?: string }>();
 
     // 1. Desde Contactos registrados
     suppliers.forEach((c: any) => {
       if (c?.name && c.name.trim()) {
-        const key = c.name.trim().toLowerCase();
-        map.set(key, {
-          name: c.name.trim(),
-          taxId: c.taxId || '',
-          phone: c.phone || '',
-          email: c.email || '',
-          city: c.address || 'La Victoria, Aragua',
-          seller: 'Oficina'
-        });
+        const cleanName = c.name.trim();
+        const key = cleanName.toLowerCase();
+        const existing = map.get(key);
+        // Si no existe o este registro tiene más información útil (RIF, teléfono, dirección)
+        const hasBetterData = !existing || (!existing.taxId && c.taxId) || (!existing.phone && c.phone) || (!existing.city && c.address);
+
+        if (hasBetterData) {
+          map.set(key, {
+            name: cleanName,
+            taxId: c.taxId || existing?.taxId || '',
+            phone: c.phone || existing?.phone || '',
+            email: c.email || existing?.email || '',
+            city: (c.address || existing?.city || 'La Victoria, Aragua').replace(/\n+/g, ', '),
+            seller: 'Oficina',
+            projectId: c.projectId,
+            projectName: c.project?.name
+          });
+        }
       }
     });
 
     // 2. Desde Cotizaciones emitidas
     quotations.forEach((q: any) => {
       if (q?.customer?.name && q.customer.name.trim()) {
-        const key = q.customer.name.trim().toLowerCase();
+        const cleanName = q.customer.name.trim();
+        const key = cleanName.toLowerCase();
         const existing = map.get(key);
-        map.set(key, {
-          name: q.customer.name.trim(),
-          taxId: q.customer.taxId || existing?.taxId || '',
-          phone: q.customer.phone || existing?.phone || '',
-          email: q.customer.email || existing?.email || '',
-          city: q.customer.city || existing?.city || 'La Victoria, Aragua',
-          seller: q.customer.seller || existing?.seller || 'Oficina'
-        });
+        if (!existing) {
+          map.set(key, {
+            name: cleanName,
+            taxId: q.customer.taxId || '',
+            phone: q.customer.phone || '',
+            email: q.customer.email || '',
+            city: q.customer.city || 'La Victoria, Aragua',
+            seller: q.customer.seller || 'Oficina',
+            projectId: q.projectId,
+            projectName: q.projectName
+          });
+        } else if (!existing.taxId && q.customer.taxId) {
+          existing.taxId = q.customer.taxId;
+        }
       }
     });
 
-    return Array.from(map.values());
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, 'es', { sensitivity: 'base' }));
   }, [suppliers, quotations]);
 
   const filteredCustomerOptions = useMemo(() => {
-    const q = (manualCustomer.name || '').trim().toLowerCase();
-    if (!q) {
-      return allCustomerOptions.slice(0, 8);
+    const rawQ = normalizeSearch(manualCustomer.name);
+    if (!rawQ) {
+      if (manualProjectId) {
+        const projCustomers = allCustomerOptions.filter(c => c.projectId === manualProjectId);
+        const otherCustomers = allCustomerOptions.filter(c => c.projectId !== manualProjectId);
+        return [...projCustomers, ...otherCustomers].slice(0, 30);
+      }
+      return allCustomerOptions.slice(0, 30);
     }
-    return allCustomerOptions.filter(c => 
-      c.name.toLowerCase().includes(q) || 
-      (c.taxId && c.taxId.toLowerCase().includes(q)) || 
-      (c.phone && c.phone.toLowerCase().includes(q))
-    ).slice(0, 10);
-  }, [manualCustomer.name, allCustomerOptions]);
 
-  const handleSelectCustomer = (c: { name: string; taxId: string; phone: string; email: string; city: string; seller: string }) => {
+    const tokens = rawQ.split(/\s+/).filter(Boolean);
+
+    // Filtrado inteligente con tolerancia a errores de tipeo
+    const matches = allCustomerOptions.filter(c => {
+      const cName = normalizeSearch(c.name);
+      const cTax = normalizeSearch(c.taxId);
+      const cPhone = normalizeSearch(c.phone);
+      const cCity = normalizeSearch(c.city);
+      const haystack = `${cName} ${cTax} ${cPhone} ${cCity}`;
+
+      if (haystack.includes(rawQ)) return true;
+      return fuzzyTokenMatch(haystack, tokens);
+    });
+
+    // Ordenar: primero coincidencias exactas o por RIF, luego proyecto asignado
+    return matches.sort((a, b) => {
+      const aName = normalizeSearch(a.name);
+      const bName = normalizeSearch(b.name);
+      const aExact = aName.startsWith(rawQ) || normalizeSearch(a.taxId).includes(rawQ) ? 2 : (aName.includes(rawQ) ? 1 : 0);
+      const bExact = bName.startsWith(rawQ) || normalizeSearch(b.taxId).includes(rawQ) ? 2 : (bName.includes(rawQ) ? 1 : 0);
+      if (bExact !== aExact) return bExact - aExact;
+
+      if (manualProjectId) {
+        const aIn = a.projectId === manualProjectId ? 1 : 0;
+        const bIn = b.projectId === manualProjectId ? 1 : 0;
+        if (bIn !== aIn) return bIn - aIn;
+      }
+      return a.name.localeCompare(b.name, 'es', { sensitivity: 'base' });
+    }).slice(0, 25);
+  }, [manualCustomer.name, allCustomerOptions, manualProjectId]);
+
+  const handleSelectCustomer = (c: any) => {
     setManualCustomer({
       name: c.name,
       taxId: c.taxId || '',
@@ -260,17 +353,12 @@ export default function QuotationsPage() {
       city: c.city || 'La Victoria, Aragua',
       seller: c.seller || 'Oficina'
     });
+    if (c.projectId && !manualProjectId) {
+      setManualProjectId(c.projectId);
+    }
     setShowCustomerDropdown(false);
     toast.success(`Cliente "${c.name}" autocompletado`);
   };
-
-  // Normalizador de búsqueda sin acentos
-  const normalizeSearch = (str: string) =>
-    (str || '')
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase()
-      .trim();
 
   // Búsqueda inteligente de productos en tiempo real (priorizando el proyecto seleccionado)
   const matchingProducts = useMemo(() => {
@@ -683,7 +771,7 @@ export default function QuotationsPage() {
 
   const loadSuppliers = async () => {
     try {
-      const res = await api.contacts.getAll();
+      const res = await api.contacts.getAll({ limit: 1000 });
       setSuppliers(res.data.data || []);
     } catch (e) {
       console.warn('Error loading suppliers', e);
@@ -2355,32 +2443,47 @@ export default function QuotationsPage() {
                     </div>
 
                     {/* Dropdown flotante de Clientes */}
-                    {showCustomerDropdown && filteredCustomerOptions.length > 0 && (
-                      <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-2xl z-50 max-h-64 overflow-y-auto divide-y divide-slate-100">
+                    {showCustomerDropdown && (
+                      <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-slate-200 rounded-xl shadow-2xl z-50 max-h-72 overflow-y-auto divide-y divide-slate-100">
                         <div className="px-3 py-1.5 bg-slate-50 text-[10px] font-bold text-slate-500 flex items-center justify-between sticky top-0 z-10 border-b border-slate-100">
-                          <span>Clientes sugeridos ({filteredCustomerOptions.length}):</span>
+                          <span>
+                            {manualCustomer.name.trim() 
+                              ? `Resultados encontrados (${filteredCustomerOptions.length}):` 
+                              : `Clientes registrados (${allCustomerOptions.length} en total - escriba para filtrar):`}
+                          </span>
                           <span className="text-[9px] text-blue-600 font-semibold">Clic para autocompletar</span>
                         </div>
-                        {filteredCustomerOptions.map((cust, idx) => (
-                          <div
-                            key={idx}
-                            onClick={() => handleSelectCustomer(cust)}
-                            className="px-3 py-2 hover:bg-blue-50/80 cursor-pointer transition-colors flex items-center justify-between gap-2"
-                          >
-                            <div className="min-w-0 flex-1">
-                              <div className="text-xs font-bold text-slate-900 truncate flex items-center gap-1.5">
-                                <Building2 size={13} className="text-blue-600 shrink-0" />
-                                <span>{cust.name}</span>
-                              </div>
-                              <div className="text-[10px] text-slate-500 flex items-center gap-2 mt-0.5 flex-wrap">
-                                {cust.taxId && <span className="font-mono bg-slate-100 px-1 rounded text-slate-700 font-semibold">{cust.taxId}</span>}
-                                {cust.phone && <span>📞 {cust.phone}</span>}
-                                {cust.city && <span>📍 {cust.city}</span>}
-                              </div>
-                            </div>
-                            <span className="text-[10px] font-bold text-blue-600 shrink-0">Seleccionar →</span>
+                        {filteredCustomerOptions.length === 0 ? (
+                          <div className="p-3 text-center text-slate-500 text-xs">
+                            No se encontraron clientes registrados con &quot;{manualCustomer.name}&quot;. Puede continuar escribiendo para registrar un cliente nuevo o particular.
                           </div>
-                        ))}
+                        ) : (
+                          filteredCustomerOptions.map((cust, idx) => (
+                            <div
+                              key={idx}
+                              onClick={() => handleSelectCustomer(cust)}
+                              className="px-3 py-2 hover:bg-blue-50/80 cursor-pointer transition-colors flex items-center justify-between gap-2"
+                            >
+                              <div className="min-w-0 flex-1">
+                                <div className="text-xs font-bold text-slate-900 truncate flex items-center gap-1.5">
+                                  <Building2 size={13} className="text-blue-600 shrink-0" />
+                                  <span>{cust.name}</span>
+                                  {(cust as any).projectName && (
+                                    <span className="text-[9px] bg-amber-50 text-amber-800 border border-amber-200/80 px-1 py-0.2 rounded font-semibold">
+                                      {(cust as any).projectName}
+                                    </span>
+                                  )}
+                                </div>
+                                <div className="text-[10px] text-slate-500 flex items-center gap-2 mt-0.5 flex-wrap">
+                                  {cust.taxId && <span className="font-mono bg-slate-100 px-1 rounded text-slate-700 font-semibold">{cust.taxId}</span>}
+                                  {cust.phone && <span>📞 {cust.phone}</span>}
+                                  {cust.city && <span>📍 {cust.city}</span>}
+                                </div>
+                              </div>
+                              <span className="text-[10px] font-bold text-blue-600 shrink-0">Seleccionar →</span>
+                            </div>
+                          ))
+                        )}
                       </div>
                     )}
                   </div>
