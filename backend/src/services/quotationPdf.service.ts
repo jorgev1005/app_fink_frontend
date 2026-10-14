@@ -16,6 +16,10 @@ export interface QuotationItem {
     discountPercent?: number;
     medidas?: string;
     empaqueCantidad?: number;
+    unidadEmpaque?: string;
+    pesoUnitarioKg?: number;
+    pesoTotalKg?: number;
+    volumenM3?: number;
     notes?: string;
 }
 
@@ -253,10 +257,15 @@ export async function generateQuotationPDFBuffer(options: QuotationPDFOptions): 
         let subtotalBrutoDivisas = 0;
         let totalDiscountsDivisas = 0;
         let totalIncrementsDivisas = 0;
+        let totalUnidades = 0;
+        let totalBultos = 0;
+        let totalPesoKg = 0;
+        let totalVolumenM3 = 0;
         const freightFactor = 1 + ((freightAdjustmentPercent || 0) / 100);
 
         items.forEach((item, itemIdx) => {
             const qty = item.quantity || 1;
+            totalUnidades += qty;
             const rawA = Number(item.unitPrice) || 0;
             const rawB = (item.priceList && Number(item.priceList) > 0) ? Number(item.priceList) : rawA;
 
@@ -287,6 +296,22 @@ export async function generateQuotationPDFBuffer(options: QuotationPDFOptions): 
                 totalIncrementsDivisas += (lineTotDivisas - lineBrutoDivisas);
             }
 
+            const empaqQty = item.empaqueCantidad && item.empaqueCantidad > 1 ? item.empaqueCantidad : 0;
+            let bultos = 0;
+            let bultosStr = '';
+            if (empaqQty > 0) {
+                bultos = qty / empaqQty;
+                totalBultos += bultos;
+                const unidad = item.unidadEmpaque || 'bulto';
+                bultosStr = `${Number(bultos.toFixed(2)).toLocaleString('es-VE')} ${bultos === 1 ? unidad : `${unidad}s`}`;
+            }
+
+            const linePesoKg = Number(item.pesoTotalKg || ((Number(item.pesoUnitarioKg) || 0) * qty));
+            const lineVolumenM3 = Number(item.volumenM3 || 0);
+
+            totalPesoKg += linePesoKg;
+            totalVolumenM3 += lineVolumenM3;
+
             let extraParts: string[] = [];
             const adjVal = Number(item.adjustmentValue || 0);
             if (adjVal !== 0) {
@@ -300,8 +325,14 @@ export async function generateQuotationPDFBuffer(options: QuotationPDFOptions): 
             if (item.unit && item.unit.toLowerCase() !== 'unidades' && item.unit.toLowerCase() !== 'unidad' && item.unit.toLowerCase() !== 'und') {
                 extraParts.push(`Unidad: ${item.unit}`);
             }
-            if (item.empaqueCantidad && item.empaqueCantidad > 1) {
-                extraParts.push(`Empaque: ${item.empaqueCantidad}`);
+            if (empaqQty > 1) {
+                extraParts.push(`Empaque: ${bultosStr} (x${empaqQty} und)`);
+            }
+            if (linePesoKg > 0) {
+                extraParts.push(`Peso: ${Number(linePesoKg.toFixed(2)).toLocaleString('es-VE')} kg`);
+            }
+            if (lineVolumenM3 > 0) {
+                extraParts.push(`Espacio: ${Number(lineVolumenM3.toFixed(3)).toLocaleString('es-VE')} m³`);
             }
             if (item.medidas) extraParts.push(`Medidas: ${item.medidas}`);
             if (item.notes) extraParts.push(item.notes);
@@ -364,7 +395,7 @@ export async function generateQuotationPDFBuffer(options: QuotationPDFOptions): 
         const totalBs = subtotalBcvUsd * tasaBCV;
         const totalBsFmt = totalBs.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
         const hasAdjustments = totalDiscountsDivisas > 0.009 || totalIncrementsDivisas > 0.009;
-        const boxH = hasAdjustments ? 78 : 58;
+        const boxH = hasAdjustments ? 86 : 66;
 
         if (y > doc.page.height - 180) {
             doc.addPage();
@@ -389,16 +420,16 @@ export async function generateQuotationPDFBuffer(options: QuotationPDFOptions): 
 
             if (totalDiscountsDivisas > 0.009) {
                 doc.fontSize(6.5).fillColor('#dc2626').font('Helvetica')
-                   .text('Descuentos (-):', totX + 10, curTotY, { width: 90 });
+                    .text('Descuentos (-):', totX + 10, curTotY, { width: 90 });
                 doc.fontSize(6.5).fillColor('#dc2626').font('Helvetica-Bold')
-                   .text(`-$${totalDiscountsDivisas.toFixed(2)}`, totX + 100, curTotY, { width: totW - 110, align: 'right' });
+                    .text(`-$${totalDiscountsDivisas.toFixed(2)}`, totX + 100, curTotY, { width: totW - 110, align: 'right' });
                 curTotY += 9;
             }
             if (totalIncrementsDivisas > 0.009) {
                 doc.fontSize(6.5).fillColor('#2563eb').font('Helvetica')
-                   .text('Incrementos (+):', totX + 10, curTotY, { width: 90 });
+                    .text('Incrementos (+):', totX + 10, curTotY, { width: 90 });
                 doc.fontSize(6.5).fillColor('#2563eb').font('Helvetica-Bold')
-                   .text(`+$${totalIncrementsDivisas.toFixed(2)}`, totX + 100, curTotY, { width: totW - 110, align: 'right' });
+                    .text(`+$${totalIncrementsDivisas.toFixed(2)}`, totX + 100, curTotY, { width: totW - 110, align: 'right' });
                 curTotY += 9;
             }
             doc.moveTo(totX + 10, curTotY).lineTo(totX + totW - 10, curTotY).strokeColor('#e2e8f0').lineWidth(0.5).stroke();
@@ -421,19 +452,28 @@ export async function generateQuotationPDFBuffer(options: QuotationPDFOptions): 
         doc.fontSize(9.5).fillColor(DARK).font('Helvetica-Bold')
            .text(`Bs. ${totalBsFmt}`, totX + 10, curTotY);
 
-        // Cuentas Bancarias (Izquierda)
+        // Cuentas Bancarias y Logística (Izquierda)
         const bankW = W - totW - 10;
         doc.rect(LEFT, totY, bankW, boxH).fill('#f8fafc');
         doc.rect(LEFT, totY, bankW, boxH).strokeColor('#cbd5e1').lineWidth(0.5).stroke();
         
         doc.fontSize(7.5).fillColor(DARK).font('Helvetica-Bold')
-           .text('Cuentas Bancarias / Métodos de Pago:', LEFT + 10, totY + 6, { lineBreak: false });
+           .text('Cuentas Bancarias / Métodos de Pago:', LEFT + 10, totY + 5, { lineBreak: false });
 
         const zelleTarget = (zelleAccount || 'admin@grupoaludra.com').trim();
         doc.fontSize(6.5).fillColor(GRAY).font('Helvetica')
-           .text('• Bolívares: Banesco Pago Móvil / Transferencia (J-40500250-6 | 0134 | 0412-271-1859)', LEFT + 10, totY + 18, { width: bankW - 15, lineBreak: false })
-           .text(`• Divisas: Zelle (${zelleTarget}) | Banesco Panamá | Binance USDT`, LEFT + 10, totY + 28, { width: bankW - 15, lineBreak: false })
-           .text('• Efectivo: Dólares en billetes en buen estado.', LEFT + 10, totY + 38, { width: bankW - 15, lineBreak: false });
+           .text('• Bolívares: Banesco Pago Móvil / Transferencia (J-40500250-6 | 0134 | 0412-271-1859)', LEFT + 10, totY + 16, { width: bankW - 15, lineBreak: false })
+           .text(`• Divisas: Zelle (${zelleTarget}) | Banesco Panamá | Binance USDT`, LEFT + 10, totY + 25, { width: bankW - 15, lineBreak: false })
+           .text('• Efectivo: Dólares en billetes en buen estado.', LEFT + 10, totY + 34, { width: bankW - 15, lineBreak: false });
+
+        doc.moveTo(LEFT + 10, totY + 44).lineTo(LEFT + bankW - 10, totY + 44).strokeColor('#e2e8f0').lineWidth(0.5).stroke();
+
+        let logSummary = `• Carga Estimada: ${totalUnidades.toLocaleString('es-VE')} Unds`;
+        if (totalBultos > 0) logSummary += ` | ${Number(totalBultos.toFixed(2)).toLocaleString('es-VE')} Bultos`;
+        if (totalPesoKg > 0) logSummary += ` | Peso Total: ${Number(totalPesoKg.toFixed(2)).toLocaleString('es-VE')} kg`;
+        if (totalVolumenM3 > 0) logSummary += ` | Espacio: ${Number(totalVolumenM3.toFixed(3)).toLocaleString('es-VE')} m³`;
+        doc.fontSize(6.5).fillColor('#0284c7').font('Helvetica-Bold')
+           .text(logSummary, LEFT + 10, totY + 49, { width: bankW - 15, lineBreak: false });
 
         y = totY + boxH + 8;
 

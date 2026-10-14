@@ -623,6 +623,72 @@ export const exportQuotationPDF = async (req: Request, res: Response) => {
       if (proj) projectName = proj.name;
     }
 
+    const skus = (items || []).map((i: any) => i.sku).filter(Boolean);
+    let skuMap: Record<string, any> = {};
+    if (skus.length > 0) {
+      const dbProducts = await prisma.product.findMany({
+        where: { sku: { in: skus } },
+        select: {
+          sku: true,
+          pesoUnitarioKg: true,
+          empaqueCantidad: true,
+          empaquePesoKg: true,
+          empaqueLargoCm: true,
+          empaqueAnchoCm: true,
+          empaqueAltoCm: true,
+          largoCm: true,
+          anchoCm: true,
+          altoCm: true,
+          unidad_empaque: true
+        }
+      });
+      dbProducts.forEach(p => {
+        if (p.sku) skuMap[p.sku.toUpperCase()] = p;
+      });
+    }
+
+    const enrichedItems = (items || []).map((it: any) => {
+      const prod = it.sku ? skuMap[it.sku.toUpperCase()] : null;
+      const qty = Number(it.quantity || 1);
+      const empaqueCantidad = Number(it.empaqueCantidad || prod?.empaqueCantidad || 0);
+      const unidadEmpaque = it.unidadEmpaque || it.unidad_empaque || prod?.unidad_empaque || '';
+
+      const pesoUnit = Number(it.pesoUnitarioKg !== undefined ? it.pesoUnitarioKg : (prod?.pesoUnitarioKg || 0));
+      let pesoTotalKg = 0;
+      if (pesoUnit > 0) {
+        pesoTotalKg = qty * pesoUnit;
+      } else if (Number(prod?.empaquePesoKg || 0) > 0 && empaqueCantidad > 0) {
+        pesoTotalKg = (qty / empaqueCantidad) * Number(prod.empaquePesoKg);
+      }
+
+      let volumenM3 = 0;
+      const empL = Number(it.empaqueLargoCm !== undefined ? it.empaqueLargoCm : (prod?.empaqueLargoCm || 0));
+      const empW = Number(it.empaqueAnchoCm !== undefined ? it.empaqueAnchoCm : (prod?.empaqueAnchoCm || 0));
+      const empH = Number(it.empaqueAltoCm !== undefined ? it.empaqueAltoCm : (prod?.empaqueAltoCm || 0));
+      const uL = Number(it.largoCm !== undefined ? it.largoCm : (prod?.largoCm || 0));
+      const uW = Number(it.anchoCm !== undefined ? it.anchoCm : (prod?.anchoCm || 0));
+      const uH = Number(it.altoCm !== undefined ? it.altoCm : (prod?.altoCm || 0));
+
+      if (empL > 0 && empW > 0 && empH > 0) {
+        const volBox = (empL * empW * empH) / 1000000;
+        const boxes = empaqueCantidad > 0 ? (qty / empaqueCantidad) : qty;
+        volumenM3 = boxes * volBox;
+      } else if (uL > 0 && uW > 0 && uH > 0) {
+        const volUnit = (uL * uW * uH) / 1000000;
+        volumenM3 = qty * volUnit;
+      }
+
+      return {
+        ...it,
+        quantity: qty,
+        empaqueCantidad,
+        unidadEmpaque,
+        pesoUnitarioKg: pesoUnit,
+        pesoTotalKg,
+        volumenM3
+      };
+    });
+
     const { generateQuotationPDFBuffer } = require('../services/quotationPdf.service');
     const { buffer, quotationNumber } = await generateQuotationPDFBuffer({
       clientName,
@@ -639,7 +705,7 @@ export const exportQuotationPDF = async (req: Request, res: Response) => {
       tasaBCV,
       tasaParalelo,
       tasaEUR,
-      items,
+      items: enrichedItems,
       notes,
       zelleAccount: req.body.zelleAccount || req.body.zelleEmail || req.body.customer?.zelleEmail || 'admin@grupoaludra.com'
     });

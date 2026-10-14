@@ -29,6 +29,17 @@ interface QuotationItem {
   costPrice?: number;
   stockAvailable?: number;
   empaqueCantidad?: number;
+  unidadEmpaque?: string;
+  pesoUnitarioKg?: number;
+  pesoTotalKg?: number;
+  volumenM3?: number;
+  empaquePesoKg?: number;
+  empaqueLargoCm?: number;
+  empaqueAnchoCm?: number;
+  empaqueAltoCm?: number;
+  largoCm?: number;
+  anchoCm?: number;
+  altoCm?: number;
   medidas?: string;
   division?: string;
   notes?: string;
@@ -175,6 +186,18 @@ export default function QuotationsPage() {
     subtotalUSD: number;
     costPrice?: number;
     medidas?: string;
+    empaqueCantidad?: number;
+    unidadEmpaque?: string;
+    pesoUnitarioKg?: number;
+    pesoTotalKg?: number;
+    volumenM3?: number;
+    empaquePesoKg?: number;
+    empaqueLargoCm?: number;
+    empaqueAnchoCm?: number;
+    empaqueAltoCm?: number;
+    largoCm?: number;
+    anchoCm?: number;
+    altoCm?: number;
   }>>([]);
 
   // Autocomplete de Clientes
@@ -420,7 +443,17 @@ export default function QuotationsPage() {
         unitPriceUSD: unitPrice,
         subtotalUSD: Number((unitPrice * qty).toFixed(2)),
         costPrice: product.costPrice,
-        medidas: product.medidas
+        medidas: product.medidas,
+        empaqueCantidad: product.empaqueCantidad,
+        unidadEmpaque: product.unidad_empaque || product.unidadEmpaque,
+        pesoUnitarioKg: product.pesoUnitarioKg,
+        empaquePesoKg: product.empaquePesoKg,
+        empaqueLargoCm: product.empaqueLargoCm,
+        empaqueAnchoCm: product.empaqueAnchoCm,
+        empaqueAltoCm: product.empaqueAltoCm,
+        largoCm: product.largoCm,
+        anchoCm: product.anchoCm,
+        altoCm: product.altoCm
       }]);
     }
 
@@ -672,7 +705,17 @@ export default function QuotationsPage() {
           subtotalUSD: i.subtotalUSD,
           subtotalBs: Number((i.subtotalUSD * bcvRate).toFixed(2)),
           costPrice: i.costPrice,
-          medidas: i.medidas
+          medidas: i.medidas,
+          empaqueCantidad: i.empaqueCantidad,
+          unidadEmpaque: i.unidadEmpaque,
+          pesoUnitarioKg: i.pesoUnitarioKg,
+          empaquePesoKg: i.empaquePesoKg,
+          empaqueLargoCm: i.empaqueLargoCm,
+          empaqueAnchoCm: i.empaqueAnchoCm,
+          empaqueAltoCm: i.empaqueAltoCm,
+          largoCm: i.largoCm,
+          anchoCm: i.anchoCm,
+          altoCm: i.altoCm
         })),
         totalUSD: Number(totalUSD.toFixed(2)),
         totalBs: Number(totalBs.toFixed(2)),
@@ -762,7 +805,17 @@ export default function QuotationsPage() {
         unit: it.unit || 'UNIDAD',
         subtotalUSD: Number(it.subtotalUSD !== undefined ? it.subtotalUSD : (finalP * q)),
         costPrice: it.costPrice !== undefined ? Number(it.costPrice) : undefined,
-        medidas: it.medidas || ''
+        medidas: it.medidas || '',
+        empaqueCantidad: it.empaqueCantidad,
+        unidadEmpaque: it.unidad_empaque || it.unidadEmpaque,
+        pesoUnitarioKg: it.pesoUnitarioKg,
+        empaquePesoKg: it.empaquePesoKg,
+        empaqueLargoCm: it.empaqueLargoCm,
+        empaqueAnchoCm: it.empaqueAnchoCm,
+        empaqueAltoCm: it.empaqueAltoCm,
+        largoCm: it.largoCm,
+        anchoCm: it.anchoCm,
+        altoCm: it.altoCm
       };
     });
     setManualItems(items);
@@ -1756,7 +1809,61 @@ export default function QuotationsPage() {
                         return (
                           <tr key={idx} className="hover:bg-slate-50">
                             <td className="p-3 font-mono text-slate-500">{it.sku || 'N/A'}</td>
-                            <td className="p-3 font-medium text-slate-900">{it.name}</td>
+                            <td className="p-3 font-medium text-slate-900">
+                              <div>{it.name}</div>
+                              {(() => {
+                                const prod = availableProducts.find(p => (p.sku && it.sku && p.sku.toUpperCase() === it.sku.toUpperCase()) || (p.name && it.name && p.name.toLowerCase() === it.name.toLowerCase()));
+                                const eq = prod?.empaqueCantidad && prod.empaqueCantidad > 1 ? prod.empaqueCantidad : (it.empaqueCantidad && it.empaqueCantidad > 1 ? it.empaqueCantidad : 0);
+                                const unidad = (prod?.unidad_empaque || it.unidadEmpaque || 'bulto').trim();
+                                let bultosStr = '';
+                                if (eq > 0) {
+                                  const b = quoted / eq;
+                                  const bStr = Number(b.toFixed(2)).toLocaleString('es-VE');
+                                  const u = b === 1 ? unidad : (unidad.endsWith('s') ? unidad : `${unidad}s`);
+                                  bultosStr = `${bStr} ${u} (x${eq} und)`;
+                                }
+                                const pu = Number(prod?.pesoUnitarioKg || it.pesoUnitarioKg || 0);
+                                let linePesoKg = 0;
+                                if (pu > 0) {
+                                  linePesoKg = quoted * pu;
+                                } else if (Number(prod?.empaquePesoKg || it.empaquePesoKg || 0) > 0 && eq > 0) {
+                                  linePesoKg = (quoted / eq) * Number(prod?.empaquePesoKg || it.empaquePesoKg);
+                                }
+                                let lineVolumenM3 = 0;
+                                const empL = Number(prod?.empaqueLargoCm || it.empaqueLargoCm || 0);
+                                const empW = Number(prod?.empaqueAnchoCm || it.empaqueAnchoCm || 0);
+                                const empH = Number(prod?.empaqueAltoCm || it.empaqueAltoCm || 0);
+                                const uL = Number(prod?.largoCm || it.largoCm || 0);
+                                const uW = Number(prod?.anchoCm || it.anchoCm || 0);
+                                const uH = Number(prod?.altoCm || it.altoCm || 0);
+                                if (empL > 0 && empW > 0 && empH > 0) {
+                                  const boxes = eq > 0 ? (quoted / eq) : quoted;
+                                  lineVolumenM3 = boxes * ((empL * empW * empH) / 1000000);
+                                } else if (uL > 0 && uW > 0 && uH > 0) {
+                                  lineVolumenM3 = quoted * ((uL * uW * uH) / 1000000);
+                                }
+                                if (!bultosStr && linePesoKg <= 0 && lineVolumenM3 <= 0) return null;
+                                return (
+                                  <div className="flex flex-wrap items-center gap-1.5 mt-1 text-[10px]">
+                                    {bultosStr && (
+                                      <span className="inline-flex items-center gap-1 font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200/60 px-1.5 py-0.5 rounded">
+                                        📦 {bultosStr}
+                                      </span>
+                                    )}
+                                    {linePesoKg > 0 && (
+                                      <span className="inline-flex items-center gap-1 font-mono font-bold text-slate-700 bg-slate-100 border border-slate-200/60 px-1.5 py-0.5 rounded">
+                                        ⚖️ {Number(linePesoKg.toFixed(2)).toLocaleString('es-VE')} kg
+                                      </span>
+                                    )}
+                                    {lineVolumenM3 > 0 && (
+                                      <span className="inline-flex items-center gap-1 font-mono font-bold text-amber-800 bg-amber-50 border border-amber-200/60 px-1.5 py-0.5 rounded">
+                                        📐 {Number(lineVolumenM3.toFixed(3)).toLocaleString('es-VE')} m³
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })()}
+                            </td>
                             <td className="p-3 text-center font-bold text-slate-800">{quoted} {it.unit || 'u'}</td>
                             <td className="p-3 text-center">
                               <span className={`font-mono font-bold ${dispatched > 0 ? 'text-indigo-600' : 'text-slate-400'}`}>
@@ -1794,21 +1901,64 @@ export default function QuotationsPage() {
               </div>
 
               {/* Totales y Márgenes */}
-              <div className="bg-slate-900 text-white p-4 rounded-2xl flex flex-wrap items-center justify-between gap-4">
-                <div>
-                  <div className="text-[10px] text-slate-400 uppercase font-bold">Total Liquidación Bolívares (BCV)</div>
-                  <div className="text-xl font-bold font-mono text-emerald-400">
-                    Bs {Number(selectedQuote.totalBs || (selectedQuote.totalUSD * (selectedQuote.rates?.bcv || 785))).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                  </div>
-                </div>
+              {(() => {
+                let totUnits = 0;
+                let totBultos = 0;
+                let totPesoKg = 0;
+                let totVolumenM3 = 0;
 
-                <div className="text-right">
-                  <div className="text-[10px] text-slate-400 uppercase font-bold">Total Cotización Venta</div>
-                  <div className="text-2xl font-black font-mono text-white">
-                    ${Number(selectedQuote.totalUSD || 0).toFixed(2)} USD
+                (selectedQuote.items || []).forEach(it => {
+                  const q = Number(it.quotedQuantity !== undefined ? it.quotedQuantity : (it.quantity || 1));
+                  totUnits += q;
+                  const prod = availableProducts.find(p => (p.sku && it.sku && p.sku.toUpperCase() === it.sku.toUpperCase()) || (p.name && it.name && p.name.toLowerCase() === it.name.toLowerCase()));
+                  const eq = prod?.empaqueCantidad && prod.empaqueCantidad > 1 ? prod.empaqueCantidad : (it.empaqueCantidad && it.empaqueCantidad > 1 ? it.empaqueCantidad : 0);
+                  if (eq > 0) totBultos += (q / eq);
+                  const pu = Number(prod?.pesoUnitarioKg || it.pesoUnitarioKg || 0);
+                  if (pu > 0) {
+                    totPesoKg += q * pu;
+                  } else if (Number(prod?.empaquePesoKg || it.empaquePesoKg || 0) > 0 && eq > 0) {
+                    totPesoKg += (q / eq) * Number(prod?.empaquePesoKg || it.empaquePesoKg);
+                  }
+                  const empL = Number(prod?.empaqueLargoCm || it.empaqueLargoCm || 0);
+                  const empW = Number(prod?.empaqueAnchoCm || it.empaqueAnchoCm || 0);
+                  const empH = Number(prod?.empaqueAltoCm || it.empaqueAltoCm || 0);
+                  const uL = Number(prod?.largoCm || it.largoCm || 0);
+                  const uW = Number(prod?.anchoCm || it.anchoCm || 0);
+                  const uH = Number(prod?.altoCm || it.altoCm || 0);
+                  if (empL > 0 && empW > 0 && empH > 0) {
+                    const b = eq > 0 ? (q / eq) : q;
+                    totVolumenM3 += b * ((empL * empW * empH) / 1000000);
+                  } else if (uL > 0 && uW > 0 && uH > 0) {
+                    totVolumenM3 += q * ((uL * uW * uH) / 1000000);
+                  }
+                });
+
+                return (
+                  <div className="bg-slate-900 text-white p-4 rounded-2xl flex flex-wrap items-center justify-between gap-4">
+                    <div className="space-y-1">
+                      <div className="text-[10px] text-slate-400 uppercase font-bold">Total Liquidación Bolívares (BCV)</div>
+                      <div className="text-xl font-bold font-mono text-emerald-400">
+                        Bs {Number(selectedQuote.totalBs || (selectedQuote.totalUSD * (selectedQuote.rates?.bcv || 785))).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      </div>
+                      {(totBultos > 0 || totPesoKg > 0 || totVolumenM3 > 0) && (
+                        <div className="pt-1 flex flex-wrap items-center gap-2 text-[11px] font-mono text-slate-300">
+                          <span className="text-indigo-300 font-bold">📦 {Number(totUnits.toFixed(0)).toLocaleString('es-VE')} unds</span>
+                          {totBultos > 0 && <span>| <span className="text-indigo-200">{Number(totBultos.toFixed(1)).toLocaleString('es-VE')} bultos</span></span>}
+                          {totPesoKg > 0 && <span>| <span className="text-slate-100 font-bold">⚖️ {Number(totPesoKg.toFixed(2)).toLocaleString('es-VE')} kg</span></span>}
+                          {totVolumenM3 > 0 && <span>| <span className="text-amber-300 font-bold">📐 {Number(totVolumenM3.toFixed(3)).toLocaleString('es-VE')} m³</span></span>}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="text-right">
+                      <div className="text-[10px] text-slate-400 uppercase font-bold">Total Cotización Venta</div>
+                      <div className="text-2xl font-black font-mono text-white">
+                        ${Number(selectedQuote.totalUSD || 0).toFixed(2)} USD
+                      </div>
+                    </div>
                   </div>
-                </div>
-              </div>
+                );
+              })()}
             </div>
 
             {/* Footer Modal */}
@@ -2736,6 +2886,58 @@ export default function QuotationsPage() {
                                   }}
                                   className="w-full bg-transparent border-b border-transparent hover:border-slate-300 focus:border-blue-500 outline-none font-semibold text-slate-800"
                                 />
+                                {(() => {
+                                  const prod = availableProducts.find(p => (p.sku || '').toUpperCase() === (item.sku || '').toUpperCase());
+                                  const eq = prod?.empaqueCantidad && prod.empaqueCantidad > 1 ? prod.empaqueCantidad : (item.empaqueCantidad && item.empaqueCantidad > 1 ? item.empaqueCantidad : 0);
+                                  const unidad = (prod?.unidad_empaque || item.unidadEmpaque || 'bulto').trim();
+                                  let bultosStr = '';
+                                  if (eq > 0) {
+                                    const b = item.quantity / eq;
+                                    const bStr = Number(b.toFixed(2)).toLocaleString('es-VE');
+                                    const u = b === 1 ? unidad : (unidad.endsWith('s') ? unidad : `${unidad}s`);
+                                    bultosStr = `${bStr} ${u} (x${eq} und)`;
+                                  }
+                                  const pu = Number(prod?.pesoUnitarioKg || item.pesoUnitarioKg || 0);
+                                  let linePesoKg = 0;
+                                  if (pu > 0) {
+                                    linePesoKg = item.quantity * pu;
+                                  } else if (Number(prod?.empaquePesoKg || item.empaquePesoKg || 0) > 0 && eq > 0) {
+                                    linePesoKg = (item.quantity / eq) * Number(prod?.empaquePesoKg || item.empaquePesoKg);
+                                  }
+                                  let lineVolumenM3 = 0;
+                                  const empL = Number(prod?.empaqueLargoCm || item.empaqueLargoCm || 0);
+                                  const empW = Number(prod?.empaqueAnchoCm || item.empaqueAnchoCm || 0);
+                                  const empH = Number(prod?.empaqueAltoCm || item.empaqueAltoCm || 0);
+                                  const uL = Number(prod?.largoCm || item.largoCm || 0);
+                                  const uW = Number(prod?.anchoCm || item.anchoCm || 0);
+                                  const uH = Number(prod?.altoCm || item.altoCm || 0);
+                                  if (empL > 0 && empW > 0 && empH > 0) {
+                                    const boxes = eq > 0 ? (item.quantity / eq) : item.quantity;
+                                    lineVolumenM3 = boxes * ((empL * empW * empH) / 1000000);
+                                  } else if (uL > 0 && uW > 0 && uH > 0) {
+                                    lineVolumenM3 = item.quantity * ((uL * uW * uH) / 1000000);
+                                  }
+                                  if (!bultosStr && linePesoKg <= 0 && lineVolumenM3 <= 0) return null;
+                                  return (
+                                    <div className="flex flex-wrap items-center gap-1.5 mt-1 text-[10px]">
+                                      {bultosStr && (
+                                        <span className="inline-flex items-center gap-1 font-semibold text-indigo-700 bg-indigo-50 border border-indigo-200/60 px-1.5 py-0.5 rounded">
+                                          📦 {bultosStr}
+                                        </span>
+                                      )}
+                                      {linePesoKg > 0 && (
+                                        <span className="inline-flex items-center gap-1 font-mono font-bold text-slate-700 bg-slate-100 border border-slate-200/60 px-1.5 py-0.5 rounded">
+                                          ⚖️ {Number(linePesoKg.toFixed(2)).toLocaleString('es-VE')} kg
+                                        </span>
+                                      )}
+                                      {lineVolumenM3 > 0 && (
+                                        <span className="inline-flex items-center gap-1 font-mono font-bold text-amber-800 bg-amber-50 border border-amber-200/60 px-1.5 py-0.5 rounded">
+                                          📐 {Number(lineVolumenM3.toFixed(3)).toLocaleString('es-VE')} m³
+                                        </span>
+                                      )}
+                                    </div>
+                                  );
+                                })()}
                               </td>
                               <td className="py-2 px-2 text-center">
                                 <input
@@ -2881,6 +3083,37 @@ export default function QuotationsPage() {
                   return lineFinal > lineBruto ? acc + (lineFinal - lineBruto) : acc;
                 }, 0);
 
+                let totalUnits = 0;
+                let totalBultos = 0;
+                let totalPesoKg = 0;
+                let totalVolumenM3 = 0;
+
+                manualItems.forEach(i => {
+                  const q = Number(i.quantity || 1);
+                  totalUnits += q;
+                  const prod = availableProducts.find(p => (p.sku || '').toUpperCase() === (i.sku || '').toUpperCase());
+                  const eq = prod?.empaqueCantidad && prod.empaqueCantidad > 1 ? prod.empaqueCantidad : (i.empaqueCantidad && i.empaqueCantidad > 1 ? i.empaqueCantidad : 0);
+                  if (eq > 0) totalBultos += (q / eq);
+                  const pu = Number(prod?.pesoUnitarioKg || i.pesoUnitarioKg || 0);
+                  if (pu > 0) {
+                    totalPesoKg += q * pu;
+                  } else if (Number(prod?.empaquePesoKg || i.empaquePesoKg || 0) > 0 && eq > 0) {
+                    totalPesoKg += (q / eq) * Number(prod?.empaquePesoKg || i.empaquePesoKg);
+                  }
+                  const empL = Number(prod?.empaqueLargoCm || i.empaqueLargoCm || 0);
+                  const empW = Number(prod?.empaqueAnchoCm || i.empaqueAnchoCm || 0);
+                  const empH = Number(prod?.empaqueAltoCm || i.empaqueAltoCm || 0);
+                  const uL = Number(prod?.largoCm || i.largoCm || 0);
+                  const uW = Number(prod?.anchoCm || i.anchoCm || 0);
+                  const uH = Number(prod?.altoCm || i.altoCm || 0);
+                  if (empL > 0 && empW > 0 && empH > 0) {
+                    const b = eq > 0 ? (q / eq) : q;
+                    totalVolumenM3 += b * ((empL * empW * empH) / 1000000);
+                  } else if (uL > 0 && uW > 0 && uH > 0) {
+                    totalVolumenM3 += q * ((uL * uW * uH) / 1000000);
+                  }
+                });
+
                 return (
                   <div className="bg-slate-900 text-white p-4 rounded-2xl flex flex-wrap items-center justify-between gap-4 shadow-md">
                     <div>
@@ -2890,6 +3123,14 @@ export default function QuotationsPage() {
                       <span className="text-xs text-slate-300 font-mono">
                         Tasa Oficial BCV: Bs. {bcvRate.toFixed(2)}
                       </span>
+                      {(totalBultos > 0 || totalPesoKg > 0 || totalVolumenM3 > 0) && (
+                        <div className="mt-2 flex flex-wrap items-center gap-2 text-xs font-mono text-slate-300">
+                          <span className="text-indigo-300 font-bold">📦 {Number(totalUnits.toFixed(0)).toLocaleString('es-VE')} unds</span>
+                          {totalBultos > 0 && <span>| <span className="text-indigo-200">{Number(totalBultos.toFixed(1)).toLocaleString('es-VE')} bultos</span></span>}
+                          {totalPesoKg > 0 && <span>| <span className="text-slate-100 font-bold">⚖️ {Number(totalPesoKg.toFixed(2)).toLocaleString('es-VE')} kg</span></span>}
+                          {totalVolumenM3 > 0 && <span>| <span className="text-amber-300 font-bold">📐 {Number(totalVolumenM3.toFixed(3)).toLocaleString('es-VE')} m³</span></span>}
+                        </div>
+                      )}
                       {(totalDiscountsUSD > 0 || totalIncrementsUSD > 0) && (
                         <div className="mt-2 text-xs space-y-0.5 font-mono">
                           <div className="text-slate-400 text-[11px]">

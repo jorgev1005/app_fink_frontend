@@ -14,6 +14,9 @@ export interface DeliveryNoteItem {
     total?: number;
     empaqueCantidad?: number;
     unidadEmpaque?: string;
+    pesoUnitarioKg?: number;
+    pesoTotalKg?: number;
+    volumenM3?: number;
     notes?: string;
 }
 
@@ -252,6 +255,8 @@ export async function generateDeliveryNotePDFBuffer(options: DeliveryNotePDFOpti
         let totalUnidades = 0;
         let totalBultos = 0;
         let totalMonto = 0;
+        let totalPesoKg = 0;
+        let totalVolumenM3 = 0;
 
         items.forEach((item, idx) => {
             const qty = item.quantity || 1;
@@ -263,12 +268,19 @@ export async function generateDeliveryNotePDFBuffer(options: DeliveryNotePDFOpti
 
             const empaqQty = item.empaqueCantidad && item.empaqueCantidad > 1 ? item.empaqueCantidad : 0;
             let bultosStr = '—';
+            let bVal = 0;
             if (empaqQty > 0) {
-                const bVal = qty / empaqQty;
+                bVal = qty / empaqQty;
                 totalBultos += bVal;
                 const unidad = item.unidadEmpaque || 'bulto';
                 bultosStr = `${Number(bVal.toFixed(2)).toLocaleString('es-VE')} ${bVal === 1 ? unidad : `${unidad}s`}`;
             }
+
+            const linePesoKg = Number(item.pesoTotalKg || ((Number(item.pesoUnitarioKg) || 0) * qty));
+            const lineVolumenM3 = Number(item.volumenM3 || 0);
+
+            totalPesoKg += linePesoKg;
+            totalVolumenM3 += lineVolumenM3;
 
             let extraParts: string[] = [];
             const adjVal = Number(item.adjustmentValue || 0);
@@ -283,8 +295,23 @@ export async function generateDeliveryNotePDFBuffer(options: DeliveryNotePDFOpti
             if (item.notes) {
                 extraParts.push(item.notes);
             }
+
+            let logParts: string[] = [];
+            if (empaqQty > 1) {
+                logParts.push(`Empaque: ${bultosStr} (x${empaqQty} und)`);
+            }
+            if (linePesoKg > 0) {
+                logParts.push(`Peso: ${Number(linePesoKg.toFixed(2)).toLocaleString('es-VE')} kg`);
+            }
+            if (lineVolumenM3 > 0) {
+                logParts.push(`Espacio: ${Number(lineVolumenM3.toFixed(3)).toLocaleString('es-VE')} m³`);
+            }
+            if (logParts.length > 0) {
+                extraParts.push(logParts.join('  |  '));
+            }
+
             const hasExtra = extraParts.length > 0;
-            const extraText = extraParts.join('  |  ');
+            const extraText = extraParts.join('  •  ');
 
             doc.fontSize(7).font('Helvetica');
             const descHeight = doc.heightOfString(item.description, { width: colWidths.desc - 5 });
@@ -335,25 +362,35 @@ export async function generateDeliveryNotePDFBuffer(options: DeliveryNotePDFOpti
         });
 
         // Fila de Totales de la Tabla
-        doc.rect(LEFT, y, W, 18).fill('#f1f5f9');
-        doc.rect(LEFT, y, W, 18).stroke(BORDER);
-        doc.fontSize(7).fillColor(DARK).font('Helvetica-Bold')
-           .text('TOTAL GENERAL DE CARGA:', LEFT + 10, y + 5, { lineBreak: false });
+        const barH = 22;
+        doc.rect(LEFT, y, W, barH).fill('#f1f5f9');
+        doc.rect(LEFT, y, W, barH).stroke(BORDER);
+        
+        doc.fontSize(6.5).fillColor(DARK).font('Helvetica-Bold')
+           .text('RESUMEN LOGÍSTICO Y CARGA:', LEFT + 8, y + 4, { lineBreak: false });
 
-        doc.fontSize(8).fillColor(PRIMARY).font('Helvetica-Bold')
-           .text(`${totalUnidades.toLocaleString('es-VE')} Unidades`, cols.cant - 20, y + 5, { width: 85, align: 'center', lineBreak: false });
-
+        let logSummaryText = `${totalUnidades.toLocaleString('es-VE')} Unidades`;
         if (totalBultos > 0) {
-            doc.fontSize(7.5).fillColor(DARK).font('Helvetica-Bold')
-               .text(`${Number(totalBultos.toFixed(2)).toLocaleString('es-VE')} Bultos`, cols.bultos, y + 5, { width: colWidths.bultos, align: 'center', lineBreak: false });
+            logSummaryText += `  |  ${Number(totalBultos.toFixed(2)).toLocaleString('es-VE')} Bultos`;
         }
+        if (totalPesoKg > 0) {
+            logSummaryText += `  |  Peso Total: ${Number(totalPesoKg.toFixed(2)).toLocaleString('es-VE')} kg`;
+        }
+        if (totalVolumenM3 > 0) {
+            logSummaryText += `  |  Espacio: ${Number(totalVolumenM3.toFixed(3)).toLocaleString('es-VE')} m³`;
+        }
+
+        doc.fontSize(6.5).fillColor(PRIMARY).font('Helvetica-Bold')
+           .text(logSummaryText, LEFT + 8, y + 13, { width: showPrices ? (cols.precio - LEFT - 10) : (W - 16), lineBreak: false });
 
         if (showPrices) {
+            doc.fontSize(6).fillColor(GRAY).font('Helvetica')
+               .text('TOTAL:', cols.precio, y + 4, { width: colWidths.precio - 4, align: 'right', lineBreak: false });
             doc.fontSize(8).fillColor('#059669').font('Helvetica-Bold')
-               .text(fmtMoney(totalMonto), cols.total, y + 4, { width: colWidths.total - 4, align: 'right', lineBreak: false });
+               .text(fmtMoney(totalMonto), cols.total, y + 8, { width: colWidths.total - 4, align: 'right', lineBreak: false });
         }
 
-        y += 28;
+        y += barH + 10;
 
         // ── 4. TALÓN DE RECEPCIÓN Y CONFORMIDAD (PIE DE PÁGINA) ───
         const footerY = Math.max(y, doc.page.height - 115);

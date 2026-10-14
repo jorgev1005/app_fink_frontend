@@ -312,10 +312,10 @@ export default function InvoiceDetailsPage() {
       const res = await api.invoices.getById(id);
       const invData = res.data.data;
       
-      // Load products for the project to match packaging units (bultos)
+      // Load products for the project to match packaging units (bultos), weight and volume
       if (invData.projectId) {
         try {
-          const prodRes = await api.products.getAll({ projectId: invData.projectId, limit: 100 });
+          const prodRes = await api.products.getAll({ projectId: invData.projectId, limit: 10000 });
           setProducts(prodRes.data.data || []);
         } catch (pe) {
           console.error("Error loading products for packaging calculation", pe);
@@ -786,9 +786,58 @@ export default function InvoiceDetailsPage() {
     if (invoice.dueDate) msg += `*Vencimiento:* ${formatDate(invoice.dueDate)}\n`;
     msg += `\n*RESUMEN DE ITEMS:*\n`;
 
+    let totalUnidadesWhatsApp = 0;
+    let totalBultosWhatsApp = 0;
+    let totalPesoWhatsApp = 0;
+    let totalVolumenWhatsApp = 0;
+
     (invoice.items || []).forEach((item) => {
+      const prod = products.find(p => p.id === item.productId || (p.sku && (item as any).sku && p.sku.toUpperCase() === (item as any).sku.toUpperCase()) || (p.name && (item.description || item.name) && p.name.toLowerCase() === (item.description || item.name)?.toLowerCase()));
+      const qty = item.quantity || 1;
+      totalUnidadesWhatsApp += qty;
+
+      const eq = prod?.empaqueCantidad && prod.empaqueCantidad > 1 ? prod.empaqueCantidad : ((item as any).empaqueCantidad && (item as any).empaqueCantidad > 1 ? (item as any).empaqueCantidad : 0);
+      let bultos = 0;
+      let bultosStr = '';
+      if (eq > 0) {
+        bultos = qty / eq;
+        totalBultosWhatsApp += bultos;
+        const u = prod?.unidad_empaque || (item as any).unidadEmpaque || 'bulto';
+        bultosStr = `${Number(bultos.toFixed(2)).toLocaleString('es-VE')} ${bultos === 1 ? u : `${u}s`}`;
+      }
+
+      const pu = Number(prod?.pesoUnitarioKg || (item as any).pesoUnitarioKg || 0);
+      let pTot = 0;
+      if (pu > 0) {
+        pTot = qty * pu;
+      } else if (Number(prod?.empaquePesoKg || (item as any).empaquePesoKg || 0) > 0 && eq > 0) {
+        pTot = (qty / eq) * Number(prod?.empaquePesoKg || (item as any).empaquePesoKg);
+      }
+      totalPesoWhatsApp += pTot;
+
+      let vTot = 0;
+      const empL = Number(prod?.empaqueLargoCm || (item as any).empaqueLargoCm || 0);
+      const empW = Number(prod?.empaqueAnchoCm || (item as any).empaqueAnchoCm || 0);
+      const empH = Number(prod?.empaqueAltoCm || (item as any).empaqueAltoCm || 0);
+      const uL = Number(prod?.largoCm || (item as any).largoCm || 0);
+      const uW = Number(prod?.anchoCm || (item as any).anchoCm || 0);
+      const uH = Number(prod?.altoCm || (item as any).altoCm || 0);
+      if (empL > 0 && empW > 0 && empH > 0) {
+        vTot = (eq > 0 ? (qty / eq) : qty) * ((empL * empW * empH) / 1000000);
+      } else if (uL > 0 && uW > 0 && uH > 0) {
+        vTot = qty * ((uL * uW * uH) / 1000000);
+      }
+      totalVolumenWhatsApp += vTot;
+
+      let logSnippet = '';
+      let snippets: string[] = [];
+      if (bultosStr) snippets.push(`📦 ${bultosStr}`);
+      if (pTot > 0) snippets.push(`⚖️ ${Number(pTot.toFixed(2)).toLocaleString('es-VE')}kg`);
+      if (vTot > 0) snippets.push(`📐 ${Number(vTot.toFixed(3)).toLocaleString('es-VE')}m³`);
+      if (snippets.length > 0) logSnippet = ` [${snippets.join(' | ')}]`;
+
       if (isDelivery && !showPricesInDeliveryNote) {
-        msg += `• ${item.quantity}x ${item.description || item.name}\n`;
+        msg += `• ${item.quantity}x ${item.description || item.name}${logSnippet}\n`;
       } else {
         const itemTotal = formatCurrency(item.total * conversionFactor, displayCurrency);
         let adjNote = '';
@@ -797,9 +846,17 @@ export default function InvoiceDetailsPage() {
           const unit = item.adjustmentType === 'AMOUNT' ? '$' : '%';
           adjNote = ` (Ajuste: ${sign}${item.adjustmentValue}${unit})`;
         }
-        msg += `• ${item.quantity}x ${item.description || item.name}${adjNote} - ${itemTotal}\n`;
+        msg += `• ${item.quantity}x ${item.description || item.name}${adjNote}${logSnippet} - ${itemTotal}\n`;
       }
     });
+
+    if (totalBultosWhatsApp > 0 || totalPesoWhatsApp > 0 || totalVolumenWhatsApp > 0) {
+      msg += `\n*CARGA Y VOLUMETRÍA:*\n`;
+      msg += `• Total Unidades: ${totalUnidadesWhatsApp}\n`;
+      if (totalBultosWhatsApp > 0) msg += `• Total Bultos: ${Number(totalBultosWhatsApp.toFixed(2)).toLocaleString('es-VE')}\n`;
+      if (totalPesoWhatsApp > 0) msg += `• Peso Total Estimado: ${Number(totalPesoWhatsApp.toFixed(2)).toLocaleString('es-VE')} kg\n`;
+      if (totalVolumenWhatsApp > 0) msg += `• Espacio Total Estimado: ${Number(totalVolumenWhatsApp.toFixed(3)).toLocaleString('es-VE')} m³\n`;
+    }
 
     if (!isDelivery || showPricesInDeliveryNote) {
       msg += `\n*Total:* ${totalStr}\n`;
@@ -1661,67 +1718,120 @@ export default function InvoiceDetailsPage() {
                                    : itemsToRender;
 
                                filteredItems.forEach((item) => {
-                                   rows.push(
-                                       <tr key={item.id} className="border-b border-gray-50 last:border-0">
-                                           <td className={`${printLayout === 'FREE_FORM' ? 'py-1.5' : 'py-4'} text-sm text-gray-800`}>
-                                               <p className="font-medium">{item.description || item.name || 'Ítem sin nombre'}</p>
-                                                {item.adjustmentValue && Number(item.adjustmentValue) !== 0 ? (
-                                                    <div className="flex items-center gap-1.5 mt-0.5">
-                                                        <span className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded ${
-                                                            Number(item.adjustmentValue) < 0 
-                                                                ? 'bg-rose-50 text-rose-700 border border-rose-200' 
-                                                                : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                                                        }`}>
-                                                            {Number(item.adjustmentValue) < 0 ? 'Desc: ' : 'Inc: '}
-                                                            {Number(item.adjustmentValue) > 0 ? `+${item.adjustmentValue}` : item.adjustmentValue}
-                                                            {item.adjustmentType === 'AMOUNT' ? ' $' : '%'}
-                                                        </span>
-                                                        {item.basePrice !== undefined && Number(item.basePrice) !== Number(item.unitPrice || item.price) && (
-                                                            <span className="text-[10px] text-gray-400 font-mono">
-                                                                (Base: {formatCurrency(Number(item.basePrice) * conversionFactor, displayCurrency)})
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                ) : null}
-                                               {item.notes && (
-                                                  <p className="text-[10px] text-gray-400 mt-0.5 font-normal whitespace-pre-wrap leading-tight">
-                                                     {item.notes}
-                                                  </p>
-                                               )}
-                                           </td>
-                                           <td className={`${printLayout === 'FREE_FORM' ? 'py-1.5' : 'py-4'} text-sm text-gray-600 text-right`}>
-                                               <div>{item.quantity}</div>
-                                               {(() => {
-                                                  const prod = products.find(p => p.id === item.productId);
-                                                  if (prod && prod.empaqueCantidad && prod.empaqueCantidad > 1) {
-                                                     const bultos = item.quantity / prod.empaqueCantidad;
-                                                     const bultosStr = Number(bultos.toFixed(2)).toLocaleString('es-VE');
-                                                     const unit = (prod.unidad_empaque || 'bulto').trim();
-                                                     const finalUnit = bultos === 1 ? unit : (unit.endsWith('s') ? unit : `${unit}s`);
-                                                     return (
-                                                        <div className="text-[10px] text-gray-400 mt-0.5 font-normal">
-                                                           ({bultosStr} {finalUnit})
-                                                        </div>
-                                                     );
-                                                  }
-                                                  return null;
-                                               })()}
-                                           </td>
-                                           {(viewMode !== 'DELIVERY_NOTE' || showPricesInDeliveryNote) && (
-                                              <>
-                                                 <td className={`${printLayout === 'FREE_FORM' ? 'py-1.5' : 'py-4'} text-sm text-gray-600 text-right font-mono`}>
-                                                     {formatCurrency((typeof item.unitPrice === 'number' && !isNaN(item.unitPrice) ? item.unitPrice : (typeof item.price === 'number' && !isNaN(item.price) ? item.price : 0)) * conversionFactor, displayCurrency)}
-                                                 </td>
-                                                 <td className={`${printLayout === 'FREE_FORM' ? 'py-1.5' : 'py-4'} text-sm text-gray-800 text-right font-medium font-mono`}>
-                                                     {formatCurrency(item.total * conversionFactor, displayCurrency)}
-                                                 </td>
-                                              </>
-                                           )}
-                                       </tr>
-                                   );
-                               });
-                           } else {
-                               rows.push(
+                                    const prod = products.find((p: any) => 
+                                        p.id === item.productId || 
+                                        (p.sku && (item as any).sku && p.sku.toUpperCase() === (item as any).sku.toUpperCase()) || 
+                                        (p.name && (item.description || item.name) && p.name.toLowerCase() === (item.description || item.name)?.toLowerCase())
+                                    );
+
+                                    const empaqQty = prod?.empaqueCantidad && prod.empaqueCantidad > 1 ? prod.empaqueCantidad : ((item as any).empaqueCantidad && (item as any).empaqueCantidad > 1 ? (item as any).empaqueCantidad : 0);
+                                    const unidad = (prod?.unidad_empaque || (item as any).unidadEmpaque || 'bulto').trim();
+                                    let bultos = 0;
+                                    let bultosStr = '';
+                                    if (empaqQty > 0) {
+                                      bultos = item.quantity / empaqQty;
+                                      const bValStr = Number(bultos.toFixed(2)).toLocaleString('es-VE');
+                                      const finalUnit = bultos === 1 ? unidad : (unidad.endsWith('s') ? unidad : `${unidad}s`);
+                                      bultosStr = `${bValStr} ${finalUnit}`;
+                                    }
+
+                                    const pesoUnit = Number(prod?.pesoUnitarioKg || (item as any).pesoUnitarioKg || 0);
+                                    let linePesoKg = 0;
+                                    if (pesoUnit > 0) {
+                                      linePesoKg = item.quantity * pesoUnit;
+                                    } else if (Number(prod?.empaquePesoKg || (item as any).empaquePesoKg || 0) > 0 && empaqQty > 0) {
+                                      linePesoKg = (item.quantity / empaqQty) * Number(prod?.empaquePesoKg || (item as any).empaquePesoKg);
+                                    }
+
+                                    let lineVolumenM3 = 0;
+                                    const empL = Number(prod?.empaqueLargoCm || (item as any).empaqueLargoCm || 0);
+                                    const empW = Number(prod?.empaqueAnchoCm || (item as any).empaqueAnchoCm || 0);
+                                    const empH = Number(prod?.empaqueAltoCm || (item as any).empaqueAltoCm || 0);
+                                    const uL = Number(prod?.largoCm || (item as any).largoCm || 0);
+                                    const uW = Number(prod?.anchoCm || (item as any).anchoCm || 0);
+                                    const uH = Number(prod?.altoCm || (item as any).altoCm || 0);
+
+                                    if (empL > 0 && empW > 0 && empH > 0) {
+                                      const volBox = (empL * empW * empH) / 1000000;
+                                      const boxes = empaqQty > 0 ? (item.quantity / empaqQty) : item.quantity;
+                                      lineVolumenM3 = boxes * volBox;
+                                    } else if (uL > 0 && uW > 0 && uH > 0) {
+                                      const volUnit = (uL * uW * uH) / 1000000;
+                                      lineVolumenM3 = item.quantity * volUnit;
+                                    }
+
+                                    const hasLogistics = empaqQty > 1 || linePesoKg > 0 || lineVolumenM3 > 0;
+
+                                    rows.push(
+                                        <tr key={item.id} className="border-b border-gray-50 last:border-0">
+                                            <td className={`${printLayout === 'FREE_FORM' ? 'py-1.5' : 'py-4'} text-sm text-gray-800`}>
+                                                <p className="font-medium">{item.description || item.name || 'Ítem sin nombre'}</p>
+                                                 {item.adjustmentValue && Number(item.adjustmentValue) !== 0 ? (
+                                                     <div className="flex items-center gap-1.5 mt-0.5">
+                                                         <span className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded ${
+                                                             Number(item.adjustmentValue) < 0 
+                                                                 ? 'bg-rose-50 text-rose-700 border border-rose-200' 
+                                                                 : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                                         }`}>
+                                                             {Number(item.adjustmentValue) < 0 ? 'Desc: ' : 'Inc: '}
+                                                             {Number(item.adjustmentValue) > 0 ? `+${item.adjustmentValue}` : item.adjustmentValue}
+                                                             {item.adjustmentType === 'AMOUNT' ? ' $' : '%'}
+                                                         </span>
+                                                         {item.basePrice !== undefined && Number(item.basePrice) !== Number(item.unitPrice || item.price) && (
+                                                             <span className="text-[10px] text-gray-400 font-mono">
+                                                                 (Base: {formatCurrency(Number(item.basePrice) * conversionFactor, displayCurrency)})
+                                                             </span>
+                                                         )}
+                                                     </div>
+                                                 ) : null}
+                                                {item.notes && (
+                                                   <p className="text-[10px] text-gray-400 mt-0.5 font-normal whitespace-pre-wrap leading-tight">
+                                                      {item.notes}
+                                                   </p>
+                                                )}
+                                                {hasLogistics && (
+                                                  <div className="flex flex-wrap items-center gap-1.5 mt-1 text-[10px] text-slate-500 font-mono">
+                                                    {empaqQty > 1 && (
+                                                      <span className="inline-flex items-center gap-0.5 bg-slate-100 text-slate-700 px-1.5 py-0.5 rounded border border-slate-200">
+                                                        📦 {bultosStr} <span className="text-[9px] text-slate-400">({empaqQty} u/bto)</span>
+                                                      </span>
+                                                    )}
+                                                    {linePesoKg > 0 && (
+                                                      <span className="inline-flex items-center gap-0.5 bg-amber-50 text-amber-800 px-1.5 py-0.5 rounded border border-amber-200">
+                                                        ⚖️ {Number(linePesoKg.toFixed(2)).toLocaleString('es-VE')} kg
+                                                      </span>
+                                                    )}
+                                                    {lineVolumenM3 > 0 && (
+                                                      <span className="inline-flex items-center gap-0.5 bg-blue-50 text-blue-800 px-1.5 py-0.5 rounded border border-blue-200">
+                                                        📐 {Number(lineVolumenM3.toFixed(3)).toLocaleString('es-VE')} m³
+                                                      </span>
+                                                    )}
+                                                  </div>
+                                                )}
+                                            </td>
+                                            <td className={`${printLayout === 'FREE_FORM' ? 'py-1.5' : 'py-4'} text-sm text-gray-600 text-right`}>
+                                                <div>{item.quantity}</div>
+                                                {bultosStr && (
+                                                   <div className="text-[10px] text-gray-400 mt-0.5 font-normal">
+                                                      ({bultosStr})
+                                                   </div>
+                                                )}
+                                            </td>
+                                            {(viewMode !== 'DELIVERY_NOTE' || showPricesInDeliveryNote) && (
+                                               <>
+                                                  <td className={`${printLayout === 'FREE_FORM' ? 'py-1.5' : 'py-4'} text-sm text-gray-600 text-right font-mono`}>
+                                                      {formatCurrency((typeof item.unitPrice === 'number' && !isNaN(item.unitPrice) ? item.unitPrice : (typeof item.price === 'number' && !isNaN(item.price) ? item.price : 0)) * conversionFactor, displayCurrency)}
+                                                  </td>
+                                                  <td className={`${printLayout === 'FREE_FORM' ? 'py-1.5' : 'py-4'} text-sm text-gray-800 text-right font-medium font-mono`}>
+                                                      {formatCurrency(item.total * conversionFactor, displayCurrency)}
+                                                  </td>
+                                               </>
+                                            )}
+                                        </tr>
+                                    );
+                                });
+                            } else {
+                                rows.push(
                                    <tr key="fallback">
                                       <td className="py-4 text-sm text-gray-800" colSpan={viewMode === 'DELIVERY_NOTE' && !showPricesInDeliveryNote ? 2 : 3}>
                                           <p className="font-medium">{invoice.description || 'Servicios Profesionales'}</p>
@@ -1758,93 +1868,195 @@ export default function InvoiceDetailsPage() {
                        })()}</tbody>
                </table>
 
-               {viewMode === 'DELIVERY_NOTE' && (() => {
-                 const itemsToSummarize = invoice.items || [];
-                 if (itemsToSummarize.length === 0) return null;
+               {(() => {
+                  const itemsToSummarize = invoice.items || [];
+                  if (itemsToSummarize.length === 0) return null;
 
-                 // Build a map: productId → { description, totalQty, totalBultos, empaqueCantidad, unidadEmpaque }
-                 const summaryMap = new Map<string, {
-                   description: string;
-                   totalQty: number;
-                   empaqueCantidad: number;
-                   unidadEmpaque: string;
-                 }>();
+                  const summaryMap = new Map<string, {
+                    description: string;
+                    totalQty: number;
+                    empaqueCantidad: number;
+                    unidadEmpaque: string;
+                    totalPesoKg: number;
+                    totalVolumenM3: number;
+                  }>();
 
-                 itemsToSummarize.forEach((item) => {
-                   const key = item.productId || `__no_product__${item.description || item.name || ''}`;
-                   const prod = products.find((p: any) => p.id === item.productId);
-                   const empaqQty = prod?.empaqueCantidad && prod.empaqueCantidad > 1 ? prod.empaqueCantidad : 0;
-                   const unidad = prod?.unidad_empaque || 'bulto';
+                  itemsToSummarize.forEach((item) => {
+                    const key = item.productId || (item as any).sku || `__no_product__${item.description || item.name || ''}`;
+                    const prod = products.find((p: any) => 
+                      p.id === item.productId || 
+                      (p.sku && (item as any).sku && p.sku.toUpperCase() === (item as any).sku.toUpperCase()) || 
+                      (p.name && (item.description || item.name) && p.name.toLowerCase() === (item.description || item.name)?.toLowerCase())
+                    );
+                    const empaqQty = prod?.empaqueCantidad && prod.empaqueCantidad > 1 ? prod.empaqueCantidad : ((item as any).empaqueCantidad && (item as any).empaqueCantidad > 1 ? (item as any).empaqueCantidad : 0);
+                    const unidad = (prod?.unidad_empaque || (item as any).unidadEmpaque || 'bulto').trim();
 
-                   if (summaryMap.has(key)) {
-                     const entry = summaryMap.get(key)!;
-                     entry.totalQty += item.quantity;
-                   } else {
-                     summaryMap.set(key, {
-                       description: item.description || item.name || 'Sin nombre',
-                       totalQty: item.quantity,
-                       empaqueCantidad: empaqQty,
-                       unidadEmpaque: unidad,
-                     });
-                   }
-                 });
+                    const pesoUnit = Number(prod?.pesoUnitarioKg || (item as any).pesoUnitarioKg || 0);
+                    let linePesoKg = 0;
+                    if (pesoUnit > 0) {
+                      linePesoKg = item.quantity * pesoUnit;
+                    } else if (Number(prod?.empaquePesoKg || (item as any).empaquePesoKg || 0) > 0 && empaqQty > 0) {
+                      linePesoKg = (item.quantity / empaqQty) * Number(prod?.empaquePesoKg || (item as any).empaquePesoKg);
+                    }
 
-                 const summaryRows = Array.from(summaryMap.values());
-                 const grandTotalQty = summaryRows.reduce((acc, r) => acc + r.totalQty, 0);
-                 const grandTotalBultos = summaryRows.reduce((acc, r) => {
-                   if (r.empaqueCantidad > 0) return acc + (r.totalQty / r.empaqueCantidad);
-                   return acc;
-                 }, 0);
+                    let lineVolumenM3 = 0;
+                    const empL = Number(prod?.empaqueLargoCm || (item as any).empaqueLargoCm || 0);
+                    const empW = Number(prod?.empaqueAnchoCm || (item as any).empaqueAnchoCm || 0);
+                    const empH = Number(prod?.empaqueAltoCm || (item as any).empaqueAltoCm || 0);
+                    const uL = Number(prod?.largoCm || (item as any).largoCm || 0);
+                    const uW = Number(prod?.anchoCm || (item as any).anchoCm || 0);
+                    const uH = Number(prod?.altoCm || (item as any).altoCm || 0);
 
-                 const hasBultos = summaryRows.some(r => r.empaqueCantidad > 0);
+                    if (empL > 0 && empW > 0 && empH > 0) {
+                      const volBox = (empL * empW * empH) / 1000000;
+                      const boxes = empaqQty > 0 ? (item.quantity / empaqQty) : item.quantity;
+                      lineVolumenM3 = boxes * volBox;
+                    } else if (uL > 0 && uW > 0 && uH > 0) {
+                      const volUnit = (uL * uW * uH) / 1000000;
+                      lineVolumenM3 = item.quantity * volUnit;
+                    }
 
-                 return (
-                   <div className="mt-4 pt-3 border-t border-gray-200">
-                     <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
-                       Resumen de Despacho
-                     </h4>
-                     <table className="w-full text-left">
-                       <thead>
-                         <tr className="border-b border-gray-300">
-                           <th className="py-1 text-[9px] font-bold text-gray-400 uppercase tracking-wider w-1/2">Producto</th>
-                           <th className="py-1 text-[9px] font-bold text-gray-400 uppercase tracking-wider text-right">Unidades</th>
-                           {hasBultos && (
-                             <th className="py-1 text-[9px] font-bold text-gray-400 uppercase tracking-wider text-right">Bultos</th>
-                           )}
-                         </tr>
-                       </thead>
-                       <tbody>
-                         {summaryRows.map((row, idx) => {
-                           const bultosNum = row.empaqueCantidad > 0 ? row.totalQty / row.empaqueCantidad : null;
-                           const bultosStr = bultosNum !== null
-                             ? `${Number(bultosNum.toFixed(2)).toLocaleString('es-VE')} ${bultosNum === 1 ? row.unidadEmpaque : (row.unidadEmpaque.endsWith('s') ? row.unidadEmpaque : `${row.unidadEmpaque}s`)}`
-                             : '—';
-                           return (
-                             <tr key={idx} className="border-b border-gray-50 last:border-0">
-                               <td className="py-1 text-[10px] text-gray-700 font-medium leading-tight">{row.description}</td>
-                               <td className="py-1 text-[10px] text-gray-800 font-mono text-right font-semibold leading-tight">{row.totalQty.toLocaleString('es-VE')}</td>
-                               {hasBultos && (
-                                 <td className="py-1 text-[10px] text-gray-600 font-mono text-right leading-tight">{bultosStr}</td>
-                               )}
-                             </tr>
-                           );
-                         })}
-                       </tbody>
-                       <tfoot>
-                         <tr className="border-t border-gray-400">
-                           <td className="py-1 text-[9px] font-bold text-gray-500 uppercase">TOTAL DESPACHO</td>
-                           <td className="py-1 text-[10px] font-mono text-right font-bold text-gray-900">{grandTotalQty.toLocaleString('es-VE')}</td>
-                           {hasBultos && (
-                             <td className="py-1 text-[10px] font-mono text-right font-bold text-gray-700">
-                               {Number(grandTotalBultos.toFixed(2)).toLocaleString('es-VE')}
-                             </td>
-                           )}
-                         </tr>
-                       </tfoot>
-                     </table>
-                   </div>
-                 );
-               })()}
+                    if (summaryMap.has(key)) {
+                      const entry = summaryMap.get(key)!;
+                      entry.totalQty += item.quantity;
+                      entry.totalPesoKg += linePesoKg;
+                      entry.totalVolumenM3 += lineVolumenM3;
+                    } else {
+                      summaryMap.set(key, {
+                        description: item.description || item.name || 'Sin nombre',
+                        totalQty: item.quantity,
+                        empaqueCantidad: empaqQty,
+                        unidadEmpaque: unidad,
+                        totalPesoKg: linePesoKg,
+                        totalVolumenM3: lineVolumenM3,
+                      });
+                    }
+                  });
+
+                  const summaryRows = Array.from(summaryMap.values());
+                  const grandTotalQty = summaryRows.reduce((acc, r) => acc + r.totalQty, 0);
+                  const grandTotalBultos = summaryRows.reduce((acc, r) => {
+                    if (r.empaqueCantidad > 0) return acc + (r.totalQty / r.empaqueCantidad);
+                    return acc;
+                  }, 0);
+                  const grandTotalPeso = summaryRows.reduce((acc, r) => acc + r.totalPesoKg, 0);
+                  const grandTotalVolumen = summaryRows.reduce((acc, r) => acc + r.totalVolumenM3, 0);
+
+                  const hasBultos = summaryRows.some(r => r.empaqueCantidad > 0);
+                  const hasPeso = grandTotalPeso > 0;
+                  const hasVolumen = grandTotalVolumen > 0;
+
+                  return (
+                    <>
+                      {viewMode === 'DELIVERY_NOTE' && (
+                        <div className="mt-4 pt-3 border-t border-gray-200">
+                          <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                            Resumen de Despacho y Logística
+                          </h4>
+                          <table className="w-full text-left">
+                            <thead>
+                              <tr className="border-b border-gray-300">
+                                <th className="py-1 text-[9px] font-bold text-gray-400 uppercase tracking-wider w-2/5">Producto</th>
+                                <th className="py-1 text-[9px] font-bold text-gray-400 uppercase tracking-wider text-right">Unidades</th>
+                                {hasBultos && (
+                                  <th className="py-1 text-[9px] font-bold text-gray-400 uppercase tracking-wider text-right">Bultos</th>
+                                )}
+                                {hasPeso && (
+                                  <th className="py-1 text-[9px] font-bold text-gray-400 uppercase tracking-wider text-right">Peso Total</th>
+                                )}
+                                {hasVolumen && (
+                                  <th className="py-1 text-[9px] font-bold text-gray-400 uppercase tracking-wider text-right">Espacio</th>
+                                )}
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {summaryRows.map((row, idx) => {
+                                const bultosNum = row.empaqueCantidad > 0 ? row.totalQty / row.empaqueCantidad : null;
+                                const bultosStr = bultosNum !== null
+                                  ? `${Number(bultosNum.toFixed(2)).toLocaleString('es-VE')} ${bultosNum === 1 ? row.unidadEmpaque : (row.unidadEmpaque.endsWith('s') ? row.unidadEmpaque : `${row.unidadEmpaque}s`)}`
+                                  : '—';
+                                return (
+                                  <tr key={idx} className="border-b border-gray-50 last:border-0">
+                                    <td className="py-1 text-[10px] text-gray-700 font-medium leading-tight">{row.description}</td>
+                                    <td className="py-1 text-[10px] text-gray-800 font-mono text-right font-semibold leading-tight">{row.totalQty.toLocaleString('es-VE')}</td>
+                                    {hasBultos && (
+                                      <td className="py-1 text-[10px] text-gray-600 font-mono text-right leading-tight">{bultosStr}</td>
+                                    )}
+                                    {hasPeso && (
+                                      <td className="py-1 text-[10px] text-amber-800 font-mono text-right leading-tight font-medium">
+                                        {row.totalPesoKg > 0 ? `${Number(row.totalPesoKg.toFixed(2)).toLocaleString('es-VE')} kg` : '—'}
+                                      </td>
+                                    )}
+                                    {hasVolumen && (
+                                      <td className="py-1 text-[10px] text-blue-800 font-mono text-right leading-tight font-medium">
+                                        {row.totalVolumenM3 > 0 ? `${Number(row.totalVolumenM3.toFixed(3)).toLocaleString('es-VE')} m³` : '—'}
+                                      </td>
+                                    )}
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                            <tfoot>
+                              <tr className="border-t border-gray-400">
+                                <td className="py-1 text-[9px] font-bold text-gray-500 uppercase">TOTAL DESPACHO</td>
+                                <td className="py-1 text-[10px] font-mono text-right font-bold text-gray-900">{grandTotalQty.toLocaleString('es-VE')}</td>
+                                {hasBultos && (
+                                  <td className="py-1 text-[10px] font-mono text-right font-bold text-gray-700">
+                                    {Number(grandTotalBultos.toFixed(2)).toLocaleString('es-VE')}
+                                  </td>
+                                )}
+                                {hasPeso && (
+                                  <td className="py-1 text-[10px] font-mono text-right font-bold text-amber-900">
+                                    {Number(grandTotalPeso.toFixed(2)).toLocaleString('es-VE')} kg
+                                  </td>
+                                )}
+                                {hasVolumen && (
+                                  <td className="py-1 text-[10px] font-mono text-right font-bold text-blue-900">
+                                    {Number(grandTotalVolumen.toFixed(3)).toLocaleString('es-VE')} m³
+                                  </td>
+                                )}
+                              </tr>
+                            </tfoot>
+                          </table>
+                        </div>
+                      )}
+
+                      {/* Resumen Logístico y Volumetría para Facturas y Notas */}
+                      {(hasBultos || hasPeso || hasVolumen) && (
+                        <div className="mt-5 p-3 bg-slate-50 border border-slate-200 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs">
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-slate-700 uppercase text-[10px] tracking-wider">
+                              📦 Carga & Volumetría:
+                            </span>
+                            <span className="font-mono font-semibold text-slate-800">
+                              {grandTotalQty.toLocaleString('es-VE')} Unds
+                            </span>
+                            {hasBultos && (
+                              <>
+                                <span className="text-slate-300">•</span>
+                                <span className="font-mono font-semibold text-slate-800">
+                                  {Number(grandTotalBultos.toFixed(2)).toLocaleString('es-VE')} Bultos
+                                </span>
+                              </>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2.5">
+                            {hasPeso && (
+                              <div className="flex items-center gap-1 bg-amber-50 border border-amber-200 text-amber-800 px-2 py-0.5 rounded-lg font-mono font-bold text-[11px]">
+                                ⚖️ Peso Total: {Number(grandTotalPeso.toFixed(2)).toLocaleString('es-VE')} kg
+                              </div>
+                            )}
+                            {hasVolumen && (
+                              <div className="flex items-center gap-1 bg-blue-50 border border-blue-200 text-blue-800 px-2 py-0.5 rounded-lg font-mono font-bold text-[11px]">
+                                📐 Espacio: {Number(grandTotalVolumen.toFixed(3)).toLocaleString('es-VE')} m³
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </>
+                  );
+                })()}
 
               {(viewMode !== 'DELIVERY_NOTE' || showPricesInDeliveryNote) && (
                  <div className="mt-8 flex justify-end">

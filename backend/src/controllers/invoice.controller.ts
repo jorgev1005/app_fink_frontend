@@ -1547,13 +1547,37 @@ export const getInvoicePdf = async (req: Request, res: Response) => {
     const isDeliveryNote = invoice.code?.toUpperCase().startsWith('NE-') || invoice.code?.toUpperCase().startsWith('NE') || req.query.viewMode === 'DELIVERY_NOTE';
     if (isDeliveryNote) {
       const productIds = itemsList.map((i: any) => i.productId).filter(Boolean);
+      const skus = itemsList.map((i: any) => i.sku).filter(Boolean);
       let productMap: Record<string, any> = {};
-      if (productIds.length > 0) {
+      let skuMap: Record<string, any> = {};
+      if (productIds.length > 0 || skus.length > 0) {
         const dbProducts = await prisma.product.findMany({
-          where: { id: { in: productIds } },
-          select: { id: true, sku: true, name: true, empaqueCantidad: true, unidad_empaque: true }
+          where: {
+            OR: [
+              ...(productIds.length > 0 ? [{ id: { in: productIds } }] : []),
+              ...(skus.length > 0 ? [{ sku: { in: skus } }] : [])
+            ]
+          },
+          select: {
+            id: true,
+            sku: true,
+            name: true,
+            empaqueCantidad: true,
+            unidad_empaque: true,
+            pesoUnitarioKg: true,
+            empaquePesoKg: true,
+            empaqueLargoCm: true,
+            empaqueAnchoCm: true,
+            empaqueAltoCm: true,
+            largoCm: true,
+            anchoCm: true,
+            altoCm: true
+          }
         });
-        dbProducts.forEach(p => { productMap[p.id] = p; });
+        dbProducts.forEach(p => {
+          if (p.id) productMap[p.id] = p;
+          if (p.sku) skuMap[p.sku.toUpperCase()] = p;
+        });
       }
 
       // Parámetros de visualización: precios y moneda
@@ -1566,7 +1590,7 @@ export const getInvoicePdf = async (req: Request, res: Response) => {
         : (Number(req.query.rate) || tasaBCV || 1);
 
       const enrichedItems = itemsList.map((it: any) => {
-        const prod = it.productId ? productMap[it.productId] : null;
+        const prod = (it.productId ? productMap[it.productId] : null) || (it.sku ? skuMap[it.sku.toUpperCase()] : null);
         const sku = it.sku || prod?.sku || '';
         const name = it.name || it.description || 'Producto';
         const qty = Number(it.quantity || 1);
@@ -1589,6 +1613,32 @@ export const getInvoicePdf = async (req: Request, res: Response) => {
           finalTotal = conversionRate > 0 ? rawTotal / conversionRate : rawTotal;
         }
 
+        // Logística y volumetría
+        const pesoUnit = Number(it.pesoUnitarioKg !== undefined ? it.pesoUnitarioKg : (prod?.pesoUnitarioKg || 0));
+        let pesoTotalKg = 0;
+        if (pesoUnit > 0) {
+          pesoTotalKg = qty * pesoUnit;
+        } else if (Number(prod?.empaquePesoKg || 0) > 0 && empaqueCantidad > 0) {
+          pesoTotalKg = (qty / empaqueCantidad) * Number(prod.empaquePesoKg);
+        }
+
+        let volumenM3 = 0;
+        const empL = Number(it.empaqueLargoCm !== undefined ? it.empaqueLargoCm : (prod?.empaqueLargoCm || 0));
+        const empW = Number(it.empaqueAnchoCm !== undefined ? it.empaqueAnchoCm : (prod?.empaqueAnchoCm || 0));
+        const empH = Number(it.empaqueAltoCm !== undefined ? it.empaqueAltoCm : (prod?.empaqueAltoCm || 0));
+        const uL = Number(it.largoCm !== undefined ? it.largoCm : (prod?.largoCm || 0));
+        const uW = Number(it.anchoCm !== undefined ? it.anchoCm : (prod?.anchoCm || 0));
+        const uH = Number(it.altoCm !== undefined ? it.altoCm : (prod?.altoCm || 0));
+
+        if (empL > 0 && empW > 0 && empH > 0) {
+          const volBox = (empL * empW * empH) / 1000000;
+          const boxes = empaqueCantidad > 0 ? (qty / empaqueCantidad) : qty;
+          volumenM3 = boxes * volBox;
+        } else if (uL > 0 && uW > 0 && uH > 0) {
+          const volUnit = (uL * uW * uH) / 1000000;
+          volumenM3 = qty * volUnit;
+        }
+
         return {
           sku,
           description: name,
@@ -1601,6 +1651,9 @@ export const getInvoicePdf = async (req: Request, res: Response) => {
           total: finalTotal,
           empaqueCantidad,
           unidadEmpaque,
+          pesoUnitarioKg: pesoUnit,
+          pesoTotalKg,
+          volumenM3,
           notes: it.notes || ''
         };
       });
