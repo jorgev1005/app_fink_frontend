@@ -1585,24 +1585,14 @@ export default function QuotationsPage() {
                             <Pencil size={15} />
                           </button>
 
-                          {/* Botón Emitir Nota de Entrega */}
+                          {/* Botón Despachar (Nota de Entrega) */}
                           <button
                             onClick={() => router.push(`/invoices/new?fromQuotation=${encodeURIComponent(q.correlative || q.id)}&isDeliveryNote=true`)}
-                            className="flex items-center gap-1 px-2 py-1 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg font-bold text-[11px] shadow-2xs transition-all cursor-pointer"
-                            title="Emitir Nota de Entrega a partir de esta cotización"
+                            className="flex items-center gap-1 px-2.5 py-1 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-lg font-bold text-[11px] shadow-2xs transition-all cursor-pointer"
+                            title="Despachar pedido y emitir Nota de Entrega para esta cotización"
                           >
                             <FileText size={12} />
-                            Nota
-                          </button>
-
-                          {/* Botón Facturar Venta */}
-                          <button
-                            onClick={() => router.push(`/invoices/new?fromQuotation=${encodeURIComponent(q.correlative || q.id)}&isDeliveryNote=false`)}
-                            className="flex items-center gap-1 px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-lg font-bold text-[11px] shadow-2xs transition-all cursor-pointer"
-                            title="Emitir Factura formal a partir de esta cotización"
-                          >
-                            <DollarSign size={12} />
-                            Factura
+                            Despachar (Nota)
                           </button>
 
                           {/* Botón Aprobar (Si está pendiente) */}
@@ -2020,20 +2010,20 @@ export default function QuotationsPage() {
 
                 <button
                   onClick={() => router.push(`/invoices/new?fromQuotation=${encodeURIComponent(selectedQuote.correlative || selectedQuote.id)}&isDeliveryNote=true`)}
-                  className="flex items-center gap-1.5 px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-xl font-bold text-xs transition-all shadow-xs cursor-pointer"
-                  title="Emitir Nota de Entrega enlazada"
+                  className="flex items-center gap-1.5 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white rounded-xl font-bold text-xs transition-all shadow-xs cursor-pointer"
+                  title="Emitir Nota de Entrega para amparar el despacho operativo"
                 >
                   <FileText size={15} />
-                  Nota de Entrega
+                  Despachar (Nota de Entrega)
                 </button>
 
                 <button
                   onClick={() => router.push(`/invoices/new?fromQuotation=${encodeURIComponent(selectedQuote.correlative || selectedQuote.id)}&isDeliveryNote=false`)}
-                  className="flex items-center gap-1.5 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl font-bold text-xs transition-all shadow-xs cursor-pointer"
-                  title="Emitir Factura de Venta enlazada"
+                  className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 rounded-xl font-semibold text-xs transition-all cursor-pointer"
+                  title="Emitir Factura fiscal directa (solo si no requiere nota previa)"
                 >
                   <DollarSign size={15} />
-                  Factura de Venta
+                  Factura Directa
                 </button>
 
                 {selectedQuote.status === 'PENDING' && (

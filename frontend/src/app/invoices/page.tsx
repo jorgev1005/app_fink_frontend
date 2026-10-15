@@ -479,8 +479,8 @@ function InvoicesPageContent() {
                     <Link href="/invoices/new?type=bill" className="bg-orange-700 hover:bg-orange-800 text-white px-3 py-2 rounded-lg transition font-medium text-xs sm:text-sm flex items-center gap-1.5 shadow-sm">
                         <Plus className="w-4 h-4" /> Factura de Compra
                     </Link>
-                    <Link href="/invoices/new?type=invoice" className="bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-2 rounded-lg transition font-medium text-xs sm:text-sm flex items-center gap-1.5 shadow-sm">
-                        <Plus className="w-4 h-4" /> Nueva Factura / Nota
+                    <Link href="/invoices/new?type=ne" className="bg-blue-600 hover:bg-blue-700 text-white px-3.5 py-2 rounded-lg transition font-medium text-xs sm:text-sm flex items-center gap-1.5 shadow-sm">
+                        <Plus className="w-4 h-4" /> Nueva Nota de Entrega
                     </Link>
                 </div>
             </div>

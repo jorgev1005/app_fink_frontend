@@ -22,9 +22,9 @@ function NewInvoiceContent() {
   const [error, setError] = useState<string | null>(null);
 
   const [projectId, setProjectId] = useState('');
-  const [type, setType] = useState('BILL'); // BILL (Gasto/Compra) or INVOICE (Venta)
+  const [type, setType] = useState<'BILL' | 'INVOICE'>('INVOICE'); // Default to INVOICE (Venta)
   const [code, setCode] = useState('');
-  const [isDeliveryNote, setIsDeliveryNote] = useState(false);
+  const [isDeliveryNote, setIsDeliveryNote] = useState(true); // Default to Delivery Note (toda venta inicia como despacho NE)
   const [isPurchaseOrder, setIsPurchaseOrder] = useState(true); // Default to Purchase Order when in BILL mode
   const [suggestedCode, setSuggestedCode] = useState<string>('');
   const [loadingSuggestedCode, setLoadingSuggestedCode] = useState<boolean>(false);
@@ -744,29 +744,34 @@ function NewInvoiceContent() {
                     {/* Subtype Selector (Invoice vs Delivery Note for INVOICE, and Orden de Compra vs Factura de Proveedor for BILL) */}
                     {type === 'INVOICE' ? (
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Subtipo de Venta</label>
+                            <div className="flex flex-wrap items-center justify-between gap-1 mb-1">
+                                <label className="block text-sm font-medium text-gray-700">Subtipo de Venta</label>
+                                <span className="text-[11px] text-indigo-700 font-semibold bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded-full">
+                                    💡 Flujo sugerido: Iniciar como Nota de Entrega y facturar al imprimir
+                                </span>
+                            </div>
                             <div className="flex bg-gray-50 p-1 rounded-xl border border-gray-200">
                                 <button
                                     type="button"
-                                    onClick={() => setIsDeliveryNote(false)}
-                                    className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all ${
-                                        !isDeliveryNote 
-                                        ? 'bg-white text-blue-600 shadow-sm border border-blue-100' 
+                                    onClick={() => setIsDeliveryNote(true)}
+                                    className={`flex-1 py-2 px-4 rounded-lg text-sm font-bold transition-all cursor-pointer ${
+                                        isDeliveryNote 
+                                        ? 'bg-white text-indigo-700 shadow-sm border border-indigo-200' 
                                         : 'text-gray-500 hover:text-gray-700'
                                     }`}
                                 >
-                                    Factura
+                                    📦 Nota de Entrega (Recomendado)
                                 </button>
                                 <button
                                     type="button"
-                                    onClick={() => setIsDeliveryNote(true)}
-                                    className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all ${
-                                        isDeliveryNote 
-                                        ? 'bg-white text-indigo-600 shadow-sm border border-indigo-100' 
+                                    onClick={() => setIsDeliveryNote(false)}
+                                    className={`flex-1 py-2 px-4 rounded-lg text-sm font-medium transition-all cursor-pointer ${
+                                        !isDeliveryNote 
+                                        ? 'bg-white text-blue-600 shadow-sm border border-blue-200 font-bold' 
                                         : 'text-gray-500 hover:text-gray-700'
                                     }`}
                                 >
-                                    Nota de Entrega
+                                    📄 Factura Fiscal Directa
                                 </button>
                             </div>
                         </div>
