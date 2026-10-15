@@ -1089,7 +1089,7 @@ export default function InvoiceDetailsPage() {
                 max-height: 27.85cm !important;
                 padding-left: 0.8cm !important;
                 padding-right: 0.8cm !important;
-                padding-top: 3.5cm !important;
+                padding-top: 4.8cm !important;
                 padding-bottom: 3.0cm !important;
                 display: flex !important;
                 flex-direction: column !important;
