@@ -1083,10 +1083,18 @@ export default function InvoiceDetailsPage() {
             break-inside: avoid !important;
             ${printLayout === 'FREE_FORM' 
               ? `
-                padding-left: 0.5cm !important;
-                padding-right: 0.5cm !important;
-                padding-top: 4.5cm !important;
-                padding-bottom: 2.0cm !important;
+                box-sizing: border-box !important;
+                width: 100% !important;
+                height: 27.85cm !important;
+                max-height: 27.85cm !important;
+                padding-left: 0.8cm !important;
+                padding-right: 0.8cm !important;
+                padding-top: 3.5cm !important;
+                padding-bottom: 3.0cm !important;
+                display: flex !important;
+                flex-direction: column !important;
+                justify-content: space-between !important;
+                overflow: hidden !important;
                 `
               : `
                 padding-left: 1.5cm !important;
@@ -1591,10 +1599,10 @@ export default function InvoiceDetailsPage() {
       </div>
 
       {/* Invoice Paper */}
-      <div id="invoice-paper-printable" className={`max-w-4xl mx-auto bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden print:shadow-none print:border-none print:rounded-none print:max-w-full print:my-0 print-no-shadow print-wrapper`}>
+      <div id="invoice-paper-printable" className={`max-w-4xl mx-auto bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden print:shadow-none print:border-none print:rounded-none print:max-w-full print:my-0 print-no-shadow print-wrapper ${printLayout === 'FREE_FORM' ? 'print:flex print:flex-col print:h-[27.85cm] print:max-h-[27.85cm] print:justify-between' : ''}`}>
            
            {/* Header */}
-           <div className={`${printLayout === 'FREE_FORM' ? 'p-4 print:p-0 print:pb-2' : 'p-8 md:p-12 print:p-4'} border-b border-gray-100`}>
+           <div className={`${printLayout === 'FREE_FORM' ? 'p-4 print:p-0 print:pb-2 print:shrink-0' : 'p-8 md:p-12 print:p-4'} border-b border-gray-100`}>
                <div className={`flex flex-col md:flex-row justify-between items-start gap-8 ${printLayout === 'FREE_FORM' ? 'mb-2' : 'mb-10'}`}>
                    {/* Left Column: Logo + Project Name & Client Details */}
                    <div className="flex-1">
@@ -1690,7 +1698,7 @@ export default function InvoiceDetailsPage() {
            </div>
 
            {/* Items Table */}
-           <div className={printLayout === 'FREE_FORM' ? 'p-4 print:px-1 print:py-1' : 'p-8 md:p-12 print:px-4 print:py-2'}>
+           <div className={printLayout === 'FREE_FORM' ? 'p-4 print:px-1 print:py-0 print:flex-1 print:flex print:flex-col print:justify-between' : 'p-8 md:p-12 print:px-4 print:py-2'}>
                <table className="w-full text-left">
                    <thead>
                        <tr className="border-b border-gray-200">
@@ -1847,26 +1855,8 @@ export default function InvoiceDetailsPage() {
                                );
                            }
 
-                           // Pad up to 4 rows if in FREE_FORM printLayout
-                            if (printLayout === 'FREE_FORM' && rows.length < 4) {
-                                const padCount = 4 - rows.length;
-                               for (let i = 0; i < padCount; i++) {
-                                   rows.push(
-                                       <tr key={`pad-${i}`} className="border-b border-gray-50 last:border-0 print:border-0">
-                                           <td className="py-1.5 text-sm">&nbsp;</td>
-                                           <td className="py-1.5 text-sm">&nbsp;</td>
-                                           {(viewMode !== 'DELIVERY_NOTE' || showPricesInDeliveryNote) && (
-                                              <>
-                                                 <td className="py-1.5 text-sm">&nbsp;</td>
-                                                 <td className="py-1.5 text-sm">&nbsp;</td>
-                                              </>
-                                           )}
-                                       </tr>
-                                   );
-                               }
-                           }
-
-                           return rows;
+                           // In FREE_FORM, flexbox (print:mt-auto) anchors totals to the bottom of the printable area
+                            return rows;
                        })()}</tbody>
                </table>
 
@@ -2026,7 +2016,7 @@ export default function InvoiceDetailsPage() {
                        )}
 
                        {/* Fila Inferior: Carga & Volumetría a la Izquierda y Totales a la Derecha */}
-                       <div className={`mt-4 pt-3 border-t border-gray-150 flex flex-col md:flex-row print:flex-row justify-between items-start gap-6 ${printLayout === 'FREE_FORM' ? 'print:mt-1.5 print:pt-1.5' : ''}`}>
+                       <div className={`mt-4 pt-3 border-t border-gray-150 flex flex-col md:flex-row print:flex-row justify-between items-end gap-6 ${printLayout === 'FREE_FORM' ? 'print:mt-auto print:pt-2' : ''}`}>
                          {/* Lado Izquierdo: Carga & Volumetría */}
                          <div className="w-full md:w-7/12 print:w-7/12 flex-1 pr-0 md:pr-4 print:pr-4">
                            {hasLogisticsSummary ? (
