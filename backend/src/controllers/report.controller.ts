@@ -335,10 +335,16 @@ export const getContactAgingReport = async (req: Request, res: Response) => {
         entry.items.push({
             id: tx.id,
             type: 'TRANSACTION',
-            docType: 'Gasto Directo',
+            docType: tx.type === 'INCOME' 
+                ? (tx.reference?.toUpperCase().startsWith('NE-') ? 'Nota de Entrega' : (tx.reference ? 'Factura' : 'Venta'))
+                : (tx.reference?.toUpperCase().startsWith('OC-') ? 'Orden de Compra' : (tx.reference ? 'Factura Prov.' : 'Gasto Directo')),
             taxAmount: 0,
             flow: tx.type, // INCOME/EXPENSE
-            description: tx.description,
+            description: tx.description 
+                ? tx.description
+                    .replace(/^Posting invoice /i, 'Factura #')
+                    .replace(/^Posting delivery note /i, 'Nota de Entrega #')
+                : (tx.reference ? `Doc. #${tx.reference}` : 'Sin descripción'),
             date: tx.date,
             dueDate: tx.dueDate,
             originalAmount: outstanding,
