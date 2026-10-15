@@ -1079,12 +1079,14 @@ export default function InvoiceDetailsPage() {
             border-radius: 0 !important;
             max-width: 100% !important;
             margin: 0 !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
             ${printLayout === 'FREE_FORM' 
               ? `
                 padding-left: 0.5cm !important;
                 padding-right: 0.5cm !important;
                 padding-top: 4.5cm !important;
-                padding-bottom: 4.0cm !important;
+                padding-bottom: 2.0cm !important;
                 `
               : `
                 padding-left: 1.5cm !important;
@@ -1647,7 +1649,7 @@ export default function InvoiceDetailsPage() {
                           {viewMode === 'DELIVERY_NOTE' ? 'Nota de Entrega' : getTypeLabel(invoice.type)}
                        </h2>
                        <p className={`font-mono text-gray-600 ${printLayout === 'FREE_FORM' ? 'text-sm mb-0.5' : 'text-lg mb-2'}`}>#{invoice.code}</p>
-                       <div className={printLayout === 'FREE_FORM' ? 'mb-1 print:hidden' : 'mb-4'}>
+                       <div className={`${printLayout === 'FREE_FORM' ? 'mb-1' : 'mb-4'} print:hidden`} data-html2canvas-ignore="true">
                            {getStatusBadge(invoice.status, invoice.type)}
                        </div>
                        
@@ -1845,9 +1847,9 @@ export default function InvoiceDetailsPage() {
                                );
                            }
 
-                           // Pad up to 10 rows if in FREE_FORM printLayout
-                           if (printLayout === 'FREE_FORM' && rows.length < 10) {
-                               const padCount = 10 - rows.length;
+                           // Pad up to 4 rows if in FREE_FORM printLayout
+                            if (printLayout === 'FREE_FORM' && rows.length < 4) {
+                                const padCount = 4 - rows.length;
                                for (let i = 0; i < padCount; i++) {
                                    rows.push(
                                        <tr key={`pad-${i}`} className="border-b border-gray-50 last:border-0 print:border-0">
@@ -1869,264 +1871,279 @@ export default function InvoiceDetailsPage() {
                </table>
 
                {(() => {
-                  const itemsToSummarize = invoice.items || [];
-                  if (itemsToSummarize.length === 0) return null;
+                   const itemsToSummarize = invoice.items || [];
+                   const summaryMap = new Map<string, {
+                     description: string;
+                     totalQty: number;
+                     empaqueCantidad: number;
+                     unidadEmpaque: string;
+                     totalPesoKg: number;
+                     totalVolumenM3: number;
+                   }>();
 
-                  const summaryMap = new Map<string, {
-                    description: string;
-                    totalQty: number;
-                    empaqueCantidad: number;
-                    unidadEmpaque: string;
-                    totalPesoKg: number;
-                    totalVolumenM3: number;
-                  }>();
+                   if (itemsToSummarize.length > 0) {
+                     itemsToSummarize.forEach((item) => {
+                       const key = item.productId || (item as any).sku || `__no_product__${item.description || item.name || ''}`;
+                       const prod = products.find((p: any) => 
+                         p.id === item.productId || 
+                         (p.sku && (item as any).sku && p.sku.toUpperCase() === (item as any).sku.toUpperCase()) || 
+                         (p.name && (item.description || item.name) && p.name.toLowerCase() === (item.description || item.name)?.toLowerCase())
+                       );
+                       const empaqQty = prod?.empaqueCantidad && prod.empaqueCantidad > 1 ? prod.empaqueCantidad : ((item as any).empaqueCantidad && (item as any).empaqueCantidad > 1 ? (item as any).empaqueCantidad : 0);
+                       const unidad = (prod?.unidad_empaque || (item as any).unidadEmpaque || 'bulto').trim();
 
-                  itemsToSummarize.forEach((item) => {
-                    const key = item.productId || (item as any).sku || `__no_product__${item.description || item.name || ''}`;
-                    const prod = products.find((p: any) => 
-                      p.id === item.productId || 
-                      (p.sku && (item as any).sku && p.sku.toUpperCase() === (item as any).sku.toUpperCase()) || 
-                      (p.name && (item.description || item.name) && p.name.toLowerCase() === (item.description || item.name)?.toLowerCase())
-                    );
-                    const empaqQty = prod?.empaqueCantidad && prod.empaqueCantidad > 1 ? prod.empaqueCantidad : ((item as any).empaqueCantidad && (item as any).empaqueCantidad > 1 ? (item as any).empaqueCantidad : 0);
-                    const unidad = (prod?.unidad_empaque || (item as any).unidadEmpaque || 'bulto').trim();
+                       const pesoUnit = Number(prod?.pesoUnitarioKg || (item as any).pesoUnitarioKg || 0);
+                       let linePesoKg = 0;
+                       if (pesoUnit > 0) {
+                         linePesoKg = item.quantity * pesoUnit;
+                       } else if (Number(prod?.empaquePesoKg || (item as any).empaquePesoKg || 0) > 0 && empaqQty > 0) {
+                         linePesoKg = (item.quantity / empaqQty) * Number(prod?.empaquePesoKg || (item as any).empaquePesoKg);
+                       }
 
-                    const pesoUnit = Number(prod?.pesoUnitarioKg || (item as any).pesoUnitarioKg || 0);
-                    let linePesoKg = 0;
-                    if (pesoUnit > 0) {
-                      linePesoKg = item.quantity * pesoUnit;
-                    } else if (Number(prod?.empaquePesoKg || (item as any).empaquePesoKg || 0) > 0 && empaqQty > 0) {
-                      linePesoKg = (item.quantity / empaqQty) * Number(prod?.empaquePesoKg || (item as any).empaquePesoKg);
-                    }
+                       let lineVolumenM3 = 0;
+                       const empL = Number(prod?.empaqueLargoCm || (item as any).empaqueLargoCm || 0);
+                       const empW = Number(prod?.empaqueAnchoCm || (item as any).empaqueAnchoCm || 0);
+                       const empH = Number(prod?.empaqueAltoCm || (item as any).empaqueAltoCm || 0);
+                       const uL = Number(prod?.largoCm || (item as any).largoCm || 0);
+                       const uW = Number(prod?.anchoCm || (item as any).anchoCm || 0);
+                       const uH = Number(prod?.altoCm || (item as any).altoCm || 0);
 
-                    let lineVolumenM3 = 0;
-                    const empL = Number(prod?.empaqueLargoCm || (item as any).empaqueLargoCm || 0);
-                    const empW = Number(prod?.empaqueAnchoCm || (item as any).empaqueAnchoCm || 0);
-                    const empH = Number(prod?.empaqueAltoCm || (item as any).empaqueAltoCm || 0);
-                    const uL = Number(prod?.largoCm || (item as any).largoCm || 0);
-                    const uW = Number(prod?.anchoCm || (item as any).anchoCm || 0);
-                    const uH = Number(prod?.altoCm || (item as any).altoCm || 0);
+                       if (empL > 0 && empW > 0 && empH > 0) {
+                         const volBox = (empL * empW * empH) / 1000000;
+                         const boxes = empaqQty > 0 ? (item.quantity / empaqQty) : item.quantity;
+                         lineVolumenM3 = boxes * volBox;
+                       } else if (uL > 0 && uW > 0 && uH > 0) {
+                         const volUnit = (uL * uW * uH) / 1000000;
+                         lineVolumenM3 = item.quantity * volUnit;
+                       }
 
-                    if (empL > 0 && empW > 0 && empH > 0) {
-                      const volBox = (empL * empW * empH) / 1000000;
-                      const boxes = empaqQty > 0 ? (item.quantity / empaqQty) : item.quantity;
-                      lineVolumenM3 = boxes * volBox;
-                    } else if (uL > 0 && uW > 0 && uH > 0) {
-                      const volUnit = (uL * uW * uH) / 1000000;
-                      lineVolumenM3 = item.quantity * volUnit;
-                    }
+                       if (summaryMap.has(key)) {
+                         const entry = summaryMap.get(key)!;
+                         entry.totalQty += item.quantity;
+                         entry.totalPesoKg += linePesoKg;
+                         entry.totalVolumenM3 += lineVolumenM3;
+                       } else {
+                         summaryMap.set(key, {
+                           description: item.description || item.name || 'Sin nombre',
+                           totalQty: item.quantity,
+                           empaqueCantidad: empaqQty,
+                           unidadEmpaque: unidad,
+                           totalPesoKg: linePesoKg,
+                           totalVolumenM3: lineVolumenM3,
+                         });
+                       }
+                     });
+                   }
 
-                    if (summaryMap.has(key)) {
-                      const entry = summaryMap.get(key)!;
-                      entry.totalQty += item.quantity;
-                      entry.totalPesoKg += linePesoKg;
-                      entry.totalVolumenM3 += lineVolumenM3;
-                    } else {
-                      summaryMap.set(key, {
-                        description: item.description || item.name || 'Sin nombre',
-                        totalQty: item.quantity,
-                        empaqueCantidad: empaqQty,
-                        unidadEmpaque: unidad,
-                        totalPesoKg: linePesoKg,
-                        totalVolumenM3: lineVolumenM3,
-                      });
-                    }
-                  });
+                   const summaryRows = Array.from(summaryMap.values());
+                   const grandTotalQty = summaryRows.reduce((acc, r) => acc + r.totalQty, 0);
+                   const grandTotalBultos = summaryRows.reduce((acc, r) => {
+                     if (r.empaqueCantidad > 0) return acc + (r.totalQty / r.empaqueCantidad);
+                     return acc;
+                   }, 0);
+                   const grandTotalPeso = summaryRows.reduce((acc, r) => acc + r.totalPesoKg, 0);
+                   const grandTotalVolumen = summaryRows.reduce((acc, r) => acc + r.totalVolumenM3, 0);
 
-                  const summaryRows = Array.from(summaryMap.values());
-                  const grandTotalQty = summaryRows.reduce((acc, r) => acc + r.totalQty, 0);
-                  const grandTotalBultos = summaryRows.reduce((acc, r) => {
-                    if (r.empaqueCantidad > 0) return acc + (r.totalQty / r.empaqueCantidad);
-                    return acc;
-                  }, 0);
-                  const grandTotalPeso = summaryRows.reduce((acc, r) => acc + r.totalPesoKg, 0);
-                  const grandTotalVolumen = summaryRows.reduce((acc, r) => acc + r.totalVolumenM3, 0);
+                   const hasBultos = summaryRows.some(r => r.empaqueCantidad > 0);
+                   const hasPeso = grandTotalPeso > 0;
+                   const hasVolumen = grandTotalVolumen > 0;
+                   const hasLogisticsSummary = hasBultos || hasPeso || hasVolumen;
 
-                  const hasBultos = summaryRows.some(r => r.empaqueCantidad > 0);
-                  const hasPeso = grandTotalPeso > 0;
-                  const hasVolumen = grandTotalVolumen > 0;
+                   return (
+                     <>
+                       {/* Resumen Detallado para Nota de Entrega */}
+                       {viewMode === 'DELIVERY_NOTE' && summaryRows.length > 0 && (
+                         <div className="mt-4 pt-3 border-t border-gray-200">
+                           <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
+                             Resumen de Despacho y Logística
+                           </h4>
+                           <table className="w-full text-left">
+                             <thead>
+                               <tr className="border-b border-gray-300">
+                                 <th className="py-1 text-[9px] font-bold text-gray-400 uppercase tracking-wider w-2/5">Producto</th>
+                                 <th className="py-1 text-[9px] font-bold text-gray-400 uppercase tracking-wider text-right">Unidades</th>
+                                 {hasBultos && (
+                                   <th className="py-1 text-[9px] font-bold text-gray-400 uppercase tracking-wider text-right">Bultos</th>
+                                 )}
+                                 {hasPeso && (
+                                   <th className="py-1 text-[9px] font-bold text-gray-400 uppercase tracking-wider text-right">Peso Total</th>
+                                 )}
+                                 {hasVolumen && (
+                                   <th className="py-1 text-[9px] font-bold text-gray-400 uppercase tracking-wider text-right">Espacio</th>
+                                 )}
+                               </tr>
+                             </thead>
+                             <tbody>
+                               {summaryRows.map((row, idx) => {
+                                 const bultosNum = row.empaqueCantidad > 0 ? row.totalQty / row.empaqueCantidad : null;
+                                 const bultosStr = bultosNum !== null
+                                   ? `${Number(bultosNum.toFixed(2)).toLocaleString('es-VE')} ${bultosNum === 1 ? row.unidadEmpaque : (row.unidadEmpaque.endsWith('s') ? row.unidadEmpaque : `${row.unidadEmpaque}s`)}`
+                                   : '—';
+                                 return (
+                                   <tr key={idx} className="border-b border-gray-50 last:border-0">
+                                     <td className="py-1 text-[10px] text-gray-700 font-medium leading-tight">{row.description}</td>
+                                     <td className="py-1 text-[10px] text-gray-800 font-mono text-right font-semibold leading-tight">{row.totalQty.toLocaleString('es-VE')}</td>
+                                     {hasBultos && (
+                                       <td className="py-1 text-[10px] text-gray-600 font-mono text-right leading-tight">{bultosStr}</td>
+                                     )}
+                                     {hasPeso && (
+                                       <td className="py-1 text-[10px] text-amber-800 font-mono text-right leading-tight font-medium">
+                                         {row.totalPesoKg > 0 ? `${Number(row.totalPesoKg.toFixed(2)).toLocaleString('es-VE')} kg` : '—'}
+                                       </td>
+                                     )}
+                                     {hasVolumen && (
+                                       <td className="py-1 text-[10px] text-blue-800 font-mono text-right leading-tight font-medium">
+                                         {row.totalVolumenM3 > 0 ? `${Number(row.totalVolumenM3.toFixed(3)).toLocaleString('es-VE')} m³` : '—'}
+                                       </td>
+                                     )}
+                                   </tr>
+                                 );
+                               })}
+                             </tbody>
+                             <tfoot>
+                               <tr className="border-t border-gray-400">
+                                 <td className="py-1 text-[9px] font-bold text-gray-500 uppercase">TOTAL DESPACHO</td>
+                                 <td className="py-1 text-[10px] font-mono text-right font-bold text-gray-900">{grandTotalQty.toLocaleString('es-VE')}</td>
+                                 {hasBultos && (
+                                   <td className="py-1 text-[10px] font-mono text-right font-bold text-gray-700">
+                                     {Number(grandTotalBultos.toFixed(2)).toLocaleString('es-VE')}
+                                   </td>
+                                 )}
+                                 {hasPeso && (
+                                   <td className="py-1 text-[10px] font-mono text-right font-bold text-amber-900">
+                                     {Number(grandTotalPeso.toFixed(2)).toLocaleString('es-VE')} kg
+                                   </td>
+                                 )}
+                                 {hasVolumen && (
+                                   <td className="py-1 text-[10px] font-mono text-right font-bold text-blue-900">
+                                     {Number(grandTotalVolumen.toFixed(3)).toLocaleString('es-VE')} m³
+                                   </td>
+                                 )}
+                               </tr>
+                             </tfoot>
+                           </table>
+                         </div>
+                       )}
 
-                  return (
-                    <>
-                      {viewMode === 'DELIVERY_NOTE' && (
-                        <div className="mt-4 pt-3 border-t border-gray-200">
-                          <h4 className="text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">
-                            Resumen de Despacho y Logística
-                          </h4>
-                          <table className="w-full text-left">
-                            <thead>
-                              <tr className="border-b border-gray-300">
-                                <th className="py-1 text-[9px] font-bold text-gray-400 uppercase tracking-wider w-2/5">Producto</th>
-                                <th className="py-1 text-[9px] font-bold text-gray-400 uppercase tracking-wider text-right">Unidades</th>
-                                {hasBultos && (
-                                  <th className="py-1 text-[9px] font-bold text-gray-400 uppercase tracking-wider text-right">Bultos</th>
-                                )}
-                                {hasPeso && (
-                                  <th className="py-1 text-[9px] font-bold text-gray-400 uppercase tracking-wider text-right">Peso Total</th>
-                                )}
-                                {hasVolumen && (
-                                  <th className="py-1 text-[9px] font-bold text-gray-400 uppercase tracking-wider text-right">Espacio</th>
-                                )}
-                              </tr>
-                            </thead>
-                            <tbody>
-                              {summaryRows.map((row, idx) => {
-                                const bultosNum = row.empaqueCantidad > 0 ? row.totalQty / row.empaqueCantidad : null;
-                                const bultosStr = bultosNum !== null
-                                  ? `${Number(bultosNum.toFixed(2)).toLocaleString('es-VE')} ${bultosNum === 1 ? row.unidadEmpaque : (row.unidadEmpaque.endsWith('s') ? row.unidadEmpaque : `${row.unidadEmpaque}s`)}`
-                                  : '—';
-                                return (
-                                  <tr key={idx} className="border-b border-gray-50 last:border-0">
-                                    <td className="py-1 text-[10px] text-gray-700 font-medium leading-tight">{row.description}</td>
-                                    <td className="py-1 text-[10px] text-gray-800 font-mono text-right font-semibold leading-tight">{row.totalQty.toLocaleString('es-VE')}</td>
-                                    {hasBultos && (
-                                      <td className="py-1 text-[10px] text-gray-600 font-mono text-right leading-tight">{bultosStr}</td>
-                                    )}
-                                    {hasPeso && (
-                                      <td className="py-1 text-[10px] text-amber-800 font-mono text-right leading-tight font-medium">
-                                        {row.totalPesoKg > 0 ? `${Number(row.totalPesoKg.toFixed(2)).toLocaleString('es-VE')} kg` : '—'}
-                                      </td>
-                                    )}
-                                    {hasVolumen && (
-                                      <td className="py-1 text-[10px] text-blue-800 font-mono text-right leading-tight font-medium">
-                                        {row.totalVolumenM3 > 0 ? `${Number(row.totalVolumenM3.toFixed(3)).toLocaleString('es-VE')} m³` : '—'}
-                                      </td>
-                                    )}
-                                  </tr>
-                                );
-                              })}
-                            </tbody>
-                            <tfoot>
-                              <tr className="border-t border-gray-400">
-                                <td className="py-1 text-[9px] font-bold text-gray-500 uppercase">TOTAL DESPACHO</td>
-                                <td className="py-1 text-[10px] font-mono text-right font-bold text-gray-900">{grandTotalQty.toLocaleString('es-VE')}</td>
-                                {hasBultos && (
-                                  <td className="py-1 text-[10px] font-mono text-right font-bold text-gray-700">
-                                    {Number(grandTotalBultos.toFixed(2)).toLocaleString('es-VE')}
-                                  </td>
-                                )}
-                                {hasPeso && (
-                                  <td className="py-1 text-[10px] font-mono text-right font-bold text-amber-900">
-                                    {Number(grandTotalPeso.toFixed(2)).toLocaleString('es-VE')} kg
-                                  </td>
-                                )}
-                                {hasVolumen && (
-                                  <td className="py-1 text-[10px] font-mono text-right font-bold text-blue-900">
-                                    {Number(grandTotalVolumen.toFixed(3)).toLocaleString('es-VE')} m³
-                                  </td>
-                                )}
-                              </tr>
-                            </tfoot>
-                          </table>
-                        </div>
-                      )}
+                       {/* Fila Inferior: Carga & Volumetría a la Izquierda y Totales a la Derecha */}
+                       <div className={`mt-4 pt-3 border-t border-gray-150 flex flex-col md:flex-row print:flex-row justify-between items-start gap-6 ${printLayout === 'FREE_FORM' ? 'print:mt-1.5 print:pt-1.5' : ''}`}>
+                         {/* Lado Izquierdo: Carga & Volumetría */}
+                         <div className="w-full md:w-7/12 print:w-7/12 flex-1 pr-0 md:pr-4 print:pr-4">
+                           {hasLogisticsSummary ? (
+                             <div className={`bg-slate-50 border border-slate-200 rounded-xl p-3 text-xs ${printLayout === 'FREE_FORM' ? 'print:p-2 print:border-slate-200' : ''}`}>
+                               <div className="flex items-center gap-1.5 mb-2 pb-1 border-b border-slate-200 text-slate-700 font-bold uppercase text-[10px] tracking-wider">
+                                 <span>📦 Carga & Volumetría</span>
+                               </div>
+                               <div className="grid grid-cols-2 gap-x-3 gap-y-1.5 text-xs">
+                                 <div>
+                                   <span className="text-gray-500 text-[10px] block leading-tight">Total Unidades:</span>
+                                   <span className="font-mono font-semibold text-slate-800 text-xs">
+                                     {grandTotalQty.toLocaleString('es-VE')} Unds
+                                   </span>
+                                 </div>
+                                 {hasBultos && (
+                                   <div>
+                                     <span className="text-gray-500 text-[10px] block leading-tight">Empaque / Bultos:</span>
+                                     <span className="font-mono font-semibold text-slate-800 text-xs">
+                                       {Number(grandTotalBultos.toFixed(2)).toLocaleString('es-VE')} Bultos
+                                     </span>
+                                   </div>
+                                 )}
+                                 {hasPeso && (
+                                   <div>
+                                     <span className="text-gray-500 text-[10px] block leading-tight">Peso Total:</span>
+                                     <span className="font-mono font-bold text-amber-800 text-xs inline-flex items-center gap-0.5 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                                       ⚖️ {Number(grandTotalPeso.toFixed(2)).toLocaleString('es-VE')} kg
+                                     </span>
+                                   </div>
+                                 )}
+                                 {hasVolumen && (
+                                   <div>
+                                     <span className="text-gray-500 text-[10px] block leading-tight">Espacio Estimado:</span>
+                                     <span className="font-mono font-bold text-blue-800 text-xs inline-flex items-center gap-0.5 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200">
+                                       📐 {Number(grandTotalVolumen.toFixed(3)).toLocaleString('es-VE')} m³
+                                     </span>
+                                   </div>
+                                 )}
+                               </div>
+                             </div>
+                           ) : <div />}
+                         </div>
 
-                      {/* Resumen Logístico y Volumetría para Facturas y Notas */}
-                      {(hasBultos || hasPeso || hasVolumen) && (
-                        <div className="mt-5 p-3 bg-slate-50 border border-slate-200 rounded-xl flex flex-wrap items-center justify-between gap-3 text-xs">
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-slate-700 uppercase text-[10px] tracking-wider">
-                              📦 Carga & Volumetría:
-                            </span>
-                            <span className="font-mono font-semibold text-slate-800">
-                              {grandTotalQty.toLocaleString('es-VE')} Unds
-                            </span>
-                            {hasBultos && (
-                              <>
-                                <span className="text-slate-300">•</span>
-                                <span className="font-mono font-semibold text-slate-800">
-                                  {Number(grandTotalBultos.toFixed(2)).toLocaleString('es-VE')} Bultos
-                                </span>
-                              </>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-2.5">
-                            {hasPeso && (
-                              <div className="flex items-center gap-1 bg-amber-50 border border-amber-200 text-amber-800 px-2 py-0.5 rounded-lg font-mono font-bold text-[11px]">
-                                ⚖️ Peso Total: {Number(grandTotalPeso.toFixed(2)).toLocaleString('es-VE')} kg
-                              </div>
-                            )}
-                            {hasVolumen && (
-                              <div className="flex items-center gap-1 bg-blue-50 border border-blue-200 text-blue-800 px-2 py-0.5 rounded-lg font-mono font-bold text-[11px]">
-                                📐 Espacio: {Number(grandTotalVolumen.toFixed(3)).toLocaleString('es-VE')} m³
-                              </div>
-                            )}
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  );
-                })()}
-
-              {(viewMode !== 'DELIVERY_NOTE' || showPricesInDeliveryNote) && (
-                 <div className="mt-8 flex justify-end">
-                     <div className="w-full md:w-5/12 space-y-3">
-                          {totals.hasAdjustments && (
-                              <>
-                                  <div className="flex justify-between text-sm text-gray-600">
-                                      <span>Subtotal Bruto</span>
-                                      <span className="font-mono">{formatCurrency(totals.subtotalBruto * conversionFactor, displayCurrency)}</span>
-                                  </div>
-                                  {totals.totalDiscounts > 0 && (
-                                      <div className="flex justify-between text-sm text-rose-600 font-medium">
-                                          <span>Descuento (-)</span>
-                                          <span className="font-mono">- {formatCurrency(totals.totalDiscounts * conversionFactor, displayCurrency)}</span>
-                                      </div>
-                                  )}
-                                  {totals.totalIncrements > 0 && (
-                                      <div className="flex justify-between text-sm text-emerald-600 font-medium">
-                                          <span>Incremento (+)</span>
-                                          <span className="font-mono">+ {formatCurrency(totals.totalIncrements * conversionFactor, displayCurrency)}</span>
-                                      </div>
-                                  )}
-                                  <div className="flex justify-between text-sm font-semibold text-gray-700 pt-1 border-t border-gray-100">
-                                      <span>Subtotal Neto</span>
-                                      <span className="font-mono">{formatCurrency(totals.subtotal * conversionFactor, displayCurrency)}</span>
-                                  </div>
-                              </>
-                          )}
-                          {!totals.hasAdjustments && (
-                              <div className="flex justify-between text-sm text-gray-600">
-                                  <span>Subtotal</span>
-                                  <span className="font-mono">{formatCurrency(totals.subtotal * conversionFactor, displayCurrency)}</span>
-                              </div>
-                          )}
-                         {totals.taxAmount > 0 && (
-                             <div className="flex justify-between text-sm text-gray-600">
+                         {/* Lado Derecho: Totales de la Factura */}
+                         {(viewMode !== 'DELIVERY_NOTE' || showPricesInDeliveryNote) && (
+                           <div className="w-full md:w-5/12 print:w-5/12 space-y-2.5 shrink-0 ml-auto">
+                             {totals.hasAdjustments && (
+                               <>
+                                 <div className="flex justify-between text-sm text-gray-600">
+                                   <span>Subtotal Bruto</span>
+                                   <span className="font-mono">{formatCurrency(totals.subtotalBruto * conversionFactor, displayCurrency)}</span>
+                                 </div>
+                                 {totals.totalDiscounts > 0 && (
+                                   <div className="flex justify-between text-sm text-rose-600 font-medium">
+                                     <span>Descuento (-)</span>
+                                     <span className="font-mono">- {formatCurrency(totals.totalDiscounts * conversionFactor, displayCurrency)}</span>
+                                   </div>
+                                 )}
+                                 {totals.totalIncrements > 0 && (
+                                   <div className="flex justify-between text-sm text-emerald-600 font-medium">
+                                     <span>Incremento (+)</span>
+                                     <span className="font-mono">+ {formatCurrency(totals.totalIncrements * conversionFactor, displayCurrency)}</span>
+                                   </div>
+                                 )}
+                                 <div className="flex justify-between text-sm font-semibold text-gray-700 pt-1 border-t border-gray-100">
+                                   <span>Subtotal Neto</span>
+                                   <span className="font-mono">{formatCurrency(totals.subtotal * conversionFactor, displayCurrency)}</span>
+                                 </div>
+                               </>
+                             )}
+                             {!totals.hasAdjustments && (
+                               <div className="flex justify-between text-sm text-gray-600">
+                                 <span>Subtotal</span>
+                                 <span className="font-mono">{formatCurrency(totals.subtotal * conversionFactor, displayCurrency)}</span>
+                               </div>
+                             )}
+                             {totals.taxAmount > 0 && (
+                               <div className="flex justify-between text-sm text-gray-600">
                                  <span>IVA ({invoice.taxAmount > 0 && invoice.total > 0 ? `${Math.round((invoice.taxAmount / (invoice.total - invoice.taxAmount)) * 100)}%` : '16%'})</span>
                                  <span className="font-mono">{formatCurrency(totals.taxAmount * conversionFactor, displayCurrency)}</span>
+                               </div>
+                             )}
+                             <div className="border-t border-gray-200 pt-2 flex justify-between text-base md:text-lg font-bold text-gray-900">
+                               <span>Total</span>
+                               <span className="font-mono">{formatCurrency(totals.total * conversionFactor, displayCurrency)}</span>
                              </div>
-                         )}
-                         <div className="border-t border-gray-200 pt-3 flex justify-between text-lg font-bold text-gray-900">
-                             <span>Total</span>
-                             <span className="font-mono">{formatCurrency(totals.total * conversionFactor, displayCurrency)}</span>
-                         </div>
-                         {invoice.payments && invoice.payments.length > 0 && (
-                             <div className="flex justify-between text-sm font-semibold text-emerald-600">
+
+                             {/* Abonos y Saldos: Ocultos al Imprimir */}
+                             {invoice.payments && invoice.payments.length > 0 && (
+                               <div className="flex justify-between text-sm font-semibold text-emerald-600 print:hidden" data-html2canvas-ignore="true">
                                  <span>Total Abonado</span>
                                  <span className="font-mono">
                                    - {formatCurrency(invoice.payments.reduce((acc, curr) => acc + getPaymentAmountInInvoiceCurrency(curr), 0) * conversionFactor, displayCurrency)}
                                  </span>
-                             </div>
-                         )}
-                         {totals.outstanding > 0 ? (
-                             <div className="flex justify-between text-sm font-bold text-orange-600 bg-orange-50/80 px-3 py-1.5 rounded-lg border border-orange-200">
+                               </div>
+                             )}
+                             {totals.outstanding > 0 ? (
+                               <div className="flex justify-between text-sm font-bold text-orange-600 bg-orange-50/80 px-3 py-1.5 rounded-lg border border-orange-200 print:hidden" data-html2canvas-ignore="true">
                                  <span>Saldo Pendiente</span>
                                  <span className="font-mono">{formatCurrency(totals.outstanding * conversionFactor, displayCurrency)}</span>
-                             </div>
-                         ) : (
-                             <div className="flex justify-between text-xs font-bold text-green-700 bg-green-50 px-3 py-1.5 rounded-lg border border-green-200">
+                               </div>
+                             ) : (
+                               <div className="flex justify-between text-xs font-bold text-green-700 bg-green-50 px-3 py-1.5 rounded-lg border border-green-200 print:hidden" data-html2canvas-ignore="true">
                                  <span>Estado de Pago</span>
                                  <span className="uppercase">PAGADA TOTALMENTE</span>
-                             </div>
+                               </div>
+                             )}
+                           </div>
                          )}
-                     </div>
-                 </div>
-              )}
+                       </div>
+                     </>
+                   );
+                })()}
 
               {/* Historial de Abonos / Pagos Realizados */}
               {(viewMode !== 'DELIVERY_NOTE' || showPricesInDeliveryNote) && invoice.payments && invoice.payments.length > 0 && (
-                <div className="mt-8 pt-6 border-t border-gray-200">
+                <div className="mt-8 pt-6 border-t border-gray-200 print:hidden" data-html2canvas-ignore="true">
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
                       <span>Historial de Abonos / Pagos</span>
