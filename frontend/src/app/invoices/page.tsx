@@ -1043,72 +1043,77 @@ function InvoicesPageContent() {
                                     </div>
 
                                     {/* Botonera de Acciones en Móvil */}
-                                    <div className="flex items-center gap-1.5 pt-1 border-t border-gray-100">
-                                        <button
-                                            type="button"
-                                            onClick={() => openTraceModal(doc.code)}
-                                            className="flex-1 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 cursor-pointer transition"
-                                            title="Ver trazabilidad"
-                                        >
-                                            <GitFork className="w-3.5 h-3.5 text-purple-600" />
-                                            <span>Trazabilidad</span>
-                                        </button>
-
-                                        {isQuote ? (
-                                            <Link 
-                                                href={`/quotations?search=${encodeURIComponent(doc.code)}`}
-                                                className="px-3 py-1.5 text-sky-700 bg-sky-50 border border-sky-200 rounded-lg text-xs font-semibold text-center hover:bg-sky-100 transition"
-                                            >
-                                                Ver
-                                            </Link>
-                                        ) : (
-                                            <Link 
-                                                href={`/invoices/${doc.rawId}`}
-                                                className="px-3 py-1.5 text-blue-700 bg-blue-50 border border-blue-200 rounded-lg text-xs font-semibold text-center hover:bg-blue-100 transition"
-                                            >
-                                                Ver
-                                            </Link>
-                                        )}
-
-                                        <button
-                                            type="button"
-                                            onClick={() => isQuote ? window.open(`/backend-api/api/quotations/${doc.code}/pdf`, '_blank') : window.open(`/backend-api/api/invoices/${doc.rawId}/pdf`, '_blank')}
-                                            className="px-3 py-1.5 text-slate-700 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold hover:bg-slate-100 transition cursor-pointer"
-                                        >
-                                            PDF
-                                        </button>
-
+                                    <div className="flex flex-col gap-1.5 pt-2 border-t border-gray-100">
+                                        {/* CTA Principal en Móvil si requiere acción */}
                                         {isNE && !doc.invoicedAsCode && (
                                             <Link
                                                 href={`/invoices/${doc.rawId}`}
-                                                className="px-2.5 py-1.5 text-emerald-700 bg-emerald-50 border border-emerald-300 rounded-lg text-xs font-bold flex items-center gap-1 hover:bg-emerald-100 transition"
+                                                className="w-full py-1.5 text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition shadow-2xs"
                                                 title="Facturar nota"
                                             >
-                                                <Receipt className="w-3 h-3" />
-                                                <span>Facturar</span>
+                                                <Receipt className="w-3.5 h-3.5" />
+                                                <span>Emitir Factura Fiscal</span>
                                             </Link>
                                         )}
 
                                         {!isQuote && !doc.invoicedAsCode && ['OPEN', 'POSTED', 'PARTIALLY_PAID'].includes(doc.status) && Number(doc.outstanding) > 0.001 && (
                                             <Link
                                                 href={`/invoices/${doc.rawId}?openPayment=true`}
-                                                className="px-2.5 py-1.5 text-emerald-700 bg-emerald-50 border border-emerald-300 rounded-lg text-xs font-bold flex items-center gap-1 hover:bg-emerald-100 transition shadow-2xs"
+                                                className="w-full py-1.5 text-emerald-700 bg-emerald-50 border border-emerald-300 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-emerald-100 transition shadow-2xs"
                                                 title={doc.type === 'INVOICE' ? 'Registrar Cobro / Abono' : 'Registrar Pago / Abono'}
                                             >
-                                                <CreditCard className="w-3 h-3" />
-                                                <span>{doc.type === 'INVOICE' ? 'Cobrar' : 'Pagar'}</span>
+                                                <CreditCard className="w-3.5 h-3.5" />
+                                                <span>{doc.type === 'INVOICE' ? 'Registrar Cobro / Abono' : 'Registrar Pago / Abono'}</span>
                                             </Link>
                                         )}
 
-                                        {!isQuote && (
-                                            <button 
-                                                onClick={() => handleDelete(doc.rawId)}
-                                                className="p-1.5 text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition cursor-pointer"
-                                                title="Eliminar documento"
+                                        {/* Acciones Secundarias en Móvil */}
+                                        <div className="flex items-center gap-1.5">
+                                            <button
+                                                type="button"
+                                                onClick={() => openTraceModal(doc.code)}
+                                                className="flex-1 py-1.5 bg-purple-50 hover:bg-purple-100 text-purple-700 border border-purple-200 rounded-lg text-xs font-semibold flex items-center justify-center gap-1 cursor-pointer transition"
+                                                title="Ver trazabilidad"
                                             >
-                                                <Trash2 className="w-3.5 h-3.5" />
+                                                <GitFork className="w-3.5 h-3.5 text-purple-600" />
+                                                <span>Trazabilidad</span>
                                             </button>
-                                        )}
+
+                                            {isQuote ? (
+                                                <Link 
+                                                    href={`/quotations?search=${encodeURIComponent(doc.code)}`}
+                                                    className="px-3 py-1.5 text-blue-700 bg-blue-50 border border-blue-200 rounded-lg text-xs font-semibold text-center hover:bg-blue-100 transition"
+                                                >
+                                                    Ver
+                                                </Link>
+                                            ) : (
+                                                <Link 
+                                                    href={`/invoices/${doc.rawId}`}
+                                                    className="px-3 py-1.5 text-blue-700 bg-blue-50 border border-blue-200 rounded-lg text-xs font-semibold text-center hover:bg-blue-100 transition"
+                                                >
+                                                    Ver
+                                                </Link>
+                                            )}
+
+                                            <button
+                                                type="button"
+                                                onClick={() => isQuote ? window.open(`/backend-api/api/quotations/${doc.code}/pdf`, '_blank') : window.open(`/backend-api/api/invoices/${doc.rawId}/pdf`, '_blank')}
+                                                className="px-3 py-1.5 text-slate-700 bg-slate-50 border border-slate-200 rounded-lg text-xs font-semibold hover:bg-slate-100 transition cursor-pointer"
+                                                title="Ver PDF oficial"
+                                            >
+                                                PDF
+                                            </button>
+
+                                            {!isQuote && (
+                                                <button 
+                                                    onClick={() => handleDelete(doc.rawId)}
+                                                    className="p-1.5 text-red-600 bg-red-50 border border-red-200 rounded-lg hover:bg-red-100 transition cursor-pointer"
+                                                    title="Eliminar documento"
+                                                >
+                                                    <Trash2 className="w-3.5 h-3.5" />
+                                                </button>
+                                            )}
+                                        </div>
                                     </div>
                                 </div>
                             );
@@ -1119,17 +1124,17 @@ function InvoicesPageContent() {
                     <div className="hidden md:block bg-white shadow-xs border border-gray-200 rounded-xl overflow-hidden relative">
                         <div ref={tableContainerRef} className="overflow-x-auto scroll-smooth">
                             <table className="min-w-full divide-y divide-gray-200">
-                                <thead className="bg-gray-50 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                                <thead className="bg-gray-50/90 text-xs font-semibold text-gray-500 uppercase tracking-wider border-b border-gray-200">
                                     <tr>
                                         <th className="px-4 py-3 text-left sticky left-0 bg-gray-50 z-10 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.08)]">
-                                            Tipo & Documento
+                                            Documento
                                         </th>
                                         <th className="px-4 py-3 text-left">Proyecto</th>
                                         <th className="px-4 py-3 text-left">Cliente / Proveedor</th>
-                                        <th className="px-4 py-3 text-left">Emisión & Vencimiento</th>
+                                        <th className="px-4 py-3 text-left">Emisión & Venc.</th>
                                         <th className="px-4 py-3 text-right">Total</th>
                                         <th className="px-4 py-3 text-left">Estado Comercial</th>
-                                        <th className="px-4 py-3 text-left">Estado Logístico / Despacho</th>
+                                        <th className="px-4 py-3 text-left">Estado Logístico</th>
                                         <th className="px-4 py-3 text-right sticky right-0 bg-gray-50 z-10 shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.08)]">
                                             Acciones
                                         </th>
@@ -1147,7 +1152,7 @@ function InvoicesPageContent() {
                                         return (
                                             <tr key={doc.code + '_' + doc.rawId} className="hover:bg-gray-50/80 transition group">
                                                 {/* 1. TIPO & DOCUMENTO */}
-                                                <td className="px-4 py-3.5 whitespace-nowrap sticky left-0 bg-white group-hover:bg-gray-50/95 z-5 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)]">
+                                                <td className="px-4 py-3 whitespace-nowrap sticky left-0 bg-white group-hover:bg-gray-50/95 z-5 shadow-[2px_0_4px_-2px_rgba(0,0,0,0.06)]">
                                                     <div className="flex flex-col gap-1">
                                                         <div className="flex items-center gap-1.5 flex-wrap">
                                                             {/* Badge de Tipo */}
@@ -1182,10 +1187,24 @@ function InvoicesPageContent() {
                                                                 </span>
                                                             )}
 
-                                                            {/* Código del Documento */}
-                                                            <span className="font-semibold text-gray-900 font-mono text-xs sm:text-sm">
-                                                                {doc.code}
-                                                            </span>
+                                                            {/* Código del Documento (Enlace interactivo) */}
+                                                            {isQuote ? (
+                                                                <Link 
+                                                                    href={`/quotations?search=${encodeURIComponent(doc.code)}`}
+                                                                    className="font-bold text-gray-900 hover:text-blue-600 font-mono text-xs sm:text-sm transition"
+                                                                    title="Ver cotización"
+                                                                >
+                                                                    {doc.code}
+                                                                </Link>
+                                                            ) : (
+                                                                <Link 
+                                                                    href={`/invoices/${doc.rawId}`}
+                                                                    className="font-bold text-gray-900 hover:text-blue-600 font-mono text-xs sm:text-sm transition"
+                                                                    title="Ver detalle del documento"
+                                                                >
+                                                                    {doc.code}
+                                                                </Link>
+                                                            )}
                                                         </div>
 
                                                         {/* Trazabilidad cruzada: NE -> Factura */}
@@ -1257,17 +1276,17 @@ function InvoicesPageContent() {
                                                 </td>
 
                                                 {/* 2. PROYECTO */}
-                                                <td className="px-4 py-3.5 whitespace-nowrap">
-                                                    <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-700 bg-gray-100 px-2 py-0.5 rounded-md">
+                                                <td className="px-4 py-3 whitespace-nowrap">
+                                                    <span className="inline-flex items-center gap-1 text-xs font-medium text-gray-700 bg-gray-100 px-2 py-0.5 rounded-md max-w-[140px] truncate" title={doc.projectName}>
                                                         📁 {doc.projectName}
                                                     </span>
                                                 </td>
 
                                                 {/* 3. CLIENTE / PROVEEDOR */}
-                                                <td className="px-4 py-3.5 whitespace-nowrap text-gray-600 text-xs sm:text-sm">
-                                                    <div className="font-medium text-gray-900 flex items-center gap-1">
+                                                <td className="px-4 py-3 whitespace-nowrap text-gray-600 text-xs sm:text-sm">
+                                                    <div className="font-medium text-gray-900 flex items-center gap-1 max-w-[190px] truncate" title={doc.contactName}>
                                                         {(isPO || isBill) && <span className="text-xs text-slate-400">🏢</span>}
-                                                        {doc.contactName}
+                                                        <span className="truncate">{doc.contactName}</span>
                                                     </div>
                                                     {doc.taxId && (
                                                         <div className="text-[10px] text-gray-400 font-mono">{doc.taxId}</div>
@@ -1275,7 +1294,7 @@ function InvoicesPageContent() {
                                                 </td>
 
                                                 {/* 4. EMISIÓN & VENCIMIENTO */}
-                                                <td className="px-4 py-3.5 whitespace-nowrap text-gray-600 text-xs">
+                                                <td className="px-4 py-3 whitespace-nowrap text-gray-600 text-xs">
                                                     <div className="flex flex-col gap-0.5">
                                                         <div className="flex items-center gap-1 font-medium text-gray-900">
                                                             <span className="text-[10px] text-gray-400">Emis:</span>
@@ -1302,7 +1321,7 @@ function InvoicesPageContent() {
                                                 </td>
 
                                                 {/* 5. TOTAL */}
-                                                <td className="px-4 py-3.5 whitespace-nowrap text-right">
+                                                <td className="px-4 py-3 whitespace-nowrap text-right">
                                                     <div className="font-mono font-bold text-gray-900">
                                                         {Number(doc.total).toLocaleString('es-VE', { minimumFractionDigits: 2 })} {doc.currency}
                                                     </div>
@@ -1319,7 +1338,7 @@ function InvoicesPageContent() {
                                                 </td>
 
                                                 {/* 6. ESTADO COMERCIAL */}
-                                                <td className="px-4 py-3.5 whitespace-nowrap">
+                                                <td className="px-4 py-3 whitespace-nowrap">
                                                     {isQuote ? (
                                                         <span className={`px-2.5 py-1 inline-flex text-[11px] leading-4 font-semibold rounded-full items-center ${
                                                             doc.status === 'APPROVED' ? 'bg-emerald-100 text-emerald-800' :
@@ -1355,37 +1374,28 @@ function InvoicesPageContent() {
                                                 </td>
 
                                                 {/* 7. ESTADO LOGÍSTICO / DESPACHO */}
-                                                <td className="px-4 py-3.5 whitespace-nowrap">
+                                                <td className="px-4 py-3 whitespace-nowrap">
                                                     {isNE ? (
-                                                        <div className="flex flex-col gap-1">
+                                                        <div className="flex items-center gap-1">
                                                             {doc.dispatchStatus === 'DELIVERED' && (
-                                                                <span className="text-[11px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full border border-emerald-200 w-fit">
+                                                                <span className="text-[11px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-full border border-emerald-200">
                                                                     ✓ Entregada
                                                                 </span>
                                                             )}
                                                             {doc.dispatchStatus === 'DISPATCHED' && (
-                                                                <span className="text-[11px] bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded-full border border-blue-200 w-fit">
+                                                                <span className="text-[11px] bg-blue-100 text-blue-800 font-bold px-2 py-0.5 rounded-full border border-blue-200">
                                                                     🚚 Despachada
                                                                 </span>
                                                             )}
                                                             {(!doc.dispatchStatus || doc.dispatchStatus === 'PENDING_DISPATCH') && (
-                                                                <span className="text-[11px] bg-amber-50 text-amber-700 font-medium px-2 py-0.5 rounded-full border border-amber-200 w-fit">
+                                                                <span className="text-[11px] bg-amber-50 text-amber-700 font-medium px-2 py-0.5 rounded-full border border-amber-200">
                                                                     🕒 Pend. Despacho
-                                                                </span>
-                                                            )}
-                                                            {doc.invoicedAsCode ? (
-                                                                <span className="text-[9.5px] text-indigo-700 font-medium">
-                                                                    Facturada (#{doc.invoicedAsCode})
-                                                                </span>
-                                                            ) : (
-                                                                <span className="text-[9.5px] text-orange-600 font-medium">
-                                                                    Sin factura oficial
                                                                 </span>
                                                             )}
                                                         </div>
                                                     ) : isSaleInvoice && doc.sourceDeliveryNoteCode ? (
                                                         <span className="text-[11px] bg-purple-50 text-purple-700 font-medium px-2 py-0.5 rounded-full border border-purple-200">
-                                                            🚚 Despacho bajo NE #{doc.sourceDeliveryNoteCode}
+                                                            🚚 Despacho NE #{doc.sourceDeliveryNoteCode}
                                                         </span>
                                                     ) : isQuote ? (
                                                         <div className="text-xs text-gray-500">
@@ -1403,65 +1413,16 @@ function InvoicesPageContent() {
                                                 </td>
 
                                                 {/* 8. ACCIONES */}
-                                                <td className="px-4 py-3.5 whitespace-nowrap text-right font-medium sticky right-0 bg-white group-hover:bg-gray-50/95 z-5 shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.06)]">
-                                                    <div className="flex gap-1.5 justify-end items-center">
-                                                        {/* Botón Trazabilidad */}
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => openTraceModal(doc.code)}
-                                                            className="text-purple-700 hover:text-purple-900 border border-purple-200 hover:bg-purple-50 px-2 py-1 rounded text-xs font-semibold transition flex items-center gap-1 cursor-pointer"
-                                                            title="Ver mapa interactivo de trazabilidad comercial y logística"
-                                                        >
-                                                            <GitFork className="w-3 h-3 text-purple-600" />
-                                                            <span>Trazabilidad</span>
-                                                        </button>
-
-                                                        {/* Botón Ver */}
-                                                        {isQuote ? (
-                                                            <Link 
-                                                                href={`/quotations?search=${encodeURIComponent(doc.code)}`}
-                                                                className="text-sky-700 hover:text-sky-900 border border-sky-200 px-2.5 py-1 rounded text-xs hover:bg-sky-50 font-semibold transition"
-                                                            >
-                                                                Ver
-                                                            </Link>
-                                                        ) : (
-                                                            <Link 
-                                                                href={`/invoices/${doc.rawId}`}
-                                                                className="text-blue-600 hover:text-blue-900 border border-blue-200 px-2.5 py-1 rounded text-xs hover:bg-blue-50 font-semibold transition"
-                                                            >
-                                                                Ver
-                                                            </Link>
-                                                        )}
-
-                                                        {/* Botón PDF oficial */}
-                                                        {isQuote ? (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => window.open(`/backend-api/api/quotations/${doc.code}/pdf`, '_blank')}
-                                                                className="text-slate-700 hover:text-slate-900 border border-slate-200 px-2 py-1 rounded text-xs hover:bg-slate-50 font-medium transition cursor-pointer"
-                                                                title="Ver PDF oficial de cotización"
-                                                            >
-                                                                PDF
-                                                            </button>
-                                                        ) : (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => window.open(`/backend-api/api/invoices/${doc.rawId}/pdf`, '_blank')}
-                                                                className="text-slate-700 hover:text-slate-900 border border-slate-200 px-2 py-1 rounded text-xs hover:bg-slate-50 font-medium transition cursor-pointer"
-                                                                title="Ver PDF oficial"
-                                                            >
-                                                                PDF
-                                                            </button>
-                                                        )}
-
+                                                <td className="px-3 py-3 whitespace-nowrap text-right font-medium sticky right-0 bg-white group-hover:bg-gray-50/95 z-5 shadow-[-2px_0_4px_-2px_rgba(0,0,0,0.06)]">
+                                                    <div className="flex items-center justify-end gap-1.5">
                                                         {/* Botón Facturar Nota de Entrega si aún no está facturada */}
                                                         {isNE && !doc.invoicedAsCode && (
                                                             <Link
                                                                 href={`/invoices/${doc.rawId}`}
-                                                                className="text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 px-2 py-1 rounded text-xs font-bold transition flex items-center gap-1"
+                                                                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs transition"
                                                                 title="Emitir factura fiscal oficial para esta nota"
                                                             >
-                                                                <Receipt className="w-3 h-3" />
+                                                                <Receipt className="w-3.5 h-3.5" />
                                                                 <span>Facturar</span>
                                                             </Link>
                                                         )}
@@ -1470,24 +1431,67 @@ function InvoicesPageContent() {
                                                         {!isQuote && !doc.invoicedAsCode && ['OPEN', 'POSTED', 'PARTIALLY_PAID'].includes(doc.status) && Number(doc.outstanding) > 0.001 && (
                                                             <Link
                                                                 href={`/invoices/${doc.rawId}?openPayment=true`}
-                                                                className="text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 px-2 py-1 rounded text-xs font-bold transition flex items-center gap-1 shadow-2xs"
+                                                                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 transition shadow-2xs"
                                                                 title={doc.type === 'INVOICE' ? 'Registrar Cobro / Abono' : 'Registrar Pago / Abono'}
                                                             >
-                                                                <CreditCard className="w-3 h-3" />
+                                                                <CreditCard className="w-3.5 h-3.5" />
                                                                 <span>{doc.type === 'INVOICE' ? 'Cobrar' : 'Pagar'}</span>
                                                             </Link>
                                                         )}
 
-                                                         {/* Botón Eliminar */}
-                                                        {!isQuote && (
-                                                            <button 
-                                                                onClick={() => handleDelete(doc.rawId)}
-                                                                className="text-red-600 hover:text-red-900 border border-red-200 px-2 py-1 rounded text-xs hover:bg-red-50 font-medium transition cursor-pointer"
-                                                                title="Eliminar documento"
+                                                        {/* Barra de Herramientas de Acciones (Iconos compactos y modernos) */}
+                                                        <div className="inline-flex items-center bg-gray-50 hover:bg-gray-100 border border-gray-200 rounded-lg p-0.5 transition">
+                                                            {/* Botón Ver */}
+                                                            {isQuote ? (
+                                                                <Link 
+                                                                    href={`/quotations?search=${encodeURIComponent(doc.code)}`}
+                                                                    className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-white rounded-md transition"
+                                                                    title="Ver cotización"
+                                                                >
+                                                                    <Eye className="w-4 h-4" />
+                                                                </Link>
+                                                            ) : (
+                                                                <Link 
+                                                                    href={`/invoices/${doc.rawId}`}
+                                                                    className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-white rounded-md transition"
+                                                                    title="Ver detalle del documento"
+                                                                >
+                                                                    <Eye className="w-4 h-4" />
+                                                                </Link>
+                                                            )}
+
+                                                            {/* Botón PDF oficial */}
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => isQuote ? window.open(`/backend-api/api/quotations/${doc.code}/pdf`, '_blank') : window.open(`/backend-api/api/invoices/${doc.rawId}/pdf`, '_blank')}
+                                                                className="p-1.5 text-gray-500 hover:text-slate-900 hover:bg-white rounded-md transition cursor-pointer"
+                                                                title="Ver PDF oficial"
                                                             >
-                                                                Eliminar
+                                                                <FileText className="w-4 h-4" />
                                                             </button>
-                                                        )}
+
+                                                            {/* Botón Trazabilidad */}
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => openTraceModal(doc.code)}
+                                                                className="p-1.5 text-purple-600 hover:text-purple-800 hover:bg-white rounded-md transition cursor-pointer"
+                                                                title="Ver mapa interactivo de trazabilidad"
+                                                            >
+                                                                <GitFork className="w-4 h-4" />
+                                                            </button>
+
+                                                            {/* Botón Eliminar */}
+                                                            {!isQuote && (
+                                                                <button 
+                                                                    type="button"
+                                                                    onClick={() => handleDelete(doc.rawId)}
+                                                                    className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-white rounded-md transition cursor-pointer"
+                                                                    title="Eliminar documento"
+                                                                >
+                                                                    <Trash2 className="w-4 h-4" />
+                                                                </button>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -1500,38 +1504,29 @@ function InvoicesPageContent() {
 
                     {/* Barra flotante inferior de scroll horizontal rápido - Solo en escritorio */}
                     <div className="hidden md:flex sticky bottom-3 z-20 justify-center pointer-events-none mt-2">
-                        <div className="bg-slate-900/40 hover:bg-slate-900/95 active:bg-slate-900/95 backdrop-blur-xs hover:backdrop-blur-md text-white px-4 py-2 rounded-full shadow-md hover:shadow-2xl flex items-center gap-3 border border-slate-700/40 hover:border-slate-700/90 pointer-events-auto text-xs font-medium opacity-30 hover:opacity-100 focus-within:opacity-100 transition-all duration-300 ease-in-out cursor-pointer select-none">
-                            <span className="text-slate-300 flex items-center gap-1.5">
-                                <ArrowLeftRight className="w-3.5 h-3.5 text-blue-400" />
-                                Mover tabla:
+                        <div className="bg-slate-900/60 hover:bg-slate-900/90 active:bg-slate-900/90 backdrop-blur-xs hover:backdrop-blur-md text-white px-3 py-1.5 rounded-full shadow-md hover:shadow-xl flex items-center gap-2 border border-slate-700/50 pointer-events-auto text-xs font-medium opacity-20 hover:opacity-100 transition-all duration-200 select-none">
+                            <span className="text-slate-300 flex items-center gap-1 text-[11px]">
+                                <ArrowLeftRight className="w-3 h-3 text-blue-400" />
+                                Tabla:
                             </span>
-                            <div className="flex items-center gap-1.5 border-l border-slate-700/60 pl-3">
+                            <div className="flex items-center gap-1 border-l border-slate-700/60 pl-2">
                                 <button
                                     type="button"
                                     onClick={() => scrollHorizontal('left')}
-                                    className="px-2.5 py-1 bg-slate-800/80 hover:bg-slate-700 active:scale-95 text-slate-200 rounded-md transition flex items-center gap-1 border border-slate-700 cursor-pointer"
+                                    className="px-2 py-0.5 bg-slate-800/80 hover:bg-slate-700 active:scale-95 text-slate-200 rounded transition flex items-center gap-0.5 border border-slate-700 cursor-pointer text-[11px]"
                                     title="Desplazar a la izquierda"
                                 >
-                                    <ChevronLeft className="w-3.5 h-3.5" />
-                                    <span>Izquierda</span>
+                                    <ChevronLeft className="w-3 h-3" />
+                                    <span>Izq</span>
                                 </button>
                                 <button
                                     type="button"
                                     onClick={() => scrollHorizontal('right')}
-                                    className="px-2.5 py-1 bg-slate-800/80 hover:bg-slate-700 active:scale-95 text-slate-200 rounded-md transition flex items-center gap-1 border border-slate-700 cursor-pointer"
+                                    className="px-2 py-0.5 bg-slate-800/80 hover:bg-slate-700 active:scale-95 text-slate-200 rounded transition flex items-center gap-0.5 border border-slate-700 cursor-pointer text-[11px]"
                                     title="Desplazar a la derecha"
                                 >
-                                    <span>Derecha</span>
-                                    <ChevronRight className="w-3.5 h-3.5" />
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={() => scrollHorizontal('end')}
-                                    className="px-3 py-1 bg-blue-600 hover:bg-blue-500 active:scale-95 text-white font-semibold rounded-md transition flex items-center gap-1 shadow-sm cursor-pointer ml-1"
-                                    title="Ir a las columnas de Estado y Acciones"
-                                >
-                                    <span>Acciones</span>
-                                    <ChevronRight className="w-3.5 h-3.5" />
+                                    <span>Der</span>
+                                    <ChevronRight className="w-3 h-3" />
                                 </button>
                             </div>
                         </div>
