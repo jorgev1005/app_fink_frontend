@@ -168,6 +168,7 @@ function InvoicesPageContent() {
 
             list.push({
                 rawId: inv.id,
+                type: inv.type,
                 isQuotation: false,
                 code: inv.code || 'SIN-CÓDIGO',
                 docCategory,
@@ -810,6 +811,7 @@ function InvoicesPageContent() {
                             const isPO = doc.docCategory === 'PURCHASE_ORDER';
                             const isBill = doc.docCategory === 'BILL';
                             const isPos = doc.docCategory === 'POS';
+                            const isPayable = isPO || isBill || doc.type === 'BILL';
                             const dueInfo = calculateDueStatus(doc.dueDate, doc.status);
 
                             return (
@@ -1060,10 +1062,10 @@ function InvoicesPageContent() {
                                             <Link
                                                 href={`/invoices/${doc.rawId}?openPayment=true`}
                                                 className="w-full py-1.5 text-emerald-700 bg-emerald-50 border border-emerald-300 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 hover:bg-emerald-100 transition shadow-2xs"
-                                                title={doc.type === 'INVOICE' ? 'Registrar Cobro / Abono' : 'Registrar Pago / Abono'}
+                                                title={isPayable ? 'Registrar Pago / Abono a Proveedor' : 'Registrar Cobro / Abono de Cliente'}
                                             >
                                                 <CreditCard className="w-3.5 h-3.5" />
-                                                <span>{doc.type === 'INVOICE' ? 'Registrar Cobro / Abono' : 'Registrar Pago / Abono'}</span>
+                                                <span>{isPayable ? 'Registrar Pago / Abono' : 'Registrar Cobro / Abono'}</span>
                                             </Link>
                                         )}
 
@@ -1148,6 +1150,7 @@ function InvoicesPageContent() {
                                         const isPO = doc.docCategory === 'PURCHASE_ORDER';
                                         const isBill = doc.docCategory === 'BILL';
                                         const isPos = doc.docCategory === 'POS';
+                                        const isPayable = isPO || isBill || doc.type === 'BILL';
 
                                         return (
                                             <tr key={doc.code + '_' + doc.rawId} className="hover:bg-gray-50/80 transition group">
@@ -1427,15 +1430,15 @@ function InvoicesPageContent() {
                                                             </Link>
                                                         )}
 
-                                                        {/* Botón Cobrar/Abonar Factura si tiene saldo pendiente */}
+                                                        {/* Botón Cobrar/Pagar si tiene saldo pendiente */}
                                                         {!isQuote && !doc.invoicedAsCode && ['OPEN', 'POSTED', 'PARTIALLY_PAID'].includes(doc.status) && Number(doc.outstanding) > 0.001 && (
                                                             <Link
                                                                 href={`/invoices/${doc.rawId}?openPayment=true`}
                                                                 className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-bold rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 transition shadow-2xs"
-                                                                title={doc.type === 'INVOICE' ? 'Registrar Cobro / Abono' : 'Registrar Pago / Abono'}
+                                                                title={isPayable ? 'Registrar Pago / Abono a Proveedor' : 'Registrar Cobro / Abono de Cliente'}
                                                             >
                                                                 <CreditCard className="w-3.5 h-3.5" />
-                                                                <span>{doc.type === 'INVOICE' ? 'Cobrar' : 'Pagar'}</span>
+                                                                <span>{isPayable ? 'Pagar' : 'Cobrar'}</span>
                                                             </Link>
                                                         )}
 
