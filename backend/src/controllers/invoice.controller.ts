@@ -583,8 +583,10 @@ export const issueInvoiceFromDeliveryNote = async (req: Request, res: Response) 
 
     // Cuentas por cobrar: transferir allocations si la NE ya tenía abonos
     const hasPayments = deliveryNote.payments && deliveryNote.payments.length > 0;
-    const targetStatus = hasPayments ? deliveryNote.status : (deliveryNote.status === 'DRAFT' ? 'OPEN' : deliveryNote.status);
     const targetOutstanding = hasPayments ? deliveryNote.outstanding : deliveryNote.total;
+    const targetStatus = hasPayments 
+      ? (Number(targetOutstanding) <= 0.001 ? 'PAID' : 'PARTIALLY_PAID')
+      : 'POSTED'; // Factura formal emitida y posteada, lista para cobranza y libro de ventas
 
     const result = await prisma.$transaction(async (tx) => {
       // 1. Crear Factura Oficial (SIN descontar inventario, pues ya lo descontó la NE)
@@ -634,7 +636,7 @@ export const issueInvoiceFromDeliveryNote = async (req: Request, res: Response) 
         data: {
           lines: JSON.stringify(updatedNELines),
           outstanding: 0,
-          status: 'PAID', // Saldo transferido y cubierto por la Factura formal
+          status: 'INVOICED', // Saldo transferido formalmente a la Factura
           notes: neNotes
         }
       });
@@ -647,6 +649,25 @@ export const issueInvoiceFromDeliveryNote = async (req: Request, res: Response) 
 
       return createdInvoice;
     });
+
+    // Si la factura oficial no tenía pagos previos, asegurar generación de transacción contable de Cuentas por Cobrar
+    if (!hasPayments) {
+      try {
+        const { processInvoicePosting } = await import('../services/invoice.service');
+        const existingTx = await prisma.transaction.findFirst({
+          where: {
+            projectId: result.projectId,
+            reference: result.code,
+            type: 'INCOME'
+          }
+        });
+        if (!existingTx) {
+          await processInvoicePosting(result.id, user.id);
+        }
+      } catch (postErr) {
+        console.warn('[issueInvoiceFromDeliveryNote] Warning creating posting transaction:', postErr);
+      }
+    }
 
     // Registrar log de actividad
     try {
@@ -841,7 +862,7 @@ export const convertPurchaseOrderToBill = async (req: Request, res: Response) =>
         data: {
           lines: JSON.stringify(updatedPOLines),
           outstanding: 0,
-          status: 'PAID', // Saldo transferido y cubierto por la Factura formal
+          status: 'INVOICED', // Saldo transferido formalmente a la Factura de Proveedor
           notes: poNotes
         }
       });

@@ -9,7 +9,7 @@ import {
     ChevronLeft, ChevronRight, ArrowLeftRight, FileText, 
     ShoppingCart, Truck, Plus, Eye, Download, Filter, 
     RefreshCw, ExternalLink, ArrowUpRight, DollarSign,
-    Package, Check, ArrowRight, Receipt, FileSpreadsheet,
+    Package, Check, ArrowRight, Receipt, FileSpreadsheet, CreditCard,
     HelpCircle, ShieldAlert, GitFork, RotateCcw, Undo2, Trash2
 } from 'lucide-react';
 import TraceabilityModal from '@/components/TraceabilityModal';
@@ -877,11 +877,13 @@ function InvoicesPageContent() {
                                                 <span className={`px-2 py-0.5 inline-flex text-[10px] font-semibold rounded-full items-center ${
                                                     doc.status === 'PAID' ? 'bg-emerald-100 text-emerald-800' : 
                                                     doc.status === 'PARTIALLY_PAID' ? 'bg-amber-100 text-amber-800 border border-amber-300' :
+                                                    doc.invoicedAsCode || doc.status === 'INVOICED' ? 'bg-indigo-100 text-indigo-800' : 
                                                     doc.status === 'POSTED' || doc.status === 'OPEN' ? ((isPO || isBill) ? 'bg-orange-100 text-orange-800' : 'bg-blue-100 text-blue-800') : 
                                                     doc.status === 'CANCELLED' ? 'bg-red-100 text-red-800' :
                                                     'bg-gray-100 text-gray-800'
                                                 }`}>
                                                     {
+                                                        doc.invoicedAsCode || doc.status === 'INVOICED' ? 'FACTURADA' : 
                                                         doc.status === 'POSTED' || doc.status === 'OPEN' ? ((isPO || isBill) ? 'POR PAGAR' : 'POR COBRAR') : 
                                                         doc.status === 'PAID' ? ((isPO || isBill) ? 'PAGADA' : 'COBRADA') : 
                                                         doc.status === 'PARTIALLY_PAID' ? 'ABONADA' :
@@ -1084,6 +1086,17 @@ function InvoicesPageContent() {
                                             >
                                                 <Receipt className="w-3 h-3" />
                                                 <span>Facturar</span>
+                                            </Link>
+                                        )}
+
+                                        {!isQuote && !doc.invoicedAsCode && ['OPEN', 'POSTED', 'PARTIALLY_PAID'].includes(doc.status) && Number(doc.outstanding) > 0.001 && (
+                                            <Link
+                                                href={`/invoices/${doc.rawId}?openPayment=true`}
+                                                className="px-2.5 py-1.5 text-emerald-700 bg-emerald-50 border border-emerald-300 rounded-lg text-xs font-bold flex items-center gap-1 hover:bg-emerald-100 transition shadow-2xs"
+                                                title={doc.type === 'INVOICE' ? 'Registrar Cobro / Abono' : 'Registrar Pago / Abono'}
+                                            >
+                                                <CreditCard className="w-3 h-3" />
+                                                <span>{doc.type === 'INVOICE' ? 'Cobrar' : 'Pagar'}</span>
                                             </Link>
                                         )}
 
@@ -1323,6 +1336,7 @@ function InvoicesPageContent() {
                                                         </span>
                                                     ) : (
                                                         <span className={`px-2.5 py-1 inline-flex text-[11px] leading-4 font-semibold rounded-full items-center ${
+                                                            doc.invoicedAsCode || doc.status === 'INVOICED' ? 'bg-indigo-100 text-indigo-800 border border-indigo-200' : 
                                                             doc.status === 'PAID' ? 'bg-emerald-100 text-emerald-800' : 
                                                             doc.status === 'PARTIALLY_PAID' ? 'bg-amber-100 text-amber-800 border border-amber-300' :
                                                             doc.status === 'POSTED' || doc.status === 'OPEN' ? ((isPO || isBill) ? 'bg-orange-100 text-orange-800' : 'bg-blue-100 text-blue-800') : 
@@ -1330,6 +1344,7 @@ function InvoicesPageContent() {
                                                             'bg-gray-100 text-gray-800'
                                                         }`}>
                                                             {
+                                                                doc.invoicedAsCode || doc.status === 'INVOICED' ? 'FACTURADA' : 
                                                                 doc.status === 'POSTED' || doc.status === 'OPEN' ? ((isPO || isBill) ? 'POR PAGAR' : 'POR COBRAR') : 
                                                                 doc.status === 'PAID' ? ((isPO || isBill) ? 'PAGADA' : 'COBRADA') : 
                                                                 doc.status === 'PARTIALLY_PAID' ? 'ABONADA' :
@@ -1451,7 +1466,19 @@ function InvoicesPageContent() {
                                                             </Link>
                                                         )}
 
-                                                        {/* Botón Eliminar */}
+                                                        {/* Botón Cobrar/Abonar Factura si tiene saldo pendiente */}
+                                                        {!isQuote && !doc.invoicedAsCode && ['OPEN', 'POSTED', 'PARTIALLY_PAID'].includes(doc.status) && Number(doc.outstanding) > 0.001 && (
+                                                            <Link
+                                                                href={`/invoices/${doc.rawId}?openPayment=true`}
+                                                                className="text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-300 px-2 py-1 rounded text-xs font-bold transition flex items-center gap-1 shadow-2xs"
+                                                                title={doc.type === 'INVOICE' ? 'Registrar Cobro / Abono' : 'Registrar Pago / Abono'}
+                                                            >
+                                                                <CreditCard className="w-3 h-3" />
+                                                                <span>{doc.type === 'INVOICE' ? 'Cobrar' : 'Pagar'}</span>
+                                                            </Link>
+                                                        )}
+
+                                                         {/* Botón Eliminar */}
                                                         {!isQuote && (
                                                             <button 
                                                                 onClick={() => handleDelete(doc.rawId)}

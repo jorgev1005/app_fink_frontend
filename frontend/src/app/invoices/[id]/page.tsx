@@ -2,8 +2,9 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
+import Link from 'next/link';
 import api, { apiClient } from '@/lib/api';
-import { Printer, ArrowLeft, Download, Edit, CreditCard, CheckCircle, FileText, Copy, Play, MessageCircle, Trash2, Undo2, AlertTriangle, Truck, Receipt, ExternalLink, Clock, RotateCcw, ShieldCheck } from 'lucide-react';
+import { Printer, ArrowLeft, Download, Edit, CreditCard, CheckCircle, FileText, Copy, Play, MessageCircle, Trash2, Undo2, AlertTriangle, Truck, Receipt, ExternalLink, Clock, RotateCcw, ShieldCheck, Wallet } from 'lucide-react';
 
 interface InvoiceItem {
   id: string;
@@ -393,8 +394,13 @@ export default function InvoiceDetailsPage() {
      setPaymentAmount(String(inv.outstanding || 0));
      try {
         const res = await api.accounts.getAll({ projectId: inv.projectId });
-        // Only keep active asset cash/bank accounts
-        const list = (res.data.data || []).filter((a: any) => a.isActive && a.type === 'ASSET' && (a.subType === 'BANK' || a.subType === 'CASH'));
+        // Only keep active asset cash/bank/financial accounts
+        const list = (res.data.data || []).filter((a: any) => 
+           a.isActive && a.type === 'ASSET' && (
+              ['BANK', 'CASH', 'WALLET', 'FINANCIAL'].includes(a.subType) || 
+              (a.code && a.code.startsWith('1.1.01'))
+           )
+        );
         setAccounts(list);
         if (list.length > 0) {
            setPaymentAccountId(list[0].id);
@@ -1018,7 +1024,10 @@ export default function InvoiceDetailsPage() {
     let label = status;
     let color = 'bg-gray-100 text-gray-800';
 
-    if (status === 'POSTED') {
+    if (invoice?.invoicedAsCode || status === 'INVOICED') {
+       label = invoice?.invoicedAsCode ? `FACTURADA (#${invoice.invoicedAsCode})` : 'FACTURADA';
+       color = 'bg-indigo-100 text-indigo-800 border border-indigo-200';
+    } else if (status === 'POSTED') {
        if (type === 'INVOICE') { label = 'POR COBRAR'; color = 'bg-blue-100 text-blue-800'; }
        else { label = 'POR PAGAR'; color = 'bg-orange-100 text-orange-800'; }
     } else if (status === 'PAID') {
@@ -1300,14 +1309,25 @@ export default function InvoiceDetailsPage() {
               )}
 
              {/* Pay/Collect Button if pending */}
-             {invoice.status === 'POSTED' && (
-                <button 
-                   onClick={() => router.push(`/invoices/${invoice.id}/pay`)}
-                   className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-medium transition shadow-sm"
-                >
-                   <CreditCard size={13} /> 
-                   {invoice.type === 'INVOICE' ? 'Registrar Cobro' : 'Registrar Pago'}
-                </button>
+             {!invoice.invoicedAsCode && ['OPEN', 'POSTED', 'PARTIALLY_PAID'].includes(invoice.status) && Number(invoice.outstanding) > 0.001 && (
+                <div className="flex items-center gap-1.5">
+                   <button 
+                      onClick={() => openPaymentModal()}
+                      className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded text-xs font-semibold transition shadow-sm cursor-pointer"
+                      title={invoice.type === 'INVOICE' ? 'Registrar Cobro o Abono directo a esta factura' : 'Registrar Pago o Abono directo a esta compra'}
+                   >
+                      <CreditCard size={13} /> 
+                      {invoice.type === 'INVOICE' ? 'Registrar Cobro / Abono' : 'Registrar Pago / Abono'}
+                   </button>
+                   <button 
+                      onClick={() => router.push(`/invoices/${invoice.id}/pay`)}
+                      className="flex items-center gap-1 px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded text-xs font-medium transition shadow-sm cursor-pointer"
+                      title="Asistente multi-moneda (BCV/Binance) para pagos en Bs/Divisas"
+                   >
+                      <Wallet size={12} />
+                      <span>Multi-Moneda</span>
+                   </button>
+                </div>
              )}
 
              {/* Print, WhatsApp & PDF Buttons */}
@@ -1434,12 +1454,12 @@ export default function InvoiceDetailsPage() {
                 <Receipt size={16} />
               </div>
               <div className="text-xs">
-                <span className="font-bold text-indigo-950">Facturación Formal: </span>
-                <span>Esta Nota de Entrega ha sido facturada bajo la Factura Fiscal Oficial </span>
+                <span className="font-bold text-indigo-950">Nota de Entrega Facturada: </span>
+                <span>Este despacho fue facturado legalmente bajo la Factura Fiscal Oficial </span>
                 <span className="font-mono font-bold text-indigo-800 bg-white px-1.5 py-0.5 rounded border border-indigo-200">
                   #{invoice.invoicedAsCode}
                 </span>.
-                <span className="text-indigo-600 block sm:inline sm:ml-1">Cuentas por cobrar e inventario sincronizados.</span>
+                <span className="text-indigo-700 block sm:inline sm:ml-1 font-medium">La cobranza formal y registro de pagos/abonos se gestionan en dicha factura.</span>
               </div>
             </div>
             {invoice.invoicedAsId && (
@@ -2114,9 +2134,36 @@ export default function InvoiceDetailsPage() {
                                </div>
                              )}
                              {totals.outstanding > 0 ? (
-                               <div className="flex justify-between text-sm font-bold text-orange-600 bg-orange-50/80 px-3 py-1.5 rounded-lg border border-orange-200 print:hidden" data-html2canvas-ignore="true">
-                                 <span>Saldo Pendiente</span>
-                                 <span className="font-mono">{formatCurrency(totals.outstanding * conversionFactor, displayCurrency)}</span>
+                               <div className="space-y-2 print:hidden" data-html2canvas-ignore="true">
+                                 <div className="flex justify-between text-sm font-bold text-orange-600 bg-orange-50/80 px-3 py-1.5 rounded-lg border border-orange-200">
+                                   <span>Saldo Pendiente</span>
+                                   <span className="font-mono">{formatCurrency(totals.outstanding * conversionFactor, displayCurrency)}</span>
+                                 </div>
+                                 {!invoice.invoicedAsCode && invoice.status !== 'CANCELLED' && (
+                                   <button
+                                     type="button"
+                                     onClick={() => openPaymentModal()}
+                                     className="w-full py-2 px-3 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+                                   >
+                                     <CreditCard size={14} />
+                                     <span>{invoice.type === 'INVOICE' ? 'Registrar Cobro / Abono' : 'Registrar Pago / Abono'}</span>
+                                   </button>
+                                 )}
+                               </div>
+                             ) : invoice.invoicedAsCode ? (
+                               <div className="flex flex-col gap-1 text-xs font-bold text-indigo-800 bg-indigo-50 px-3 py-2 rounded-lg border border-indigo-200 print:hidden" data-html2canvas-ignore="true">
+                                 <div className="flex justify-between items-center">
+                                   <span>Estado del Documento</span>
+                                   <span className="uppercase">FACTURADA</span>
+                                 </div>
+                                 <div className="text-[11px] font-normal text-indigo-700 flex items-center justify-between mt-1">
+                                   <span>Cobranza en Factura #{invoice.invoicedAsCode}</span>
+                                   {invoice.invoicedAsId && (
+                                     <Link href={`/invoices/${invoice.invoicedAsId}`} className="text-indigo-600 underline font-semibold hover:text-indigo-900">
+                                       Ver Factura
+                                     </Link>
+                                   )}
+                                 </div>
                                </div>
                              ) : (
                                <div className="flex justify-between text-xs font-bold text-green-700 bg-green-50 px-3 py-1.5 rounded-lg border border-green-200 print:hidden" data-html2canvas-ignore="true">
@@ -2132,18 +2179,49 @@ export default function InvoiceDetailsPage() {
                 })()}
 
               {/* Historial de Abonos / Pagos Realizados */}
-              {(viewMode !== 'DELIVERY_NOTE' || showPricesInDeliveryNote) && invoice.payments && invoice.payments.length > 0 && (
+              {(viewMode !== 'DELIVERY_NOTE' || showPricesInDeliveryNote) && !invoice.invoicedAsCode && (
                 <div className="mt-8 pt-6 border-t border-gray-200 print:hidden" data-html2canvas-ignore="true">
                   <div className="flex items-center justify-between mb-3">
                     <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider flex items-center gap-2">
                       <span>Historial de Abonos / Pagos</span>
-                      <span className="bg-emerald-100 text-emerald-800 text-[10px] font-semibold px-2 py-0.5 rounded-full">
-                        {invoice.payments.length} {invoice.payments.length === 1 ? 'abono registrado' : 'abonos registrados'}
-                      </span>
+                      {invoice.payments && invoice.payments.length > 0 ? (
+                        <span className="bg-emerald-100 text-emerald-800 text-[10px] font-semibold px-2 py-0.5 rounded-full">
+                          {invoice.payments.length} {invoice.payments.length === 1 ? 'abono registrado' : 'abonos registrados'}
+                        </span>
+                      ) : (
+                        <span className="bg-amber-100 text-amber-800 text-[10px] font-semibold px-2 py-0.5 rounded-full">
+                          Sin abonos registrados
+                        </span>
+                      )}
                     </h3>
+                    {totals.outstanding > 0 && invoice.status !== 'CANCELLED' && (
+                      <button
+                        type="button"
+                        onClick={() => openPaymentModal()}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-semibold shadow-xs cursor-pointer transition"
+                      >
+                        <CreditCard size={13} />
+                        <span>+ Registrar {invoice.payments && invoice.payments.length > 0 ? 'Otro Abono' : 'Primer Abono'}</span>
+                      </button>
+                    )}
                   </div>
                   
-                  <div className="overflow-x-auto rounded-lg border border-gray-200">
+                  {(!invoice.payments || invoice.payments.length === 0) ? (
+                    <div className="bg-slate-50 border border-dashed border-slate-200 rounded-lg p-4 text-center">
+                      <p className="text-xs text-gray-500 mb-2">
+                        Esta factura tiene un saldo pendiente de <span className="font-bold text-orange-600 font-mono">{formatCurrency(totals.outstanding * conversionFactor, displayCurrency)}</span> y aún no registra abonos o retenciones.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => openPaymentModal()}
+                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-green-600 hover:bg-green-700 text-white rounded-lg text-xs font-semibold shadow-sm transition cursor-pointer"
+                      >
+                        <CreditCard size={13} />
+                        <span>Registrar Abono o Pago</span>
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="overflow-x-auto rounded-lg border border-gray-200">
                     <table className="w-full text-left text-xs">
                       <thead className="bg-gray-50 text-gray-600 font-semibold border-b border-gray-200">
                         <tr>
@@ -2219,6 +2297,7 @@ export default function InvoiceDetailsPage() {
                       </tfoot>
                     </table>
                   </div>
+                  )}
                 </div>
               )}
            </div>
