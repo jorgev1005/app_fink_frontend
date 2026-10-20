@@ -633,12 +633,14 @@ function NewInvoiceContent() {
     }
   };
 
-  // Filter contacts based on type
-  const filteredContacts = contacts.filter(c => {
-      if (type === 'BILL') return c.type === 'SUPPLIER' || c.type === 'BOTH' || c.type === 'OTHER';
-      if (type === 'INVOICE') return c.type === 'CUSTOMER' || c.type === 'BOTH' || c.type === 'OTHER';
+  // Segmentar contactos: preferidos según el tipo de documento (Cliente vs Proveedor), y secundarios
+  const preferredContacts = contacts.filter(c => {
+      if (type === 'BILL') return c.type === 'SUPPLIER' || c.type === 'BOTH';
+      if (type === 'INVOICE') return c.type === 'CUSTOMER' || c.type === 'BOTH';
       return true;
   });
+  const otherContacts = contacts.filter(c => !preferredContacts.some(p => p.id === c.id));
+  const filteredContacts = contacts; // Mantener compatibilidad si se usa en otros hooks
 
   return (
     <div className="max-w-6xl mx-auto p-4 md:p-8 pb-20">
@@ -818,9 +820,20 @@ function NewInvoiceContent() {
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                      {/* Contact Selector */}
                      <div className="md:col-span-2">
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                            {type === 'BILL' ? 'Proveedor (Acreedor)' : 'Cliente (Deudor)'}
-                        </label>
+                        <div className="flex items-center justify-between mb-1">
+                            <label className="block text-sm font-medium text-gray-700">
+                                {type === 'BILL' ? 'Proveedor (Acreedor)' : 'Cliente (Deudor)'}
+                            </label>
+                            <Link 
+                                href="/contacts" 
+                                target="_blank" 
+                                className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1 hover:underline font-medium"
+                                title="Crear o editar contactos en una pestaña nueva"
+                            >
+                                <Plus className="w-3.5 h-3.5" />
+                                <span>Gestionar Contactos</span>
+                            </Link>
+                        </div>
                         <div className="relative">
                             <User className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
                             <select 
@@ -830,9 +843,24 @@ function NewInvoiceContent() {
                                 disabled={!projectId || dataLoading}
                             >
                                 <option value="">-- Seleccionar o Dejar Vacío --</option>
-                                {filteredContacts.map(c => (
-                                    <option key={c.id} value={c.id}>{c.name} {c.taxId ? `(${c.taxId})` : ''}</option>
-                                ))}
+                                {preferredContacts.length > 0 && (
+                                    <optgroup label={type === 'BILL' ? '🏢 Proveedores' : '👤 Clientes'}>
+                                        {preferredContacts.map(c => (
+                                            <option key={c.id} value={c.id}>
+                                                {c.name} {c.taxId ? `(${c.taxId})` : ''}
+                                            </option>
+                                        ))}
+                                    </optgroup>
+                                )}
+                                {otherContacts.length > 0 && (
+                                    <optgroup label={type === 'BILL' ? 'Otros Contactos / Clientes' : 'Otros Contactos / Proveedores'}>
+                                        {otherContacts.map(c => (
+                                            <option key={c.id} value={c.id}>
+                                                {c.name} {c.taxId ? `(${c.taxId})` : ''} ({c.type === 'SUPPLIER' ? 'Proveedor' : c.type === 'CUSTOMER' ? 'Cliente' : 'Otro'})
+                                            </option>
+                                        ))}
+                                    </optgroup>
+                                )}
                             </select>
                         </div>
                     </div>
