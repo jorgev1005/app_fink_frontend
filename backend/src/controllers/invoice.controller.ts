@@ -255,16 +255,16 @@ export const createInvoice = async (req: Request, res: Response) => {
       }
     }
 
-    // Anchor dueDate to noon if it's a date-only string
+    // Anchor dueDate to noon if it's a date-only string or unanchored
     let dueDateToStore = dueDate;
-    if (dueDate && typeof dueDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
-      dueDateToStore = dueDate + 'T12:00:00';
+    if (dueDate && typeof dueDate === 'string' && /^\d{4}-\d{2}-\d{2}/.test(dueDate)) {
+      dueDateToStore = dueDate.slice(0, 10) + 'T12:00:00';
     }
 
     // Anchor issueDate to noon if it's a date-only string to prevent TZ shifts
     let issueDateToStore = issueDate ? new Date(issueDate) : new Date();
-    if (issueDate && typeof issueDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(issueDate)) {
-        issueDateToStore = new Date(issueDate + 'T12:00:00');
+    if (issueDate && typeof issueDate === 'string' && /^\d{4}-\d{2}-\d{2}/.test(issueDate)) {
+        issueDateToStore = new Date(issueDate.slice(0, 10) + 'T12:00:00');
     }
 
     // Prepare Lines Data (JSON)
@@ -562,9 +562,20 @@ export const issueInvoiceFromDeliveryNote = async (req: Request, res: Response) 
       }
     }
 
-    // Fechas
-    const issueDateToStore = issueDate ? new Date(issueDate) : new Date();
-    const dueDateToStore = dueDate ? new Date(dueDate) : (deliveryNote.dueDate ? new Date(deliveryNote.dueDate) : null);
+    // Fechas (ancladas al mediodía para evitar desfases de zona horaria UTC)
+    let issueDateToStore = issueDate ? new Date(issueDate) : new Date();
+    if (issueDate && typeof issueDate === 'string' && /^\d{4}-\d{2}-\d{2}/.test(issueDate)) {
+      issueDateToStore = new Date(issueDate.slice(0, 10) + 'T12:00:00');
+    }
+
+    let dueDateToStore: Date | null = null;
+    if (dueDate) {
+      dueDateToStore = typeof dueDate === 'string' && /^\d{4}-\d{2}-\d{2}/.test(dueDate)
+        ? new Date(dueDate.slice(0, 10) + 'T12:00:00')
+        : new Date(dueDate);
+    } else if (deliveryNote.dueDate) {
+      dueDateToStore = new Date(deliveryNote.dueDate);
+    }
 
     // Preparar objeto de líneas para la nueva Factura (marcado para no descontar inventario duplicado)
     const newInvoiceLines: any = {
@@ -1027,16 +1038,16 @@ export const updateInvoice = async (req: Request, res: Response) => {
         return res.status(400).json({ success: false, error: { message: 'No se puede editar una factura pagada o parcialmente pagada.' } });
     }
 
-    // Anchor dueDate to noon if it's a date-only string
+    // Anchor dueDate to noon if it's a date-only string or unanchored
     let dueDateToStore = dueDate !== undefined ? (dueDate ? new Date(dueDate) : null) : invoice.dueDate;
-    if (dueDate && typeof dueDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
-      dueDateToStore = new Date(dueDate + 'T12:00:00');
+    if (dueDate && typeof dueDate === 'string' && /^\d{4}-\d{2}-\d{2}/.test(dueDate)) {
+      dueDateToStore = new Date(dueDate.slice(0, 10) + 'T12:00:00');
     }
 
     // Anchor issueDate to noon if it's a date-only string to prevent TZ shifts
     let issueDateToStore = issueDate ? new Date(issueDate) : invoice.issueDate;
-    if (issueDate && typeof issueDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(issueDate)) {
-      issueDateToStore = new Date(issueDate + 'T12:00:00');
+    if (issueDate && typeof issueDate === 'string' && /^\d{4}-\d{2}-\d{2}/.test(issueDate)) {
+      issueDateToStore = new Date(issueDate.slice(0, 10) + 'T12:00:00');
     }
 
     const updated = await prisma.$transaction(async (tx) => {

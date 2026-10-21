@@ -52,7 +52,13 @@ function NewInvoiceContent() {
   const [taxAmount, setTaxAmount] = useState('0');
 
   // Dates
-  const [issueDate, setIssueDate] = useState(new Date().toISOString().slice(0, 10));
+  const [issueDate, setIssueDate] = useState(() => {
+    const d = new Date();
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    return `${yyyy}-${mm}-${dd}`;
+  });
   const [dueDate, setDueDate] = useState('');
   
   // Purchase Order
@@ -558,8 +564,8 @@ function NewInvoiceContent() {
     try {
       // Anchor dueDate to noon to avoid timezone issues if present
       let dueDateToSend = dueDate;
-      if (dueDate && /^\d{4}-\d{2}-\d{2}$/.test(dueDate)) {
-        dueDateToSend = dueDate + 'T12:00:00';
+      if (dueDate && /^\d{4}-\d{2}-\d{2}/.test(dueDate)) {
+        dueDateToSend = dueDate.slice(0, 10) + 'T12:00:00';
       }
 
       // Calculate final total (Base + Tax) if tax enabled
@@ -568,9 +574,11 @@ function NewInvoiceContent() {
           finalTotal += Number(taxAmount);
       }
 
-      // Issue Date Logic: Send raw YYYY-MM-DD string to let backend anchor it to noon
-      // This prevents the -1 day error due to UTC midnight conversion
-      const issueDateToSend = issueDate;
+      // Issue Date Logic: anchor to noon to prevent TZ shifts
+      let issueDateToSend = issueDate;
+      if (issueDate && /^\d{4}-\d{2}-\d{2}/.test(issueDate)) {
+        issueDateToSend = issueDate.slice(0, 10) + 'T12:00:00';
+      }
 
       // Automatic code generator on frontend to guarantee immediate assignment
       let finalCode = code ? String(code).trim() : undefined;

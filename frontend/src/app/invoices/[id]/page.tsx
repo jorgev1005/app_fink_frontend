@@ -443,18 +443,29 @@ export default function InvoiceDetailsPage() {
      router.push(`/invoices/new?duplicateFrom=${invoice.id}`);
   };
 
+  const setIssueInvoiceCreditDays = (days: number) => {
+    const d = new Date();
+    d.setDate(d.getDate() + days);
+    const yyyy = d.getFullYear();
+    const mm = String(d.getMonth() + 1).padStart(2, '0');
+    const dd = String(d.getDate()).padStart(2, '0');
+    setIssueInvoiceDueDate(`${yyyy}-${mm}-${dd}`);
+  };
+
   const openIssueInvoiceModal = async () => {
      if (!invoice) return;
      setIsIssueInvoiceModalOpen(true);
      setIssueInvoiceError(null);
      setIssueInvoiceNotes('');
-     // Default due date: if delivery note has dueDate, use it; otherwise 15 days from today
+     // Default due date: if delivery note has dueDate, use it; otherwise today (cash/contado)
      if (invoice.dueDate) {
-       setIssueInvoiceDueDate(invoice.dueDate.split('T')[0]);
+       setIssueInvoiceDueDate(invoice.dueDate.slice(0, 10));
      } else {
        const d = new Date();
-       d.setDate(d.getDate() + 15);
-       setIssueInvoiceDueDate(d.toISOString().split('T')[0]);
+       const yyyy = d.getFullYear();
+       const mm = String(d.getMonth() + 1).padStart(2, '0');
+       const dd = String(d.getDate()).padStart(2, '0');
+       setIssueInvoiceDueDate(`${yyyy}-${mm}-${dd}`);
      }
      try {
        const res = await api.invoices.getNextCode({ projectId: invoice.projectId, isDeliveryNote: false });
@@ -472,9 +483,13 @@ export default function InvoiceDetailsPage() {
      try {
        setSubmittingIssueInvoice(true);
        setIssueInvoiceError(null);
+       let dueDateToSend = issueInvoiceDueDate;
+       if (issueInvoiceDueDate && /^\d{4}-\d{2}-\d{2}/.test(issueInvoiceDueDate)) {
+         dueDateToSend = issueInvoiceDueDate.slice(0, 10) + 'T12:00:00';
+       }
        const res = await (api.invoices as any).issueInvoice(invoice.id, {
          customCode: suggestedInvoiceCode,
-         dueDate: issueInvoiceDueDate || undefined,
+         dueDate: dueDateToSend || undefined,
          notes: issueInvoiceNotes || undefined
        });
        setIsIssueInvoiceModalOpen(false);
@@ -1007,7 +1022,11 @@ export default function InvoiceDetailsPage() {
 
   const formatDate = (dateStr: string) => {
     if (!dateStr) return '-';
-    return new Date(dateStr).toLocaleDateString();
+    const match = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (match && (dateStr.includes('T00:00:00') || !dateStr.includes('T'))) {
+      return `${match[3]}/${match[2]}/${match[1]}`;
+    }
+    return new Date(dateStr).toLocaleDateString('es-VE');
   };
 
   const getTypeLabel = (type: string) => {
@@ -2529,9 +2548,28 @@ export default function InvoiceDetailsPage() {
                   </div>
 
                   <div>
-                     <label className="block text-xs font-semibold text-gray-700 mb-1">
-                        Fecha de Vencimiento de Factura
-                     </label>
+                     <div className="flex items-center justify-between mb-1">
+                        <label className="block text-xs font-semibold text-gray-700">
+                           Fecha de Vencimiento de Factura
+                        </label>
+                        <div className="flex gap-1">
+                           {[
+                              { label: 'Contado (0d)', days: 0 },
+                              { label: '7d', days: 7 },
+                              { label: '15d', days: 15 },
+                              { label: '30d', days: 30 }
+                           ].map(term => (
+                              <button
+                                 key={term.days}
+                                 type="button"
+                                 onClick={() => setIssueInvoiceCreditDays(term.days)}
+                                 className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-slate-100 hover:bg-blue-100 text-slate-700 hover:text-blue-700 border border-slate-200 transition"
+                              >
+                                 {term.label}
+                              </button>
+                           ))}
+                        </div>
+                     </div>
                      <input 
                         type="date" 
                         value={issueInvoiceDueDate}

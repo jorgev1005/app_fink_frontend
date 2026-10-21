@@ -17,6 +17,15 @@ import TraceabilityModal from '@/components/TraceabilityModal';
 // Tipos de pestañas disponibles
 type DocTabType = 'ALL' | 'DELIVERY_NOTE' | 'INVOICE' | 'QUOTATION' | 'PURCHASE_ORDER' | 'BILL' | 'POS' | 'RETURNS';
 
+const formatLocalDate = (dateStr?: string | null) => {
+    if (!dateStr) return '-';
+    const match = String(dateStr).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (match && (dateStr.includes('T00:00:00') || !dateStr.includes('T'))) {
+        return `${match[3]}/${match[2]}/${match[1]}`;
+    }
+    return new Date(dateStr).toLocaleDateString('es-VE');
+};
+
 const calculateDueStatus = (dueDateStr?: string, status?: string) => {
     if (!dueDateStr) return null;
     if (status === 'PAID') {
@@ -25,7 +34,14 @@ const calculateDueStatus = (dueDateStr?: string, status?: string) => {
     if (status === 'CANCELLED') {
         return { label: 'Anulada', badgeClass: 'bg-slate-100 text-slate-500 border-slate-200' };
     }
-    const due = new Date(dueDateStr);
+    let due: Date;
+    const match = String(dueDateStr).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (match && (dueDateStr.includes('T00:00:00') || !dueDateStr.includes('T'))) {
+        due = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]), 12, 0, 0);
+    } else {
+        due = new Date(dueDateStr);
+    }
+
     const today = new Date();
     due.setHours(0, 0, 0, 0);
     today.setHours(0, 0, 0, 0);
@@ -41,10 +57,10 @@ const calculateDueStatus = (dueDateStr?: string, status?: string) => {
         };
     } else if (diffDays === 0) {
         return { 
-            label: 'Vence hoy', 
+            label: 'Vence hoy (Contado)', 
             diffDays, 
             isToday: true, 
-            badgeClass: 'bg-amber-100 text-amber-800 border-amber-300 font-bold' 
+            badgeClass: 'bg-emerald-100 text-emerald-800 border-emerald-300 font-bold' 
         };
     } else {
         return { 
@@ -969,7 +985,7 @@ function InvoicesPageContent() {
                                         <div className="flex items-center justify-between pt-0.5">
                                             <span className="text-gray-500 text-[11px]">Emisión:</span>
                                             <span className="text-gray-700 font-mono text-[11px]">
-                                                {doc.issueDate ? new Date(doc.issueDate).toLocaleDateString('es-VE') : '-'}
+                                                {formatLocalDate(doc.issueDate)}
                                             </span>
                                         </div>
                                         {doc.dueDate && (
@@ -977,7 +993,7 @@ function InvoicesPageContent() {
                                                 <span className="text-gray-500 text-[11px]">Vence:</span>
                                                 <div className="flex items-center gap-1">
                                                     <span className="text-gray-700 font-mono text-[11px]">
-                                                        {new Date(doc.dueDate).toLocaleDateString('es-VE')}
+                                                        {formatLocalDate(doc.dueDate)}
                                                     </span>
                                                     {dueInfo && (
                                                         <span className={`px-1 py-0.2 rounded text-[9px] border ${dueInfo.badgeClass}`}>
@@ -1301,12 +1317,12 @@ function InvoicesPageContent() {
                                                     <div className="flex flex-col gap-0.5">
                                                         <div className="flex items-center gap-1 font-medium text-gray-900">
                                                             <span className="text-[10px] text-gray-400">Emis:</span>
-                                                            {doc.issueDate ? new Date(doc.issueDate).toLocaleDateString('es-VE') : '-'}
+                                                            {formatLocalDate(doc.issueDate)}
                                                         </div>
                                                         {doc.dueDate && (
                                                             <div className="flex items-center gap-1">
                                                                 <span className="text-[10px] text-gray-400">Venc:</span>
-                                                                <span className="font-medium text-gray-700">{new Date(doc.dueDate).toLocaleDateString('es-VE')}</span>
+                                                                <span className="font-medium text-gray-700">{formatLocalDate(doc.dueDate)}</span>
                                                             </div>
                                                         )}
                                                         {(() => {
