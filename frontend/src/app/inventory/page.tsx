@@ -114,6 +114,8 @@ export default function InventoryPage() {
   const [search, setSearch] = useState('');
   const [selectedProject, setSelectedProject] = useState<string>('');
   const [selectedDivision, setSelectedDivision] = useState<string>('');
+  const [catalogOriginFilter, setCatalogOriginFilter] = useState<'originals' | 'all' | 'pdf'>('all');
+  const [selectedCatalogIds, setSelectedCatalogIds] = useState<Record<string, boolean>>({});
   const [exchangeRate, setExchangeRate] = useState<any>(null);
   const [ratesBySource, setRatesBySource] = useState<{ BCV?: number; BINANCE?: number; CUSTOM?: number; EUR?: number }>({});
   const [pdfRateMode, setPdfRateMode] = useState<'BCV' | 'EUR' | 'BINANCE' | 'CUSTOM'>('BCV');
@@ -675,9 +677,102 @@ export default function InventoryPage() {
 
   const sCodes = skuSupplierCodes as Record<string, string>;
 
-  // Filtrar productos por división y por código de proveedor localmente
+  const isPdfProduct = (p: Product) => {
+    const s = (p.sku || '').toUpperCase().trim();
+    return p.division === 'Catálogo Ampliado' || s.startsWith('FER-SOL-');
+  };
+
+  const isOwnProduct = (p: Product) => {
+    if (isPdfProduct(p)) return false;
+    const s = (p.sku || '').toUpperCase().trim();
+    if (s.endsWith('-ALU') || s.endsWith('-VET003') || s.startsWith('TEST-')) return false;
+    return true;
+  };
+
+  const FINK_SKU_PHOTOS: Record<string, string> = {
+    'FER-JUL-TUB-015': 'https://catalogo.grupoaludra.com/uploads/fondo_mas_blanco_1781990455657.jpg',
+    'FER-JUL-TUB-016': 'https://catalogo.grupoaludra.com/uploads/fondo_mas_blanco_1773159237156.jpg',
+    'FER-JUL-TUB-013': 'https://catalogo.grupoaludra.com/uploads/fondo_mas_blanco_1781990616089.jpg',
+    'LUC-ALU-JUL-TUB-001': 'https://catalogo.grupoaludra.com/uploads/fondo_mas_blanco_1781990651817.jpg',
+    'FER-JUL-TUB-014': 'https://catalogo.grupoaludra.com/uploads/fondo_mas_blanco_1781990725805.jpg',
+    'FER-JUL-TUB-017': 'https://catalogo.grupoaludra.com/uploads/imagen_tuberia_elec_1781991533291.png',
+    'FER-JUL-TUB-018': 'https://catalogo.grupoaludra.com/uploads/imagen_tuberia_elec_1781991645479.png',
+    'LUC-ALU-JUL-PVC-001': 'https://catalogo.grupoaludra.com/uploads/canilla_julio_fondo_blanco_1783983737840.png',
+    'LUC-FER-JUL-PVC-001': 'https://catalogo.grupoaludra.com/uploads/canilla_julio_fondo_blanco_1783983812774.png',
+    'FER-JUL-CAN-021': 'https://catalogo.grupoaludra.com/uploads/canilla_julio_fondo_blanco_1783983737840.png',
+    'FER-JUL-CAN-022': 'https://catalogo.grupoaludra.com/uploads/canilla_julio_fondo_blanco_1783983812774.png',
+    'FER-JAM-CAN-005': 'https://catalogo.grupoaludra.com/uploads/Gemini_Generated_Image_bxs5q8bxs5q8bxs5_1784039649129.png',
+    'FER-JAM-CAN-006': 'https://catalogo.grupoaludra.com/uploads/Gemini_Generated_Image_bxs5q8bxs5q8bxs5_1784039664160.png',
+    'FER-JAM-CAN-007': 'https://catalogo.grupoaludra.com/uploads/Gemini_Generated_Image_bxs5q8bxs5q8bxs5_1784039681853.png',
+    'FER-JAM-CAN-008': 'https://catalogo.grupoaludra.com/uploads/Gemini_Generated_Image_bxs5q8bxs5q8bxs5_1784039604195.png',
+    'FER-JAM-UNI-001': 'https://catalogo.grupoaludra.com/products/FER-SOL-TAN-UNI-0486.png',
+    'FER-JAM-UNI-002': 'https://catalogo.grupoaludra.com/products/FER-SOL-TAN-UNI-0486.png',
+    'FER-JAM-UNI-003': 'https://catalogo.grupoaludra.com/products/FER-SOL-TAN-UNI-0471.png',
+    'FER-JAM-UNI-004': 'https://catalogo.grupoaludra.com/products/FER-SOL-TAN-UNI-0480.png',
+    'FER-JAM-CON-009': 'https://catalogo.grupoaludra.com/products/FER-JAM-CON-NEGRA.png',
+    'FER-JAM-CON-010': 'https://catalogo.grupoaludra.com/products/FER-JAM-CON-NEGRA.png',
+    'FER-JAM-CON-011': 'https://catalogo.grupoaludra.com/products/FER-SOL-FER-ACC-0498.png',
+    'FER-JAM-CON-012': 'https://catalogo.grupoaludra.com/products/FER-SOL-FER-FLA-0501.png',
+    'LUC-FER-JUL-EST-001': 'https://catalogo.grupoaludra.com/uploads/4_cajas_fondo_blanco_1781991968558.png',
+    'ALK-FER-MAR-RED-001': 'https://catalogo.grupoaludra.com/uploads/4_cajas_fondo_blanco_1783603440637.png',
+    'LUC-FER-MAR-AZU-002': 'https://catalogo.grupoaludra.com/uploads/caja_azul_1784041588428.png',
+    'LUC-FER-MAR-AZU-004': 'https://catalogo.grupoaludra.com/uploads/caja_azul_1783984660885.png',
+    'LUC-FER-MAR-AZU-005': 'https://catalogo.grupoaludra.com/uploads/caja_azul_1783984706457.png',
+    'LUC-ALU-MAR-NEG-002': 'https://catalogo.grupoaludra.com/uploads/caja_mediana_1784041532428.png',
+    'LUC-ALU-MAR-NEG-001': 'https://catalogo.grupoaludra.com/uploads/caja_mediana_1784041554849.png',
+    'LUC-FER-MAR-ROJ-004': 'https://catalogo.grupoaludra.com/uploads/caja_roja_1784041635558.png',
+    'LUC-FER-MAR-ROJ-011': 'https://catalogo.grupoaludra.com/uploads/caja_roja_1784041635558.png',
+    'LUC-FER-MAR-GRI-010': 'https://catalogo.grupoaludra.com/uploads/4_cajas_fondo_blanco_1784041654338.png',
+    'LUC-FER-MAR-AMA-012': 'https://catalogo.grupoaludra.com/uploads/4_cajas_fondo_blanco_1784041689848.png',
+    'FER-JUL-CAJ-026': 'https://catalogo.grupoaludra.com/uploads/4_cajas_fondo_blanco_1781991968558.png',
+    'FER-MAR-CAJ-024': 'https://catalogo.grupoaludra.com/uploads/caja_azul_1783984706457.png',
+    'FER-JUL-CUR-019': 'https://catalogo.grupoaludra.com/uploads/curva_electrica_1784043663072.jpg',
+    'FER-JUL-CUR-020': 'https://catalogo.grupoaludra.com/uploads/curva_electrica_1784043677736.jpg',
+    'LUC-DEM-ERN-28P-001': 'https://catalogo.grupoaludra.com/uploads/Gemini_Generated_Image_dme9zxdme9zxdme9_1785290683187.png',
+    'LUC-DEM-ERN-GOM-002': 'https://catalogo.grupoaludra.com/uploads/Gemini_Generated_Image_bntxirbntxirbntx_1785291024279.png',
+    'LUC-DEM-ERN-SBR-003': 'https://catalogo.grupoaludra.com/uploads/Gemini_Generated_Image_bc724dbc724dbc72_1785291162123.png',
+    'ALU-6370': 'https://catalogo.grupoaludra.com/uploads/foto_envase_labial_catalogo_1785291425502.jpg',
+    'ALU-1899': 'https://catalogo.grupoaludra.com/uploads/foto_envase_labial_catalogo_1785291425502.jpg',
+    'LUC-CAR-PRO-CON-001': 'https://catalogo.grupoaludra.com/uploads/Gemini_Generated_Image_m14pazm14pazm14p_1785291792642.png',
+    'LUC-CAR-PRO-BAN-002': 'https://catalogo.grupoaludra.com/uploads/Gemini_Generated_Image_79rb2q79rb2q79rb_1785291829766.png',
+    'LUC-CAR-PRO-JUG-003': 'https://catalogo.grupoaludra.com/uploads/Gemini_Generated_Image_m14pazm14pazm14p_1785291842006.png',
+    'LUC-CER-PRO-AIS-001': 'https://catalogo.grupoaludra.com/uploads/aislador_de_paso_1785291963088.png',
+    'LUC-CER-SER-AIS-002': 'https://catalogo.grupoaludra.com/uploads/aislador_puntilla_1785291981521.png',
+    'LUC-CER-SER-AIS-003': 'https://catalogo.grupoaludra.com/uploads/aislador_ovalado_1785291992524.png',
+    'LUC-TAP-JAM-AMA-001': 'https://i.postimg.cc/Znvn4G9M/tapas-28mm-ver2.png'
+  };
+
+  const resolveFinkProductPhoto = (p: any): string => {
+    const raw = String(p.url_catalogo || p.image || '').trim();
+    if (raw && raw !== 'https://catalogo.grupoaludra.com' && raw !== 'https://catalogo.grupoaludra.com/') return raw;
+    const sku = (p.sku || '').toUpperCase().trim();
+    if (sku && FINK_SKU_PHOTOS[sku]) return FINK_SKU_PHOTOS[sku];
+    const n = (p.name || '').toLowerCase();
+    if (n.includes('canilla')) return 'https://catalogo.grupoaludra.com/uploads/Gemini_Generated_Image_bxs5q8bxs5q8bxs5_1784039604195.png';
+    if (n.includes('tubo electrico') || n.includes('tubo eléctrico')) return 'https://catalogo.grupoaludra.com/uploads/imagen_tuberia_elec_1781991533291.png';
+    if (n.includes('tubo') || n.includes('tuberia')) return 'https://catalogo.grupoaludra.com/uploads/fondo_mas_blanco_1781990455657.jpg';
+    if (n.includes('curva')) return 'https://catalogo.grupoaludra.com/uploads/curva_electrica_1784043663072.jpg';
+    if (n.includes('caja') && n.includes('apilable')) return 'https://catalogo.grupoaludra.com/uploads/4_cajas_fondo_blanco_1781991968558.png';
+    if (n.includes('cono vial')) return 'https://catalogo.grupoaludra.com/uploads/Gemini_Generated_Image_dme9zxdme9zxdme9_1785290683187.png';
+    if (n.includes('tope')) return 'https://catalogo.grupoaludra.com/uploads/Gemini_Generated_Image_bc724dbc724dbc72_1785291162123.png';
+    if (n.includes('aislador')) return 'https://catalogo.grupoaludra.com/uploads/aislador_de_paso_1785291963088.png';
+    if (n.includes('caja de carton') || n.includes('troquel') || n.includes('separador')) return 'https://catalogo.grupoaludra.com/uploads/Gemini_Generated_Image_m14pazm14pazm14p_1785291792642.png';
+    if (n.includes('labial')) return 'https://catalogo.grupoaludra.com/uploads/foto_envase_labial_catalogo_1785291425502.jpg';
+    if (n.includes('bobina')) return 'https://i.postimg.cc/Y9Kx7zRB/bobina_02.jpg';
+    if (n.includes('tapa')) return 'https://i.postimg.cc/Znvn4G9M/tapas-28mm-ver2.png';
+    return '';
+  };
+
+  // Filtrar productos por origen (Propios vs PDF), división y búsqueda localmente
   const filteredProducts = products.filter(p => {
-    if (selectedDivision && p.division !== selectedDivision) return false;
+    if (selectedDivision === '__ORIGINALS__') {
+      if (!isOwnProduct(p)) return false;
+    } else if (selectedDivision) {
+      if (p.division !== selectedDivision) return false;
+    } else {
+      if (catalogOriginFilter === 'originals' && !isOwnProduct(p)) return false;
+      if (catalogOriginFilter === 'pdf' && !isPdfProduct(p)) return false;
+    }
     if (search) {
       const q = search.trim().toLowerCase();
       const sCode = (p.sku ? sCodes[p.sku] : '')?.toLowerCase();
@@ -688,6 +783,124 @@ export default function InventoryPage() {
     }
     return true;
   });
+
+  const ownProductsCount = products.filter(isOwnProduct).length;
+  const pdfProductsCount = products.filter(isPdfProduct).length;
+  const manuallySelectedProducts = products.filter(p => selectedCatalogIds[p.id]);
+  const productsForPhotoCatalog = manuallySelectedProducts.length > 0 ? manuallySelectedProducts : filteredProducts;
+
+  const handlePrintFinkPhotoCatalog = () => {
+    if (productsForPhotoCatalog.length === 0) {
+      toast.error('No hay productos seleccionados para generar el catálogo PDF con fotos.');
+      return;
+    }
+    const nowStr = new Date().toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric' });
+    const rateBs = exchangeRate?.usdToBs || 0;
+    const title = manuallySelectedProducts.length > 0
+      ? `CATÁLOGO DE PRODUCTOS SELECCIONADOS (${manuallySelectedProducts.length} CÓDIGOS)`
+      : catalogOriginFilter === 'originals'
+        ? 'CATÁLOGO OFICIAL DE PRODUCTOS PROPIOS'
+        : 'CATÁLOGO GENERAL DE PRODUCTOS';
+
+    const cardsHtml = productsForPhotoCatalog.map(p => {
+      const code = p.sku || 'PROPIO';
+      const div = p.division || 'General';
+      const img = resolveFinkProductPhoto(p);
+      const priceUsd = Number(p.unitPrice || 0);
+      const priceBs = rateBs > 0 ? priceUsd * rateBs : 0;
+      const imgTag = img
+        ? `<img src="${img}" alt="${p.name.replace(/"/g, '&quot;')}" class="p-img" onerror="this.style.display='none';this.nextElementSibling.style.display='flex';" /><div class="p-ph" style="display:none;">📦<span>${code}</span></div>`
+        : `<div class="p-ph">📦<span>${code}</span></div>`;
+
+      return `
+        <div class="card">
+          <div class="top"><span class="sku">${code}</span><span class="div">${div}</span></div>
+          <div class="img-box">${imgTag}</div>
+          <div class="body">
+            <h3>${p.name}</h3>
+            ${p.medidas ? `<div class="meta"><strong>Medidas:</strong> ${p.medidas}</div>` : ''}
+            ${p.description ? `<p class="desc">${p.description}</p>` : ''}
+            <div class="pack">📦 Empaque: <strong>${p.empaqueCantidad || 1} ${p.unit || 'UND'}</strong></div>
+            <div class="prices">
+              <div class="p-col usd"><span>Precio USD</span><strong>$${priceUsd.toFixed(2)}</strong></div>
+              ${priceBs > 0 ? `<div class="p-col bs"><span>Ref. Bs. (BCV)</span><strong>Bs. ${priceBs.toFixed(2)}</strong></div>` : ''}
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+    const win = window.open('', '_blank');
+    if (!win) {
+      toast.error('Por favor habilita las ventanas emergentes para ver el Catálogo PDF.');
+      return;
+    }
+    win.document.write(`<!DOCTYPE html><html lang="es"><head><meta charset="UTF-8"/><title>${title}</title>
+      <style>
+        @page { size: portrait; margin: 10mm; }
+        * { box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Roboto, Arial, sans-serif; margin: 0; padding: 16px; background: #f8fafc; color: #0f172a; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+        .bar { display: flex; justify-content: space-between; align-items: center; background: #0f172a; color: #fff; padding: 12px 18px; border-radius: 10px; margin-bottom: 16px; }
+        .bar button { border: none; padding: 8px 14px; border-radius: 8px; font-weight: 700; cursor: pointer; background: #10b981; color: #fff; margin-left: 8px; }
+        .hdr { display: flex; justify-content: space-between; align-items: center; background: linear-gradient(135deg, #0f172a, #1e293b); color: #fff; padding: 18px 24px; border-radius: 14px; margin-bottom: 18px; border-bottom: 4px solid #10b981; }
+        .hdr-l { display: flex; align-items: center; gap: 16px; }
+        .hdr-l img { width: 72px; height: 72px; object-fit: contain; background: #fff; border-radius: 12px; padding: 6px; }
+        .hdr-l h1 { margin: 0; font-size: 20px; font-weight: 800; }
+        .hdr-l h2 { margin: 3px 0 0 0; font-size: 13px; color: #34d399; text-transform: uppercase; }
+        .hdr-l p { margin: 4px 0 0 0; font-size: 11px; color: #cbd5e1; }
+        .hdr-r { text-align: right; font-size: 11px; color: #e2e8f0; line-height: 1.5; }
+        .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
+        .card { background: #fff; border: 1px solid #cbd5e1; border-radius: 12px; overflow: hidden; display: flex; flex-direction: column; page-break-inside: avoid; break-inside: avoid; }
+        .top { display: flex; justify-content: space-between; padding: 7px 10px; background: #f8fafc; border-bottom: 1px solid #f1f5f9; }
+        .sku { font-family: monospace; font-size: 10px; font-weight: 800; color: #1e40af; background: #dbeafe; padding: 2px 7px; border-radius: 5px; }
+        .div { font-size: 9px; font-weight: 700; color: #065f46; background: #d1fae5; padding: 2px 7px; border-radius: 999px; max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .img-box { height: 145px; display: flex; align-items: center; justify-content: center; padding: 8px; border-bottom: 1px solid #f1f5f9; background: #fff; }
+        .p-img { max-width: 100%; max-height: 130px; object-fit: contain; }
+        .p-ph { width: 100%; height: 100%; background: #f8fafc; border: 1px dashed #cbd5e1; border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-size: 24px; color: #64748b; }
+        .p-ph span { font-size: 10px; font-family: monospace; font-weight: 700; margin-top: 4px; }
+        .body { padding: 10px 12px 12px 12px; display: flex; flex-direction: column; flex: 1; }
+        .body h3 { margin: 0 0 4px 0; font-size: 12.5px; font-weight: 800; min-height: 31px; }
+        .meta { font-size: 10px; color: #334155; margin-bottom: 4px; }
+        .desc { margin: 0 0 6px 0; font-size: 10px; color: #475569; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+        .pack { margin-top: auto; font-size: 10px; background: #f1f5f9; padding: 4px 8px; border-radius: 6px; margin-bottom: 8px; }
+        .prices { display: flex; gap: 6px; }
+        .p-col { flex: 1; padding: 5px 6px; border-radius: 7px; text-align: center; }
+        .p-col.usd { background: #ecfdf5; border: 1px solid #a7f3d0; }
+        .p-col.bs { background: #eff6ff; border: 1px solid #bfdbfe; }
+        .p-col span { display: block; font-size: 8.5px; font-weight: 700; text-transform: uppercase; color: #475569; }
+        .p-col strong { display: block; font-size: 12px; color: #065f46; }
+        .p-col.bs strong { color: #1e40af; }
+        body.hide-prices .prices { display: none !important; }
+        @media print { body { background: #fff; padding: 0; } .bar { display: none !important; } }
+      </style></head><body>
+      <div class="bar">
+        <strong>📕 Catálogo PDF Imprimible con Fotos (${productsForPhotoCatalog.length} productos)</strong>
+        <div>
+          <button style="background:#3b82f6" onclick="document.body.classList.toggle('hide-prices')">💲 Mostrar / Ocultar Precios</button>
+          <button onclick="window.print()">🖨️ Imprimir / Guardar PDF</button>
+          <button style="background:#475569" onclick="window.close()">Cerrar</button>
+        </div>
+      </div>
+      <div class="hdr">
+        <div class="hdr-l">
+          <img src="https://i.postimg.cc/FHc7hSnG/logo-nvo-sin-fondo.png" alt="Logo" />
+          <div>
+            <h1>INVERSIONES LUCEM, C.A. &bull; GRUPO ALUDRA</h1>
+            <h2>${title}</h2>
+            <p>Soluciones de organización, almacenamiento, ferretería y empaques industriales</p>
+          </div>
+        </div>
+        <div class="hdr-r">
+          <div><strong>RIF:</strong> J-40500250-6</div>
+          <div><strong>Fecha:</strong> ${nowStr}</div>
+          <div><strong>Productos:</strong> ${productsForPhotoCatalog.length} códigos</div>
+          <div><strong>Contacto:</strong> +58 412-2711859 | catalogo.grupoaludra.com</div>
+        </div>
+      </div>
+      <div class="grid">${cardsHtml}</div>
+    </body></html>`);
+    win.document.close();
+  };
 
   // Calcular métricas agregadas del inventario actual
   let totalCostVal = 0;
@@ -756,13 +969,106 @@ export default function InventoryPage() {
           <select 
             className="w-full bg-slate-50 border border-slate-200 rounded-xl py-2 px-3 focus:ring-2 focus:ring-blue-500 focus:bg-white outline-none text-xs font-semibold text-slate-700 transition-all"
             value={selectedDivision}
-            onChange={(e) => setSelectedDivision(e.target.value)}
+            onChange={(e) => {
+              const val = e.target.value;
+              setSelectedDivision(val);
+              if (val === '__ORIGINALS__') {
+                setCatalogOriginFilter('originals');
+              } else if (val === 'Catálogo Ampliado') {
+                setCatalogOriginFilter('pdf');
+              } else if (val === '') {
+                setCatalogOriginFilter('all');
+              }
+            }}
           >
             <option value="">Todos los Grupos (Divisiones)</option>
-            {divisionsList.map(div => (
+            <option value="__ORIGINALS__">⭐ Mis Productos Originales</option>
+            {divisionsList.filter(d => d !== 'Catálogo Ampliado').map(div => (
               <option key={div} value={div}>{div}</option>
             ))}
+            {divisionsList.includes('Catálogo Ampliado') && (
+              <option value="Catálogo Ampliado">Catálogo Ampliado</option>
+            )}
           </select>
+        </div>
+      </div>
+
+      {/* 2.5 Barra de Selección de Códigos Propios y Emisión de Catálogo PDF con Fotos */}
+      <div className="bg-slate-900 text-white p-4 rounded-2xl shadow-md border border-slate-700 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-xs font-bold uppercase tracking-wider text-emerald-400">Origen de Códigos:</span>
+            <button
+              type="button"
+              onClick={() => setCatalogOriginFilter('originals')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                catalogOriginFilter === 'originals' ? 'bg-blue-600 text-white shadow' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+              }`}
+            >
+              ⭐ Mis Códigos Propios ({ownProductsCount})
+            </button>
+            <button
+              type="button"
+              onClick={() => setCatalogOriginFilter('all')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                catalogOriginFilter === 'all' ? 'bg-blue-600 text-white shadow' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+              }`}
+            >
+              🌐 Todos ({products.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setCatalogOriginFilter('pdf')}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer ${
+                catalogOriginFilter === 'pdf' ? 'bg-blue-600 text-white shadow' : 'bg-slate-800 text-slate-300 hover:bg-slate-700'
+              }`}
+            >
+              📄 Catálogo PDF ({pdfProductsCount})
+            </button>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                const next: Record<string, boolean> = {};
+                products.forEach(p => { if (isOwnProduct(p)) next[p.id] = true; });
+                setCatalogOriginFilter('originals');
+                setSelectedCatalogIds(next);
+              }}
+              className="px-2.5 py-1.5 rounded-lg bg-blue-950/90 border border-blue-500/40 text-blue-300 hover:bg-blue-900 text-xs font-semibold cursor-pointer"
+            >
+              ⭐ Seleccionar Todos Mis Propios
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const next = { ...selectedCatalogIds };
+                filteredProducts.forEach(p => { next[p.id] = true; });
+                setSelectedCatalogIds(next);
+              }}
+              className="px-2.5 py-1.5 rounded-lg bg-emerald-950/90 border border-emerald-500/40 text-emerald-300 hover:bg-emerald-900 text-xs font-semibold cursor-pointer"
+            >
+              ☑️ Seleccionar Filtrados ({filteredProducts.length})
+            </button>
+            {manuallySelectedProducts.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setSelectedCatalogIds({})}
+                className="px-2.5 py-1.5 rounded-lg bg-rose-950/90 border border-rose-500/40 text-rose-300 hover:bg-rose-900 text-xs font-semibold cursor-pointer"
+              >
+                ☐ Limpiar ({manuallySelectedProducts.length})
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={handlePrintFinkPhotoCatalog}
+              className="px-4 py-2 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-extrabold text-xs shadow-lg cursor-pointer flex items-center gap-1.5"
+              title="Emitir Catálogo PDF Imprimible con Encabezado Corporativo y Fotos de los Productos"
+            >
+              📕 Emitir Catálogo PDF con Fotos ({productsForPhotoCatalog.length})
+            </button>
+          </div>
         </div>
       </div>
 
@@ -1012,6 +1318,13 @@ export default function InventoryPage() {
                   <tr key={product.id} className="hover:bg-slate-50 transition-colors group">
                     <td className="p-4">
                       <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={!!selectedCatalogIds[product.id]}
+                          onChange={(e) => setSelectedCatalogIds(prev => ({ ...prev, [product.id]: e.target.checked }))}
+                          title="Seleccionar para Catálogo PDF con Fotos"
+                          className="w-4 h-4 accent-blue-600 rounded cursor-pointer shrink-0"
+                        />
                         <span className="font-medium text-slate-800">{product.name}</span>
                         {product.division && (
                           <span className="px-1.5 py-0.5 text-[10px] font-semibold bg-slate-100 text-slate-600 rounded">
