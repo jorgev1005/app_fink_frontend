@@ -49,6 +49,7 @@ export default function ProductAutocomplete({
 
   const [remoteProducts, setRemoteProducts] = useState<ProductItem[]>([]);
   const [searchingRemote, setSearchingRemote] = useState(false);
+  const [selectedRemoteProduct, setSelectedRemoteProduct] = useState<ProductItem | null>(null);
 
   // Búsqueda remota y cross-project cuando el usuario escribe al menos 2 letras
   useEffect(() => {
@@ -76,11 +77,42 @@ export default function ProductAutocomplete({
     return () => clearTimeout(timer);
   }, [search, isOpen, products]);
 
-  // Match selected product either from prop value or by customName
+  // Si value proviene de un producto remoto o externo que no está en la lista local del proyecto,
+  // lo sincronizamos y obtenemos para que siempre se muestre seleccionado con su SKU y badge
+  useEffect(() => {
+    if (!value || value === 'CUSTOM') {
+      setSelectedRemoteProduct(null);
+      return;
+    }
+    const existsLocally = products.some(p => p.id === value);
+    if (!existsLocally && (!selectedRemoteProduct || selectedRemoteProduct.id !== value)) {
+      const inRemote = remoteProducts.find(p => p.id === value);
+      if (inRemote) {
+        setSelectedRemoteProduct(inRemote);
+      } else {
+        api.products.getById(value)
+          .then(res => {
+            if (res.data?.data) {
+              setSelectedRemoteProduct(res.data.data);
+            }
+          })
+          .catch(() => {});
+      }
+    }
+  }, [value, products, remoteProducts, selectedRemoteProduct]);
+
+  // Match selected product either from prop value or from remote products / cache
   const selectedProduct = useMemo(() => {
     if (!value || value === 'CUSTOM') return null;
-    return products.find(p => p.id === value) || null;
-  }, [products, value]);
+    const local = products.find(p => p.id === value);
+    if (local) return local;
+    if (selectedRemoteProduct && selectedRemoteProduct.id === value) {
+      return selectedRemoteProduct;
+    }
+    const remote = remoteProducts.find(p => p.id === value);
+    if (remote) return remote;
+    return null;
+  }, [products, value, selectedRemoteProduct, remoteProducts]);
 
   // Sync custom mode when value changes
   useEffect(() => {
@@ -116,6 +148,7 @@ export default function ProductAutocomplete({
   }, [products, search]);
 
   const handleSelectProduct = (product: ProductItem) => {
+    setSelectedRemoteProduct(product);
     setIsCustomMode(false);
     setSearch('');
     setIsOpen(false);
@@ -124,6 +157,7 @@ export default function ProductAutocomplete({
   };
 
   const handleSelectCustom = () => {
+    setSelectedRemoteProduct(null);
     setIsCustomMode(true);
     setIsOpen(false);
     setHoveredProduct(null);
@@ -134,6 +168,7 @@ export default function ProductAutocomplete({
   };
 
   const handleClear = () => {
+    setSelectedRemoteProduct(null);
     setIsCustomMode(false);
     setSearch('');
     onSelect(null);
@@ -154,6 +189,11 @@ export default function ProductAutocomplete({
         <div className="flex flex-wrap sm:flex-nowrap items-start justify-between gap-2">
           <div className="min-w-[140px] flex-1 space-y-1">
             <div className="flex items-center gap-1.5 flex-wrap">
+              {selectedProduct.project?.name && (
+                <span className="bg-indigo-600 text-white text-[9px] font-bold px-1.5 py-0.5 rounded shadow-xs shrink-0">
+                  {selectedProduct.project.name}
+                </span>
+              )}
               {selectedProduct.sku && (
                 <span className="bg-blue-600 text-white font-mono font-bold text-[10px] px-1.5 py-0.5 rounded shadow-xs shrink-0">
                   {selectedProduct.sku}

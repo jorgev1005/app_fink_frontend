@@ -523,6 +523,7 @@ function NewInvoiceContent() {
                   const prod = products.find(p => p.id === values.productId);
                   if (prod) {
                       if (values.name === undefined) updated.name = prod.name;
+                      if (values.sku === undefined) updated.sku = prod.sku;
                       const uPrice = Number(prod.unitPrice || 0);
                       if (values.price === undefined && values.basePrice === undefined) {
                         updated.basePrice = uPrice;
@@ -609,6 +610,7 @@ function NewInvoiceContent() {
           paymentMethod: isPaid ? paymentMethod : undefined,
           lines: useItemsMode ? lines.map(line => ({
               productId: line.productId || undefined,
+              sku: line.sku || undefined,
               description: line.name || '',
               quantity: Number(line.quantity || 1),
               basePrice: line.basePrice !== undefined ? Number(line.basePrice) : Number(line.price || 0),
@@ -1183,8 +1185,10 @@ function NewInvoiceContent() {
                                                     customName={line.name}
                                                     onSelect={(prod) => {
                                                         if (prod) {
+                                                            setProducts(prev => prev.some(p => p.id === prod.id) ? prev : [prod, ...prev]);
                                                             updateLineMultiple(line.id, {
                                                                 productId: prod.id,
+                                                                sku: prod.sku,
                                                                 name: prod.name,
                                                                 basePrice: prod.unitPrice || 0,
                                                                 adjustmentType: 'PERCENT',
@@ -1193,7 +1197,8 @@ function NewInvoiceContent() {
                                                             });
                                                         } else {
                                                             updateLineMultiple(line.id, {
-                                                                productId: 'CUSTOM'
+                                                                productId: 'CUSTOM',
+                                                                sku: ''
                                                             });
                                                         }
                                                     }}
@@ -1420,8 +1425,10 @@ function NewInvoiceContent() {
                                                     customName={line.name}
                                                     onSelect={(prod) => {
                                                         if (prod) {
+                                                            setProducts(prev => prev.some(p => p.id === prod.id) ? prev : [prod, ...prev]);
                                                             updateLineMultiple(line.id, {
                                                                 productId: prod.id,
+                                                                sku: prod.sku,
                                                                 name: prod.name,
                                                                 basePrice: prod.unitPrice || 0,
                                                                 adjustmentType: 'PERCENT',
@@ -1430,7 +1437,8 @@ function NewInvoiceContent() {
                                                             });
                                                         } else {
                                                             updateLineMultiple(line.id, {
-                                                                productId: 'CUSTOM'
+                                                                productId: 'CUSTOM',
+                                                                sku: ''
                                                             });
                                                         }
                                                     }}
