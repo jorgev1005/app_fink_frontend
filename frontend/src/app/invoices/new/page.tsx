@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { ArrowLeft, Save, Building, Calendar, FileText, DollarSign, AlertCircle, User, CreditCard, Wallet, Percent, Plus, Trash2, Box, Package, Search, X, Check, Clock, ChevronRight, ChevronDown, Sparkles, ExternalLink, RefreshCw, SlidersHorizontal, MessageSquare } from 'lucide-react';
 import { toast } from 'sonner';
 import ProductAutocomplete from '@/components/ProductAutocomplete';
+import { resolveLineCodes } from '@/lib/productCodes';
 
 function NewInvoiceContent() {
   const router = useRouter();
@@ -608,19 +609,23 @@ function NewInvoiceContent() {
           isPaid,
           paymentAccountId: isPaid ? paymentAccountId : undefined,
           paymentMethod: isPaid ? paymentMethod : undefined,
-          lines: useItemsMode ? lines.map(line => ({
-              productId: line.productId || undefined,
-              sku: line.sku || undefined,
-              description: line.name || '',
-              quantity: Number(line.quantity || 1),
-              basePrice: line.basePrice !== undefined ? Number(line.basePrice) : Number(line.price || 0),
-              adjustmentType: line.adjustmentType === 'AMOUNT' ? 'AMOUNT' : 'PERCENT',
-              adjustmentValue: Number(line.adjustmentValue || 0),
-              unitPrice: Number(line.price || 0),
-              price: Number(line.price || 0),
-              total: Number(line.total || 0),
-              notes: line.notes || ''
-          })) : undefined, // Send lines mapped to backend structure if in items mode
+          lines: useItemsMode ? lines.map(line => {
+              const codes = resolveLineCodes(line, products);
+              return {
+                  productId: line.productId || undefined,
+                  sku: line.sku || codes.sku || undefined,
+                  supplierCode: line.supplierCode || codes.supplierCode || undefined,
+                  description: line.name || '',
+                  quantity: Number(line.quantity || 1),
+                  basePrice: line.basePrice !== undefined ? Number(line.basePrice) : Number(line.price || 0),
+                  adjustmentType: line.adjustmentType === 'AMOUNT' ? 'AMOUNT' : 'PERCENT',
+                  adjustmentValue: Number(line.adjustmentValue || 0),
+                  unitPrice: Number(line.price || 0),
+                  price: Number(line.price || 0),
+                  total: Number(line.total || 0),
+                  notes: line.notes || ''
+              };
+          }) : undefined, // Send lines mapped to backend structure if in items mode
           isDeliveryNote: type === 'INVOICE' ? isDeliveryNote : false,
           isPurchaseOrder: type === 'BILL' ? isPurchaseOrder : false,
           purchaseOrder: type === 'INVOICE' ? (purchaseOrder || undefined) : undefined,
@@ -1186,9 +1191,11 @@ function NewInvoiceContent() {
                                                     onSelect={(prod) => {
                                                         if (prod) {
                                                             setProducts(prev => prev.some(p => p.id === prod.id) ? prev : [prod, ...prev]);
+                                                            const codes = resolveLineCodes({ ...prod, productId: prod.id }, products);
                                                             updateLineMultiple(line.id, {
                                                                 productId: prod.id,
-                                                                sku: prod.sku,
+                                                                sku: prod.sku || codes.sku,
+                                                                supplierCode: (prod as any).supplierCode || codes.supplierCode,
                                                                 name: prod.name,
                                                                 basePrice: prod.unitPrice || 0,
                                                                 adjustmentType: 'PERCENT',
@@ -1198,7 +1205,8 @@ function NewInvoiceContent() {
                                                         } else {
                                                             updateLineMultiple(line.id, {
                                                                 productId: 'CUSTOM',
-                                                                sku: ''
+                                                                sku: '',
+                                                                supplierCode: ''
                                                             });
                                                         }
                                                     }}
@@ -1210,6 +1218,27 @@ function NewInvoiceContent() {
                                                     }}
                                                     placeholder="Buscar por nombre, SKU, código..."
                                                 />
+                                                {/* Minimalist Supplier Code & SKU badge display */}
+                                                {(() => {
+                                                    const codes = resolveLineCodes(line, products);
+                                                    if (!codes.sku && !codes.supplierCode) return null;
+                                                    return (
+                                                        <div className="flex flex-wrap items-center gap-1.5 text-[10.5px] font-mono text-slate-500 pt-0.5 select-none">
+                                                            {codes.supplierCode && (
+                                                                <span className="inline-flex items-center gap-1 bg-amber-500/10 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded border border-amber-300/40">
+                                                                    <span className="font-semibold text-slate-400 text-[9.5px]">Cód. Prov:</span>
+                                                                    <b className="font-bold">{codes.supplierCode}</b>
+                                                                </span>
+                                                            )}
+                                                            {codes.sku && (
+                                                                <span className="inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">
+                                                                    <span className="text-slate-400 text-[9.5px]">SKU:</span>
+                                                                    <span>{codes.sku}</span>
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })()}
                                                 {(line.notes || activeNoteLines[line.id]) ? (
                                                     <div className="flex items-center gap-1.5 mt-1">
                                                         <input 
@@ -1426,9 +1455,11 @@ function NewInvoiceContent() {
                                                     onSelect={(prod) => {
                                                         if (prod) {
                                                             setProducts(prev => prev.some(p => p.id === prod.id) ? prev : [prod, ...prev]);
+                                                            const codes = resolveLineCodes({ ...prod, productId: prod.id }, products);
                                                             updateLineMultiple(line.id, {
                                                                 productId: prod.id,
-                                                                sku: prod.sku,
+                                                                sku: prod.sku || codes.sku,
+                                                                supplierCode: (prod as any).supplierCode || codes.supplierCode,
                                                                 name: prod.name,
                                                                 basePrice: prod.unitPrice || 0,
                                                                 adjustmentType: 'PERCENT',
@@ -1438,7 +1469,8 @@ function NewInvoiceContent() {
                                                         } else {
                                                             updateLineMultiple(line.id, {
                                                                 productId: 'CUSTOM',
-                                                                sku: ''
+                                                                sku: '',
+                                                                supplierCode: ''
                                                             });
                                                         }
                                                     }}
@@ -1450,6 +1482,27 @@ function NewInvoiceContent() {
                                                     }}
                                                     placeholder="Buscar por nombre o SKU..."
                                                 />
+                                                {/* Minimalist Supplier Code & SKU badge display */}
+                                                {(() => {
+                                                    const codes = resolveLineCodes(line, products);
+                                                    if (!codes.sku && !codes.supplierCode) return null;
+                                                    return (
+                                                        <div className="flex flex-wrap items-center gap-1.5 text-[10px] font-mono text-slate-500 pt-1 select-none">
+                                                            {codes.supplierCode && (
+                                                                <span className="inline-flex items-center gap-1 bg-amber-500/10 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded border border-amber-300/40">
+                                                                    <span className="font-semibold text-slate-400 text-[9px]">Cód. Prov:</span>
+                                                                    <b className="font-bold">{codes.supplierCode}</b>
+                                                                </span>
+                                                            )}
+                                                            {codes.sku && (
+                                                                <span className="inline-flex items-center gap-1 bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">
+                                                                    <span className="text-slate-400 text-[9px]">SKU:</span>
+                                                                    <span>{codes.sku}</span>
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    );
+                                                })()}
                                                 <input 
                                                     className="w-full mt-1.5 p-1 text-[11px] border-b border-dashed border-slate-200 focus:border-blue-300 outline-none bg-transparent text-gray-500 placeholder:text-slate-300"
                                                     placeholder="Comentario opcional..."

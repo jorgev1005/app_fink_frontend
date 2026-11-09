@@ -327,6 +327,15 @@ export default function ProductAutocomplete({
                         {p.sku}
                       </span>
                     )}
+                    {(() => {
+                      const suppCode = (p as any).supplierCode || (p.sku?.startsWith('FCS-VIP-') ? p.sku.slice(8) : '');
+                      if (!suppCode) return null;
+                      return (
+                        <span className="bg-amber-50 group-hover:bg-amber-500 group-hover:text-white text-amber-700 font-mono text-[9px] font-bold px-1.5 py-0.5 rounded border border-amber-200/60 transition-colors shrink-0">
+                          Prov: {suppCode}
+                        </span>
+                      );
+                    })()}
                     {p.division && (
                       <span className="text-[10px] text-slate-400 truncate">
                         {p.division}
@@ -381,6 +390,15 @@ export default function ProductAutocomplete({
                             {p.sku}
                           </span>
                         )}
+                        {(() => {
+                          const suppCode = (p as any).supplierCode || (p.sku?.startsWith('FCS-VIP-') ? p.sku.slice(8) : '');
+                          if (!suppCode) return null;
+                          return (
+                            <span className="bg-amber-50 group-hover:bg-amber-500 group-hover:text-white text-amber-700 font-mono text-[9px] font-bold px-1.5 py-0.5 rounded border border-amber-200/60 transition-colors shrink-0">
+                              Prov: {suppCode}
+                            </span>
+                          );
+                        })()}
                         {p.division && (
                           <span className="text-[10px] text-slate-400 truncate">
                             {p.division}
@@ -445,6 +463,9 @@ export default function ProductAutocomplete({
               <Info size={14} className="text-blue-400 shrink-0" />
               <div className="min-w-0 flex-1">
                 <span className="font-bold text-blue-300 mr-1.5">[{hoveredProduct.sku || 'N/A'}]</span>
+                {(hoveredProduct.sku?.startsWith('FCS-VIP-') || (hoveredProduct as any).supplierCode) && (
+                  <span className="font-bold text-amber-300 mr-1.5">[Cód: {(hoveredProduct as any).supplierCode || hoveredProduct.sku?.slice(8)}]</span>
+                )}
                 <span className="font-medium text-slate-100">{hoveredProduct.name}</span>
               </div>
             </div>

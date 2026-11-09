@@ -221,6 +221,28 @@ function InvoicesPageContent() {
             const taxId = q.customer?.taxId || q.clientTaxId || '';
             const total = Number(q.totalUSD || q.total || 0);
 
+            // Determinar o inferir projectId y projectName
+            let qProjectId = q.projectId || '';
+            let qProjectName = q.projectName || '';
+
+            if (!qProjectId && Array.isArray(q.items)) {
+                if (q.items.some((it: any) => it.sku?.startsWith('FCS-') || it.division?.includes('FullCarga'))) {
+                    qProjectId = '2fbae4d3-38ca-4fee-b587-4d9b735c48de';
+                    qProjectName = 'FullCarga_Store';
+                } else if (q.items.some((it: any) => it.sku?.startsWith('LUC-') || it.division?.toLowerCase().includes('lucem'))) {
+                    qProjectId = '0e1bcc2f-9192-4c9f-85d0-a5bf5702265e';
+                    qProjectName = 'Lucem';
+                } else if (q.items.some((it: any) => it.sku?.startsWith('FER-') || it.division?.toLowerCase().includes('ferreteria'))) {
+                    qProjectId = '14fb8b71-7bc2-4844-ae45-42b7912991ab';
+                    qProjectName = 'AludraCon';
+                }
+            }
+
+            if (!qProjectName && qProjectId) {
+                qProjectName = projects.find(p => p.id === qProjectId)?.name || 'Venta Comercial';
+            }
+            if (!qProjectName) qProjectName = 'Venta Comercial';
+
             list.push({
                 rawId: q.id || q.correlative,
                 isQuotation: true,
@@ -228,8 +250,8 @@ function InvoicesPageContent() {
                 docCategory: 'QUOTATION' as DocTabType,
                 contactName,
                 taxId,
-                projectId: '',
-                projectName: 'Venta Comercial',
+                projectId: qProjectId,
+                projectName: qProjectName,
                 issueDate: q.createdAt,
                 dueDate: null,
                 total,
@@ -254,26 +276,32 @@ function InvoicesPageContent() {
         return list.sort((a, b) => new Date(b.issueDate || b.createdAt || 0).getTime() - new Date(a.issueDate || a.createdAt || 0).getTime());
     }, [invoices, quotations, projects]);
 
+    // Documentos base filtrados por proyecto (si hay un proyecto seleccionado)
+    const docsByProject = useMemo(() => {
+        if (!projectFilter) return unifiedDocs;
+        return unifiedDocs.filter(d => d.projectId === projectFilter);
+    }, [unifiedDocs, projectFilter]);
+
     // Conteo por cada Pestaña
     const counts = useMemo(() => {
         return {
-            ALL: unifiedDocs.length,
-            DELIVERY_NOTE: unifiedDocs.filter(d => d.docCategory === 'DELIVERY_NOTE').length,
-            INVOICE: unifiedDocs.filter(d => d.docCategory === 'INVOICE').length,
-            QUOTATION: unifiedDocs.filter(d => d.docCategory === 'QUOTATION').length,
-            PURCHASE_ORDER: unifiedDocs.filter(d => d.docCategory === 'PURCHASE_ORDER').length,
-            BILL: unifiedDocs.filter(d => d.docCategory === 'BILL').length,
-            POS: unifiedDocs.filter(d => d.docCategory === 'POS').length,
-            RETURNS: unifiedDocs.filter(d => d.hasReturns).length,
+            ALL: docsByProject.length,
+            DELIVERY_NOTE: docsByProject.filter(d => d.docCategory === 'DELIVERY_NOTE').length,
+            INVOICE: docsByProject.filter(d => d.docCategory === 'INVOICE').length,
+            QUOTATION: docsByProject.filter(d => d.docCategory === 'QUOTATION').length,
+            PURCHASE_ORDER: docsByProject.filter(d => d.docCategory === 'PURCHASE_ORDER').length,
+            BILL: docsByProject.filter(d => d.docCategory === 'BILL').length,
+            POS: docsByProject.filter(d => d.docCategory === 'POS').length,
+            RETURNS: docsByProject.filter(d => d.hasReturns).length,
         };
-    }, [unifiedDocs]);
+    }, [docsByProject]);
 
     // Documentos que aplican a la pestaña activa (para calcular las tarjetas KPI de esa pestaña)
     const docsInActiveTab = useMemo(() => {
-        if (activeTab === 'ALL') return unifiedDocs;
-        if (activeTab === 'RETURNS') return unifiedDocs.filter(d => d.hasReturns);
-        return unifiedDocs.filter(d => d.docCategory === activeTab);
-    }, [unifiedDocs, activeTab]);
+        if (activeTab === 'ALL') return docsByProject;
+        if (activeTab === 'RETURNS') return docsByProject.filter(d => d.hasReturns);
+        return docsByProject.filter(d => d.docCategory === activeTab);
+    }, [docsByProject, activeTab]);
 
     // Cálculo de métricas KPI según la pestaña activa
     const tabKpis = useMemo(() => {
@@ -347,27 +375,27 @@ function InvoicesPageContent() {
         }
 
         // Pestaña General ALL
-        const totalNE = unifiedDocs.filter(d => d.docCategory === 'DELIVERY_NOTE').length;
-        const totalInv = unifiedDocs.filter(d => d.docCategory === 'INVOICE').length;
-        const totalQuot = unifiedDocs.filter(d => d.docCategory === 'QUOTATION').length;
-        const totalPO = unifiedDocs.filter(d => d.docCategory === 'PURCHASE_ORDER' || d.docCategory === 'BILL').length;
-        const totalPending = unifiedDocs.filter(d => d.status === 'POSTED' || d.status === 'OPEN' || d.status === 'PENDING').length;
+        const totalNE = docsByProject.filter(d => d.docCategory === 'DELIVERY_NOTE').length;
+        const totalInv = docsByProject.filter(d => d.docCategory === 'INVOICE').length;
+        const totalQuot = docsByProject.filter(d => d.docCategory === 'QUOTATION').length;
+        const totalPO = docsByProject.filter(d => d.docCategory === 'PURCHASE_ORDER' || d.docCategory === 'BILL').length;
+        const totalPending = docsByProject.filter(d => d.status === 'POSTED' || d.status === 'OPEN' || d.status === 'PENDING').length;
 
         return [
-            { id: 'ALL', label: 'Total Documentos', count: unifiedDocs.length, color: 'text-slate-800 bg-slate-100 border-slate-300' },
+            { id: 'ALL', label: 'Total Documentos', count: docsByProject.length, color: 'text-slate-800 bg-slate-100 border-slate-300' },
             { id: 'DELIVERY_NOTE', label: '📦 Notas de Entrega', count: totalNE, color: 'text-purple-700 bg-purple-50 border-purple-200' },
             { id: 'INVOICE', label: '📄 Facturas de Venta', count: totalInv, color: 'text-blue-700 bg-blue-50 border-blue-200' },
             { id: 'QUOTATION', label: '📋 Cotizaciones', count: totalQuot, color: 'text-sky-700 bg-sky-50 border-sky-200' },
             { id: 'PURCHASE_ORDER', label: '📥 Compras & O.C.', count: totalPO, color: 'text-orange-700 bg-orange-50 border-orange-200' },
             { id: 'PENDING', label: '⏳ Pendientes / Por Cobrar', count: totalPending, color: 'text-amber-700 bg-amber-50 border-amber-200' },
         ];
-    }, [activeTab, docsInActiveTab, unifiedDocs]);
+    }, [activeTab, docsInActiveTab, docsByProject]);
 
     // Filtrado exhaustivo según Pestaña, Filtros y KPI seleccionado
     const filteredDocs = useMemo(() => {
         return docsInActiveTab.filter(doc => {
             // Filtro de Proyecto
-            if (projectFilter && doc.projectId && doc.projectId !== projectFilter) return false;
+            if (projectFilter && doc.projectId !== projectFilter) return false;
 
             // Filtro KPI interactivo
             if (kpiFilter && kpiFilter !== 'ALL') {

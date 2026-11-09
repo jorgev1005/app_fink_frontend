@@ -1025,9 +1025,17 @@ export default function QuotationsPage() {
       });
       const data = res.data?.data;
       if (data?.whatsappText) {
-        const phone = quote.customer?.phone ? quote.customer.phone.replace(/[^0-9]/g, '') : '';
-        const url = phone
-          ? `https://wa.me/${phone}?text=${encodeURIComponent(data.whatsappText)}`
+        const rawPhone = quote.customer?.phone || '';
+        let cleanPhone = rawPhone.replace(/[^0-9]/g, '');
+        if (cleanPhone.startsWith('0') && cleanPhone.length === 11) {
+          cleanPhone = '58' + cleanPhone.slice(1);
+        } else if (!cleanPhone.startsWith('58') && (cleanPhone.length === 10 && cleanPhone.startsWith('4'))) {
+          cleanPhone = '58' + cleanPhone;
+        } else if (cleanPhone.startsWith('580') && cleanPhone.length === 13) {
+          cleanPhone = '58' + cleanPhone.slice(3);
+        }
+        const url = cleanPhone
+          ? `https://wa.me/${cleanPhone}?text=${encodeURIComponent(data.whatsappText)}`
           : `https://wa.me/?text=${encodeURIComponent(data.whatsappText)}`;
         window.open(url, '_blank');
         toast.success(`Certificación digital generada para ${quote.correlative}`);

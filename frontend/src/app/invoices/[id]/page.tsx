@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import api, { apiClient } from '@/lib/api';
+import { resolveLineCodes } from '@/lib/productCodes';
 import { Printer, ArrowLeft, Download, Edit, CreditCard, CheckCircle, FileText, Copy, Play, MessageCircle, Trash2, Undo2, AlertTriangle, Truck, Receipt, ExternalLink, Clock, RotateCcw, ShieldCheck, Wallet } from 'lucide-react';
 
 interface InvoiceItem {
@@ -784,6 +785,23 @@ export default function InvoiceDetailsPage() {
     return alloc.allocatedAmount;
   };
 
+  const formatWhatsAppPhone = (rawPhone?: string | null): string => {
+    if (!rawPhone) return '';
+    let clean = String(rawPhone).replace(/[^0-9]/g, '');
+    if (!clean) return '';
+    // Venezuelan numbers with 11 digits starting with 0 (e.g., 04243404201 -> 584243404201)
+    if (clean.startsWith('0') && clean.length === 11) {
+      clean = '58' + clean.slice(1);
+    } else if (!clean.startsWith('58') && (clean.length === 10 && clean.startsWith('4'))) {
+      // 10 digits without leading 0 (e.g., 4243404201 -> 584243404201)
+      clean = '58' + clean;
+    } else if (clean.startsWith('580') && clean.length === 13) {
+      // 580424... -> 58424...
+      clean = '58' + clean.slice(3);
+    }
+    return clean;
+  };
+
   const shareViaWhatsApp = () => {
     if (!invoice) return;
     const isDelivery = viewMode === 'DELIVERY_NOTE' || invoice.code?.toUpperCase().startsWith('NE');
@@ -900,7 +918,8 @@ export default function InvoiceDetailsPage() {
       }
     }
 
-    const phone = contact?.phone ? contact.phone.replace(/[^0-9]/g, '') : '';
+    const rawPhone = contact?.phone || (invoice as any).clientPhone || (invoice as any).customerPhone || (invoice as any).vendorPhone || '';
+    const phone = formatWhatsAppPhone(rawPhone);
     const url = phone 
       ? `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`
       : `https://wa.me/?text=${encodeURIComponent(msg)}`;
@@ -909,23 +928,60 @@ export default function InvoiceDetailsPage() {
   };
 
   const [certifyingDoc, setCertifyingDoc] = useState(false);
+  const [certifiedModal, setCertifiedModal] = useState<{
+    trackingUrl: string;
+    whatsappText: string;
+    waUrl: string;
+    phone: string;
+  } | null>(null);
 
   const handleShareCertifiedWhatsApp = async () => {
     if (!invoice) return;
+
+    // Abrir ventana en blanco síncronamente en el click para que el navegador no bloquee el popup tras el await
+    let waWindow: Window | null = null;
+    try {
+      waWindow = window.open('about:blank', '_blank');
+    } catch (_) {}
+
     try {
       setCertifyingDoc(true);
       const res = await (apiClient as any).post(`/api/certified/certify-invoice/${invoice.id}`);
       const data = res.data?.data;
       if (data?.whatsappText) {
-        const phone = contact?.phone ? contact.phone.replace(/[^0-9]/g, '') : '';
+        const rawPhone = contact?.phone || (invoice as any).clientPhone || (invoice as any).customerPhone || (invoice as any).vendorPhone || '';
+        const phone = formatWhatsAppPhone(rawPhone);
         const url = phone
           ? `https://wa.me/${phone}?text=${encodeURIComponent(data.whatsappText)}`
           : `https://wa.me/?text=${encodeURIComponent(data.whatsappText)}`;
-        window.open(url, '_blank');
+
+        // Copiar texto y enlace al portapapeles automáticamente
+        try {
+          if (navigator.clipboard) {
+            await navigator.clipboard.writeText(data.whatsappText);
+          }
+        } catch (_) {}
+
+        // Redirigir la ventana abierta a WhatsApp
+        if (waWindow && !waWindow.closed) {
+          waWindow.location.href = url;
+        } else {
+          window.open(url, '_blank');
+        }
+
+        // Mostrar modal amigable de confirmación con enlaces y botón de copia
+        setCertifiedModal({
+          trackingUrl: data.trackingUrl,
+          whatsappText: data.whatsappText,
+          waUrl: url,
+          phone: phone ? `+${phone}` : 'Selección en WhatsApp'
+        });
       } else {
+        if (waWindow && !waWindow.closed) waWindow.close();
         alert('No se pudo generar la certificación digital');
       }
     } catch (err: any) {
+      if (waWindow && !waWindow.closed) waWindow.close();
       console.error(err);
       alert(err.response?.data?.error?.message || err.message || 'Error al certificar documento');
     } finally {
@@ -1815,6 +1871,26 @@ export default function InvoiceDetailsPage() {
                                         <tr key={item.id} className="border-b border-gray-50 last:border-0">
                                             <td className={`${printLayout === 'FREE_FORM' ? 'py-1.5' : 'py-4'} text-sm text-gray-800`}>
                                                 <p className="font-medium">{item.description || item.name || 'Ítem sin nombre'}</p>
+                                                {(() => {
+                                                  const codes = resolveLineCodes(item, products);
+                                                  if (!codes.sku && !codes.supplierCode) return null;
+                                                  return (
+                                                    <div className="flex flex-wrap items-center gap-1.5 mt-0.5 text-[10px] font-mono text-slate-500">
+                                                      {codes.supplierCode && (
+                                                        <span className="inline-flex items-center gap-0.5 bg-amber-500/10 text-amber-700 dark:text-amber-300 px-1.5 py-0.5 rounded border border-amber-300/40">
+                                                          <span className="text-slate-400 text-[9px]">Cód. Prov:</span>
+                                                          <b className="font-bold">{codes.supplierCode}</b>
+                                                        </span>
+                                                      )}
+                                                      {codes.sku && (
+                                                        <span className="inline-flex items-center gap-0.5 bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded border border-slate-200">
+                                                          <span className="text-slate-400 text-[9px]">SKU:</span>
+                                                          <span>{codes.sku}</span>
+                                                        </span>
+                                                      )}
+                                                    </div>
+                                                  );
+                                                })()}
                                                  {item.adjustmentValue && Number(item.adjustmentValue) !== 0 ? (
                                                      <div className="flex items-center gap-1.5 mt-0.5">
                                                          <span className={`inline-flex items-center text-[10px] font-semibold px-1.5 py-0.5 rounded ${
@@ -3018,6 +3094,85 @@ export default function InvoiceDetailsPage() {
                </form>
             </div>
          </div>
+      )}
+
+      {/* Modal de Documento Certificado */}
+      {certifiedModal && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl border border-gray-200 space-y-4 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between border-b border-gray-100 pb-3">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center font-bold">
+                  <ShieldCheck size={20} />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-base text-gray-900">Documento Certificado con Éxito</h3>
+                  <p className="text-xs text-gray-500">Enlace con trazabilidad inmutable y acuse de recibo</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setCertifiedModal(null)}
+                className="text-gray-400 hover:text-gray-600 p-1.5 rounded-lg hover:bg-gray-100 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-3">
+              <div className="bg-blue-50 border border-blue-200 rounded-xl p-3 text-xs space-y-1">
+                <p className="font-semibold text-blue-900">Enlace de Certificación y Acuse:</p>
+                <a
+                  href={certifiedModal.trackingUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="text-blue-600 hover:underline break-all font-mono font-bold block"
+                >
+                  {certifiedModal.trackingUrl}
+                </a>
+              </div>
+
+              <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 text-xs text-gray-700 font-mono whitespace-pre-wrap max-h-36 overflow-y-auto">
+                {certifiedModal.whatsappText}
+              </div>
+            </div>
+
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5 pt-2 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={async () => {
+                  try {
+                    await navigator.clipboard.writeText(certifiedModal.whatsappText);
+                    alert('¡Texto y enlace copiados al portapapeles!');
+                  } catch (_) {}
+                }}
+                className="w-full sm:w-auto px-4 py-2 border border-gray-300 hover:bg-gray-50 text-gray-700 rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 cursor-pointer"
+              >
+                <Copy size={13} />
+                <span>Copiar Mensaje y Enlace</span>
+              </button>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <a
+                  href={certifiedModal.waUrl}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex-1 sm:flex-none px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition flex items-center justify-center gap-1.5 shadow-sm cursor-pointer"
+                >
+                  <MessageCircle size={14} />
+                  <span>Abrir en WhatsApp</span>
+                </a>
+
+                <button
+                  type="button"
+                  onClick={() => setCertifiedModal(null)}
+                  className="px-3 py-2 text-gray-500 hover:text-gray-700 text-xs font-semibold rounded-xl hover:bg-gray-100 transition cursor-pointer"
+                >
+                  Cerrar
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
