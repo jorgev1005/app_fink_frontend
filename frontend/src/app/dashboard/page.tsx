@@ -87,6 +87,8 @@ export default function DashboardPage() {
   const [projectAccounts, setProjectAccounts] = useState<Record<string, any[]>>({});
   const [projectAccountsLoading, setProjectAccountsLoading] = useState<Record<string, boolean>>({});
   const [userName, setUserName] = useState('');
+  const [userEmail, setUserEmail] = useState('');
+  const isMainOwner = userEmail === 'jorge.verenzuela@gmail.com';
   const [showTotals, setShowTotals] = useState(false);
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [showIntraTransferModal, setShowIntraTransferModal] = useState(false);
@@ -223,6 +225,16 @@ export default function DashboardPage() {
       if (userStr) {
         const user = JSON.parse(userStr);
         setUserName(`${user.firstName} ${user.lastName}`);
+        if (user.email) {
+          setUserEmail(String(user.email).trim().toLowerCase());
+        }
+      }
+      const tokenStr = localStorage.getItem('token');
+      if (tokenStr && tokenStr.split('.').length === 3) {
+        const payload = JSON.parse(atob(tokenStr.split('.')[1]));
+        if (payload?.email) {
+          setUserEmail((prev) => prev || String(payload.email).trim().toLowerCase());
+        }
       }
     } catch (e) {
       // ignore
@@ -476,14 +488,16 @@ export default function DashboardPage() {
             <p className="text-slate-500 mt-1">Resumen general de tus finanzas</p>
           </div>
           <div className="flex flex-wrap items-center gap-3">
-            <button
-              onClick={() => setShowAppsDirectoryModal(true)}
-              className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-sm hover:shadow-md transition-all duration-200 font-bold cursor-pointer"
-              title="Buscar y abrir direcciones web de catálogos, administradores y apps"
-            >
-              <Globe className="w-4 h-4 text-indigo-200" />
-              <span>Enlaces / Apps</span>
-            </button>
+            {isMainOwner && (
+              <button
+                onClick={() => setShowAppsDirectoryModal(true)}
+                className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-sm hover:shadow-md transition-all duration-200 font-bold cursor-pointer"
+                title="Buscar y abrir direcciones web de catálogos, administradores y apps"
+              >
+                <Globe className="w-4 h-4 text-indigo-200" />
+                <span>Enlaces / Apps</span>
+              </button>
+            )}
             <Link
               href="/certified"
               className="flex items-center gap-2 px-4 py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl shadow-sm hover:shadow-md transition-all duration-200 font-bold"
@@ -923,7 +937,9 @@ export default function DashboardPage() {
             <QuickAction icon={Banknote} label="Préstamos" path="/loans" color="emerald" />
             <QuickAction icon={RefreshCw} label="Reglas Periódicas" path="/recurring" color="violet" />
             <QuickAction icon={Package} label="Inventario" path="/inventory" color="amber" />
-            <QuickAction icon={Globe} label="Enlaces y Catálogos Web" action={() => setShowAppsDirectoryModal(true)} color="indigo" />
+            {isMainOwner && (
+              <QuickAction icon={Globe} label="Enlaces y Catálogos Web" action={() => setShowAppsDirectoryModal(true)} color="indigo" />
+            )}
             <QuickAction icon={ShoppingCart} label="Consulta Precios" path="/price-check" color="emerald" />
             <QuickAction icon={Tag} label="Categorías" path="/categories" color="pink" />
             <QuickAction icon={BarChart3} label="Reportes" path="/reports" color="blue" />
@@ -985,7 +1001,7 @@ export default function DashboardPage() {
         </div>
       )}
 
-      {showAppsDirectoryModal && (
+      {isMainOwner && showAppsDirectoryModal && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-slate-900/50 p-4"
           onClick={() => setShowAppsDirectoryModal(false)}
