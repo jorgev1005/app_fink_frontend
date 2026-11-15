@@ -2,7 +2,7 @@
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { useEffect, useState, useRef, useCallback } from "react";
-import { RefreshCw, Calculator, LogOut, Zap, Plus, FileText, Users, BarChart3, Wallet, ArrowRight, Info, ChevronDown, ChevronUp, Layers, Tag, FileClock, Eye, EyeOff, Package, ArrowRightLeft, HardDrive, Banknote, Settings, ShoppingCart, FileCheck, ShieldCheck } from 'lucide-react';
+import { RefreshCw, Calculator, LogOut, Zap, Plus, FileText, Users, BarChart3, Wallet, ArrowRight, Info, ChevronDown, ChevronUp, Layers, Tag, FileClock, Eye, EyeOff, Package, ArrowRightLeft, HardDrive, Banknote, Settings, ShoppingCart, FileCheck, ShieldCheck, Globe, ExternalLink, Copy, Check, Search, X } from 'lucide-react';
 
 import NotificationBell from "@/components/NotificationBell";
 import ExchangeRatesPanel from '@/components/ExchangeRatesPanel';
@@ -90,6 +90,129 @@ export default function DashboardPage() {
   const [showTotals, setShowTotals] = useState(false);
   const [showTransferModal, setShowTransferModal] = useState(false);
   const [showIntraTransferModal, setShowIntraTransferModal] = useState(false);
+  const [showAppsDirectoryModal, setShowAppsDirectoryModal] = useState(false);
+  const [appsSearchQuery, setAppsSearchQuery] = useState('');
+  const [copiedUrlKey, setCopiedUrlKey] = useState<string | null>(null);
+
+  const salesAppsLinks = [
+    {
+      id: 'cat-ferreteria',
+      title: 'Catálogo Ferretería & Industrial (Grupo Aludra)',
+      subtitle: 'Catálogo público + Cotizador Digital con fletes por ciudad (BCV y Divisas)',
+      url: 'https://catalogo.grupoaludra.com/catalog',
+      badge: 'Catálogo Público',
+      emoji: '🛠️',
+      colorBg: 'bg-blue-50/80 border-blue-200',
+      btnBg: 'bg-blue-600 hover:bg-blue-700'
+    },
+    {
+      id: 'cat-fullcarga',
+      title: 'Catálogo Tecnología FullCarga Store',
+      subtitle: 'Catálogo mayorista y detal con las 3 modalidades (Contado BCV, Divisas y 3 Cuotas)',
+      url: 'https://catalogo.grupoaludra.com/fullcarga',
+      badge: 'Catálogo Público',
+      emoji: '⚡',
+      colorBg: 'bg-emerald-50/80 border-emerald-200',
+      btnBg: 'bg-emerald-600 hover:bg-emerald-700'
+    },
+    {
+      id: 'studio-reels',
+      title: 'FullCarga Studio Pro HD (Flyers, .ZIP & Reels)',
+      subtitle: 'Generador automático de imágenes HD con 5 plantillas, descarga en .ZIP y Videos Reel',
+      url: 'https://catalogo.grupoaludra.com/fullcarga/studio',
+      badge: 'Marketing IG / WA',
+      emoji: '🎬',
+      colorBg: 'bg-purple-50/80 border-purple-200',
+      btnBg: 'bg-purple-600 hover:bg-purple-700'
+    },
+    {
+      id: 'cat-admin',
+      title: 'Administrador Maestro de Catálogos Web',
+      subtitle: 'Panel para editar precios, fotos, gestionar pedidos web y matriz de fletes (Aludra y FullCarga)',
+      url: 'https://catalogo.grupoaludra.com/catalog/admin',
+      badge: 'Administrador Web',
+      emoji: '⚙️',
+      colorBg: 'bg-amber-50/80 border-amber-200',
+      btnBg: 'bg-amber-600 hover:bg-amber-700'
+    },
+    {
+      id: 'sku-generator',
+      title: 'Generador de SKU & Lista de Precios',
+      subtitle: 'Creación y gestión de códigos de inventario y listas de precios',
+      url: 'https://catalogo.grupoaludra.com/sku/',
+      badge: 'Herramienta SKU',
+      emoji: '🏷️',
+      colorBg: 'bg-indigo-50/80 border-indigo-200',
+      btnBg: 'bg-indigo-600 hover:bg-indigo-700'
+    },
+    {
+      id: 'cat-eva',
+      title: 'Catálogo & Admin Eva Miliani',
+      subtitle: 'Catálogo digital de moda y accesorios con panel administrativo',
+      url: 'https://catalogo.grupoaludra.com/eva/',
+      badge: 'Catálogo Eva',
+      emoji: '👗',
+      colorBg: 'bg-pink-50/80 border-pink-200',
+      btnBg: 'bg-pink-600 hover:bg-pink-700'
+    },
+    {
+      id: 'cat-libros',
+      title: 'Catálogo & Admin Ágora Libros',
+      subtitle: 'Catálogo digital de librería y generación de órdenes en PDF',
+      url: 'https://catalogo.grupoaludra.com/libros/',
+      badge: 'Catálogo Libros',
+      emoji: '📚',
+      colorBg: 'bg-orange-50/80 border-orange-200',
+      btnBg: 'bg-orange-600 hover:bg-orange-700'
+    },
+    {
+      id: 'fink-inventory',
+      title: 'Inventario Maestro de Productos & OC (FINK)',
+      subtitle: 'Gestión de stock, costos, códigos de proveedor y emisión de Órdenes de Compra PDF',
+      url: 'https://fink.grupoaludra.com/inventory',
+      badge: 'Módulo FINK',
+      emoji: '📦',
+      colorBg: 'bg-slate-50 border-slate-200',
+      btnBg: 'bg-slate-800 hover:bg-slate-900'
+    },
+    {
+      id: 'fink-pos',
+      title: 'Caja POS / Punto de Venta Express (FINK)',
+      subtitle: 'Facturación rápida y cobro multimoneda en mostrador',
+      url: 'https://fink.grupoaludra.com/pos',
+      badge: 'Módulo FINK',
+      emoji: '🛒',
+      colorBg: 'bg-slate-50 border-slate-200',
+      btnBg: 'bg-slate-800 hover:bg-slate-900'
+    },
+    {
+      id: 'fink-quotations',
+      title: 'Cotizador Formal B2B (FINK)',
+      subtitle: 'Emisión de presupuestos y cotizaciones formales en PDF',
+      url: 'https://fink.grupoaludra.com/quotations',
+      badge: 'Módulo FINK',
+      emoji: '📄',
+      colorBg: 'bg-slate-50 border-slate-200',
+      btnBg: 'bg-slate-800 hover:bg-slate-900'
+    }
+  ];
+
+  const filteredAppsLinks = salesAppsLinks.filter((app) => {
+    if (!appsSearchQuery.trim()) return true;
+    const q = appsSearchQuery.toLowerCase();
+    return (
+      app.title.toLowerCase().includes(q) ||
+      app.subtitle.toLowerCase().includes(q) ||
+      app.url.toLowerCase().includes(q) ||
+      app.badge.toLowerCase().includes(q)
+    );
+  });
+
+  const handleCopyAppUrl = (id: string, url: string) => {
+    navigator.clipboard.writeText(url);
+    setCopiedUrlKey(id);
+    setTimeout(() => setCopiedUrlKey(null), 2000);
+  };
 
   const modalRef = useRef<HTMLDivElement | null>(null);
   const previousActiveElement = useRef<Element | null>(null);
@@ -352,7 +475,15 @@ export default function DashboardPage() {
             </h1>
             <p className="text-slate-500 mt-1">Resumen general de tus finanzas</p>
           </div>
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={() => setShowAppsDirectoryModal(true)}
+              className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-sm hover:shadow-md transition-all duration-200 font-bold cursor-pointer"
+              title="Buscar y abrir direcciones web de catálogos, administradores y apps"
+            >
+              <Globe className="w-4 h-4 text-indigo-200" />
+              <span>Enlaces / Apps</span>
+            </button>
             <Link
               href="/certified"
               className="flex items-center gap-2 px-4 py-2.5 bg-cyan-600 hover:bg-cyan-700 text-white rounded-xl shadow-sm hover:shadow-md transition-all duration-200 font-bold"
@@ -792,6 +923,7 @@ export default function DashboardPage() {
             <QuickAction icon={Banknote} label="Préstamos" path="/loans" color="emerald" />
             <QuickAction icon={RefreshCw} label="Reglas Periódicas" path="/recurring" color="violet" />
             <QuickAction icon={Package} label="Inventario" path="/inventory" color="amber" />
+            <QuickAction icon={Globe} label="Enlaces y Catálogos Web" action={() => setShowAppsDirectoryModal(true)} color="indigo" />
             <QuickAction icon={ShoppingCart} label="Consulta Precios" path="/price-check" color="emerald" />
             <QuickAction icon={Tag} label="Categorías" path="/categories" color="pink" />
             <QuickAction icon={BarChart3} label="Reportes" path="/reports" color="blue" />
@@ -848,6 +980,101 @@ export default function DashboardPage() {
               >
                 {recalcLoading ? 'Procesando...' : 'Confirmar'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showAppsDirectoryModal && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center backdrop-blur-sm bg-slate-900/50 p-4"
+          onClick={() => setShowAppsDirectoryModal(false)}
+        >
+          <div
+            className="bg-white rounded-3xl p-6 max-w-3xl w-full shadow-2xl border border-slate-200 max-h-[88vh] flex flex-col animate-in zoom-in-95 duration-200"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between pb-4 border-b border-slate-200">
+              <div>
+                <h3 className="text-xl font-extrabold text-slate-800 flex items-center gap-2">
+                  <Globe className="text-indigo-600" size={22} />
+                  <span>Directorio de Enlaces Web, Catálogos y Administradores</span>
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Busca, copia o abre con un clic cualquiera de tus páginas y aplicaciones de ventas
+                </p>
+              </div>
+              <button
+                onClick={() => setShowAppsDirectoryModal(false)}
+                className="p-2 rounded-full hover:bg-slate-100 text-slate-500 cursor-pointer"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="my-3.5 relative">
+              <Search size={16} className="text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={appsSearchQuery}
+                onChange={(e) => setAppsSearchQuery(e.target.value)}
+                placeholder="Buscar catálogo, fullcarga, ferretería, studio, reels, admin, sku..."
+                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white"
+              />
+            </div>
+
+            <div className="space-y-2.5 overflow-y-auto pr-1 flex-1">
+              {filteredAppsLinks.map((app) => (
+                <div
+                  key={app.id}
+                  className={`p-3.5 rounded-2xl border ${app.colorBg} flex flex-col sm:flex-row sm:items-center justify-between gap-3 transition-all hover:shadow-sm`}
+                >
+                  <div className="flex items-start gap-3 min-w-0">
+                    <span className="text-2xl shrink-0">{app.emoji}</span>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="font-bold text-sm text-slate-800">{app.title}</h4>
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white text-slate-700 border border-slate-200">
+                          {app.badge}
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-600 mt-0.5">{app.subtitle}</p>
+                      <p className="text-xs font-mono text-indigo-700 font-semibold mt-1 select-all truncate">
+                        {app.url}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-2 shrink-0">
+                    <button
+                      type="button"
+                      onClick={() => handleCopyAppUrl(app.id, app.url)}
+                      className="px-3 py-2 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 text-xs font-bold flex items-center gap-1.5 cursor-pointer transition-colors"
+                    >
+                      {copiedUrlKey === app.id ? (
+                        <>
+                          <Check size={14} className="text-emerald-600" />
+                          <span className="text-emerald-700">Copiado</span>
+                        </>
+                      ) : (
+                        <>
+                          <Copy size={14} />
+                          <span>Copiar Link</span>
+                        </>
+                      )}
+                    </button>
+                    <a
+                      href={app.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className={`px-4 py-2 rounded-xl text-white text-xs font-bold flex items-center gap-1.5 shadow-sm transition-all ${app.btnBg}`}
+                    >
+                      <span>Abrir</span>
+                      <ExternalLink size={14} />
+                    </a>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
         </div>
